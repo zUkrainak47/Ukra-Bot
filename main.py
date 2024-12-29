@@ -18,6 +18,8 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 server_settings = {}
 allowed_users = [369809123925295104]
 bot_name = 'Ukra Bot'
+allow_dict = {True:  "Enabled ",
+              False: "Disabled"}
 
 intents = Intents.default()
 intents.message_content = True
@@ -123,7 +125,21 @@ async def on_ready():
 @client.command()
 async def listcommands(ctx):
     """Lists all commands!"""
-    await ctx.send("listcommands\nsettings\nsegs\nallowsegs\npreventsegs\nbackshot\nallowbackshots\npreventbackshots")
+    await ctx.send("listcommands\ncompliment\nsettings\nsegs\nallowsegs\npreventsegs\nbackshot\nallowbackshots\npreventbackshots")
+
+
+@client.command()
+async def compliment(ctx):
+    """
+    !compliment @user
+    Compliments user based on 3x100 most popular compliments lmfaoooooo
+    """
+    if mentions := ctx.message.mentions:
+        with open(Path('dev', 'compliments.txt')) as fp:
+            await ctx.send(f"{mentions[0].mention}, {random.choice(fp.readlines()).lower()}")
+    else:
+        with open(Path('dev', 'compliments.txt')) as fp:
+            await ctx.send(f"{random.choice(fp.readlines())}")
 
 
 @client.command()
@@ -144,10 +160,10 @@ async def settings(ctx):
         segs_role_name = '@' + ctx.guild.get_role(segs_role).name
     else:
         segs_role_name = "Does not exist, run !setsegsrole"
-    await ctx.send(f"`Segs:           {segs_allowed}{' '*segs_allowed}` {segs_allowed*' - !preventsegs'+(1-segs_allowed)*' - !allowsegs'}\n" +
+    await ctx.send(f"`Segs:           {allow_dict[segs_allowed]}` {segs_allowed*' - !preventsegs'+(1-segs_allowed)*' - !allowsegs'}\n" +
                    f"`Segs Role:      {segs_role_name}`\n" * segs_allowed +
                    '\n' +
-                   f"`Backshots:      {backshots_allowed}{' '*backshots_allowed}` {backshots_allowed*' - !preventbackshots'+(1-backshots_allowed)*' - !allowbackshots'}\n" +
+                   f"`Backshots:      {allow_dict[backshots_allowed]}` {backshots_allowed*' - !preventbackshots'+(1-backshots_allowed)*' - !allowbackshots'}\n" +
                    f"`Backshots Role: {backshots_role_name}`"*backshots_allowed)
 
 
@@ -178,7 +194,7 @@ async def setsegsrole(ctx):
 @commands.has_permissions(administrator=True)
 async def setbackshotsrole(ctx):
     """
-    !setbackshotsrole <new role id>
+    !setbackshotsrole <role id/mention>
     Can only be used by administrators
     """
     guild_id = str(ctx.guild.id)
@@ -335,7 +351,7 @@ async def allowbackshots(ctx):
 @client.command(aliases=['backshoot'])
 async def backshot(ctx):
     """
-    Usage: !backshot @victim
+    !backshot @victim
     Cannot be used on users who have been shot or backshot
     Distributes Backshots Role for 60 seconds with a small chance to backfire
     """
