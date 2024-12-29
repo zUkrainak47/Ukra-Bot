@@ -125,7 +125,15 @@ async def on_ready():
 @client.command()
 async def listcommands(ctx):
     """Lists all commands!"""
-    await ctx.send("listcommands\ncompliment\nsettings\nsegs\nallowsegs\npreventsegs\nbackshot\nallowbackshots\npreventbackshots")
+    await ctx.send("listcommands\nping\nsettings\ncompliment\nsegs\nsetsegsrole\nbackshot\nsetbackshotrole\nenable\ndisable")
+
+
+@client.command()
+async def ping(ctx):
+    """
+    pong
+    """
+    await ctx.send(f"Pong! {round(client.latency * 1000)}ms")
 
 
 @client.command()
@@ -134,22 +142,28 @@ async def compliment(ctx):
     !compliment @user
     Compliments user based on 3x100 most popular compliments lmfaoooooo
     """
-    if mentions := ctx.message.mentions:
-        with open(Path('dev', 'compliments.txt')) as fp:
-            await ctx.send(f"{mentions[0].mention}, {random.choice(fp.readlines()).lower()}")
+    if 'compliment' in server_settings.get(str(ctx.guild.id), {}).get('allowed_commands', []):
+        if mentions := ctx.message.mentions:
+            with open(Path('dev', 'compliments.txt')) as fp:
+                await ctx.send(f"{mentions[0].mention}, {random.choice(fp.readlines()).lower()}")
+        else:
+            with open(Path('dev', 'compliments.txt')) as fp:
+                await ctx.send(f"{random.choice(fp.readlines())}")
+        await log_channel.send(f'✅ {ctx.author.mention} casted a compliment in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
     else:
-        with open(Path('dev', 'compliments.txt')) as fp:
-            await ctx.send(f"{random.choice(fp.readlines())}")
+        await log_channel.send(f"🫡 {ctx.author.mention} tried to cast a compliment in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but compliments aren't allowed in this server")
 
 
 @client.command()
 async def settings(ctx):
     """Shows current server settings"""
     guild_settings = server_settings[str(ctx.guild.id)]
-    segs_allowed = guild_settings.get("segs_allowed", False)
-    backshots_allowed = guild_settings.get("backshots_allowed", False)
+    allowed_commands = guild_settings.get("allowed_commands", set())
+    segs_allowed = 'segs' in allowed_commands
     segs_role = guild_settings.get("segs_role", False)
+    backshots_allowed = 'backshot' in allowed_commands
     backshots_role = guild_settings.get("backshots_role", False)
+    compliments_allowed = 'compliment' in allowed_commands
 
     if backshots_role and ctx.guild.get_role(backshots_role):
         backshots_role_name = '@' + ctx.guild.get_role(backshots_role).name
@@ -160,11 +174,14 @@ async def settings(ctx):
         segs_role_name = '@' + ctx.guild.get_role(segs_role).name
     else:
         segs_role_name = "Does not exist, run !setsegsrole"
-    await ctx.send(f"`Segs:           {allow_dict[segs_allowed]}` {segs_allowed*' - !preventsegs'+(1-segs_allowed)*' - !allowsegs'}\n" +
-                   f"`Segs Role:      {segs_role_name}`\n" * segs_allowed +
+    await ctx.send(f"```Segs:           {allow_dict[segs_allowed]}\n" +
+                   f"Segs Role:      {segs_role_name}\n" * segs_allowed +
                    '\n' +
-                   f"`Backshots:      {allow_dict[backshots_allowed]}` {backshots_allowed*' - !preventbackshots'+(1-backshots_allowed)*' - !allowbackshots'}\n" +
-                   f"`Backshots Role: {backshots_role_name}`"*backshots_allowed)
+                   f"Backshots:      {allow_dict[backshots_allowed]}\n" +
+                   f"Backshots Role: {backshots_role_name}\n" * backshots_allowed +
+                   '\n' +
+                   f"Compliments:    {allow_dict[compliments_allowed]}" +
+                   '```')
 
 
 # ROLES #FIXME need to combine all of this into one function buh
@@ -212,33 +229,83 @@ async def setbackshotsrole(ctx):
         await ctx.send(f"Command usage: `!setbackshotsrole <role id/mention>`")
 
 
+# ENABLING/DISABLING
+toggleable_commands = ['segs', 'backshot', 'compliment']
+
+
+@client.command(aliases=['allow'])
+@commands.has_permissions(administrator=True)
+async def enable(ctx):
+    """
+    Enables command of choice
+    Can only be used by administrators
+    """
+    guild_id = str(ctx.guild.id)
+    cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
+    if cmd in toggleable_commands and cmd not in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', []):
+        server_settings.get(guild_id).get('allowed_commands').append(cmd)
+        await log_channel.send(f'<:wicked:1323075389131587646> {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
+        success = f"!{cmd} has been enabled"
+        success += '. **Please run !setsegsrole**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('segs_role')))) * cmd == 'segs')
+        success += '. **Please run !setbackshotrole**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('backshot_role')))) * cmd == 'backshot')
+        await ctx.send(success)
+        save_settings()
+    elif cmd in toggleable_commands:
+        await ctx.send(f"!{cmd} is already enabled")
+    else:
+        await ctx.send(f"Command usage: `!enable <cmd>`\n"
+                       f"Available commands: {', '.join(toggleable_commands)}")
+
+
+@client.command(aliases=['disallow', 'prevent'])
+@commands.has_permissions(administrator=True)
+async def disable(ctx):
+    """
+    Disables command of choice
+    Can only be used by administrators
+    """
+    guild_id = str(ctx.guild.id)
+    cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
+    if cmd in toggleable_commands and cmd in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', []):
+        server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', set()).remove(cmd)
+        await log_channel.send(f'<:deadge:1323075561089929300> {ctx.author.mention} disabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
+        success = f"!{cmd} has been disabled"
+        await ctx.send(success)
+        save_settings()
+    elif cmd in toggleable_commands:
+        await ctx.send(f"!{cmd} is already disabled")
+    else:
+        await ctx.send(f"Command usage: `!disable <cmd>`\n"
+                       f"Available commands: {', '.join(toggleable_commands)}")
+
+
 # SEGS
-@client.command(aliases=['disallowsegs', 'disablesegs'])
-@commands.has_permissions(administrator=True)
-async def preventsegs(ctx):
-    """
-    Disables !segs
-    Can only be used by administrators
-    """
-    guild_id = str(ctx.guild.id)
-    server_settings.setdefault(guild_id, {})['segs_allowed'] = False
-    await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} disallowed segs')
-    await ctx.send(f"Segs no longer allowed")
-    save_settings()
-
-
-@client.command(aliases=['enablesegs'])
-@commands.has_permissions(administrator=True)
-async def allowsegs(ctx):
-    """
-    Enables !segs
-    Can only be used by administrators
-    """
-    guild_id = str(ctx.guild.id)
-    server_settings.setdefault(guild_id, {})['segs_allowed'] = True
-    await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} allowed segs')
-    await ctx.send(f"Segs has been allowed" + '. **Please run !setsegsrole**' * (1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('segs_role')))))
-    save_settings()
+# @client.command(aliases=['disallowsegs', 'disablesegs'])
+# @commands.has_permissions(administrator=True)
+# async def preventsegs(ctx):
+#     """
+#     Disables !segs
+#     Can only be used by administrators
+#     """
+#     guild_id = str(ctx.guild.id)
+#     server_settings.setdefault(guild_id, {})['segs_allowed'] = False
+#     await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} disallowed segs')
+#     await ctx.send(f"Segs no longer allowed")
+#     save_settings()
+#
+#
+# @client.command(aliases=['enablesegs'])
+# @commands.has_permissions(administrator=True)
+# async def allowsegs(ctx):
+#     """
+#     Enables !segs
+#     Can only be used by administrators
+#     """
+#     guild_id = str(ctx.guild.id)
+#     server_settings.setdefault(guild_id, {})['segs_allowed'] = True
+#     await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} allowed segs')
+#     await ctx.send(f"Segs has been allowed" + '. **Please run !setsegsrole**' * (1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('segs_role')))))
+#     save_settings()
 
 
 @client.command()
@@ -250,7 +317,7 @@ async def segs(ctx):
     """
     caller = ctx.author
     guild_id = str(ctx.guild.id)
-    if server_settings.get(guild_id, {}).get('segs_allowed', False) and server_settings.get(guild_id, {}).get('segs_role', False):
+    if 'segs' in server_settings.get(guild_id, {}).get('allowed_commands', []) and server_settings.get(guild_id, {}).get('segs_role', False):
         mentions = ctx.message.mentions
         role = ctx.guild.get_role(server_settings.get(guild_id, {}).get('segs_role'))
         if not role:
@@ -311,7 +378,7 @@ async def segs(ctx):
             await ctx.send(f"Segsed people can't segs, dummy <:pepela:1322718719977197671>")
             await log_channel.send(f'❌ {caller.mention} tried to segs in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but they were segsed themselves')
 
-    elif server_settings.get(guild_id, {}).get('segs_allowed', False):
+    elif 'segs' in server_settings.get(guild_id, {}).get('allowed_commands', []):
         await ctx.send(f"*Segs role does not exist!*\nRun !setsegsrole to use segs")
         await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but the role does not exist')
 
@@ -320,32 +387,32 @@ async def segs(ctx):
 
 
 # BACKSHOTS
-@client.command(aliases=['disallowbackshots', 'disablebackshots'])
-@commands.has_permissions(administrator=True)
-async def preventbackshots(ctx):
-    """
-    Disables !backshot
-    Can only be used by administrators
-    """
-    guild_id = str(ctx.guild.id)
-    server_settings.setdefault(guild_id, {})['backshots_allowed'] = False
-    await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} disallowed backshots')
-    await ctx.send(f"Backshots no longer allowed")
-    save_settings()
-
-
-@client.command(aliases=['enablebackshots'])
-@commands.has_permissions(administrator=True)
-async def allowbackshots(ctx):
-    """
-    Enables !backshot
-    Can only be used by administrators
-    """
-    guild_id = str(ctx.guild.id)
-    server_settings.setdefault(guild_id, {})['backshots_allowed'] = True
-    await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} allowed backshots')
-    await ctx.send(f"Backshots have been allowed" + '. **Please run !setbackshotsrole**' * (1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('backshots_role')))))
-    save_settings()
+# @client.command(aliases=['disallowbackshots', 'disablebackshots'])
+# @commands.has_permissions(administrator=True)
+# async def preventbackshots(ctx):
+#     """
+#     Disables !backshot
+#     Can only be used by administrators
+#     """
+#     guild_id = str(ctx.guild.id)
+#     server_settings.setdefault(guild_id, {})['backshots_allowed'] = False
+#     await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} disallowed backshots')
+#     await ctx.send(f"Backshots no longer allowed")
+#     save_settings()
+#
+#
+# @client.command(aliases=['enablebackshots'])
+# @commands.has_permissions(administrator=True)
+# async def allowbackshots(ctx):
+#     """
+#     Enables !backshot
+#     Can only be used by administrators
+#     """
+#     guild_id = str(ctx.guild.id)
+#     server_settings.setdefault(guild_id, {})['backshots_allowed'] = True
+#     await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} allowed backshots')
+#     await ctx.send(f"Backshots have been allowed" + '. **Please run !setbackshotsrole**' * (1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('backshots_role')))))
+#     save_settings()
 
 
 @client.command(aliases=['backshoot'])
@@ -357,7 +424,7 @@ async def backshot(ctx):
     """
     caller = ctx.author
     guild_id = str(ctx.guild.id)
-    if server_settings.get(guild_id, {}).get('backshots_allowed', False) and server_settings.get(guild_id, {}).get('backshots_role', False):
+    if 'backshot' in server_settings.get(guild_id, {}).get('allowed_commands', []) and server_settings.get(guild_id, {}).get('backshots_role', False):
         mentions = ctx.message.mentions
         role = ctx.guild.get_role(server_settings.get(guild_id, {}).get('backshots_role'))
         if not role:
@@ -415,7 +482,7 @@ async def backshot(ctx):
             await ctx.send(f"Backshotted people can't backshoot, dummy <:pepela:1322718719977197671>")
             await log_channel.send(f'❌ {caller.mention} tried to give devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but they were backshotted themselves')
 
-    elif server_settings.get(guild_id, {}).get('backshots_allowed', False):
+    elif 'backshot' in server_settings.get(guild_id, {}).get('allowed_commands', []):
         await ctx.send(f"*Backshots role does not exist!*\nRun !setbackshotsrole use backshots")
         await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but the role does not exist')
 
