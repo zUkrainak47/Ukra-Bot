@@ -72,19 +72,24 @@ async def on_ready():
 
     # await log_channel.send(f'{client.user} has connected to Discord!')
     await log_channel.send(f'<:yay:1322721331896389702>\n{bot_name} has connected to Discord!')
-    role_dict = {'Backshot Realm': distributed_backshots,
-                 'Segs Realm': distributed_segs}
-    save_dict = {'Backshot Realm': save_distributed_backshots,
-                 'Segs Realm': save_distributed_segs}
+    role_dict = {'backshots_role': distributed_backshots,
+                 'segs_role': distributed_segs}
+    save_dict = {'backshots_role': save_distributed_backshots,
+                 'segs_role': save_distributed_segs}
 
     async def remove_all_roles(role_name):
         for guild_id in role_dict[role_name]:
-            guild = client.get_guild(int(guild_id))
+            guild = await client.fetch_guild(int(guild_id))
             if not guild:
-                continue  # Skip if the guild doesn't exist or isn't cached
-            role = discord.utils.get(guild.roles, name=role_name)
+                continue
+            await log_channel.send(f"`===== {guild.name} - {guild_id} - {role_name} =====`")
+            role = guild.get_role(server_settings.get(guild_id, {}).get(role_name))
             if not role:
-                continue  # Skip if the role doesn't exist in the guild
+                role_dict[role_name][guild_id].clear()
+                await log_channel.send(f"✅❓ {guild.name} deleted their {role_name}")
+
+                continue
+
             for member_id in list(role_dict[role_name][guild_id]):
                 member = await guild.fetch_member(member_id)
                 print(guild, guild.id, type(guild), member_id, type(member_id), member, type(member))
@@ -98,13 +103,15 @@ async def on_ready():
                         role_dict[role_name][guild_id].remove(member_id)
                 except discord.Forbidden:
                     # In case the bot doesn't have permission to remove the role
-                    await log_channel.send(f"❌ Failed to remove `@{role.name}` from {member.mention} (permission error).")
+                    await log_channel.send(f"❌ Failed to remove `@{role.name}` from {member.mention} (permission error)")
                 except discord.NotFound:
                     # Handle case where the member is not found in the guild
-                    await log_channel.send(f"❌ Member {member.mention} not found in {guild.name}.")
+                    await log_channel.send(f"❌ Member {member.mention} not found in {guild.name}")
                 except discord.HTTPException as e:
                     # Handle potential HTTP errors
                     await log_channel.send(f"❓ Failed to remove `@{role.name}` from {member.mention}: {e}")
+        else:
+            await log_channel.send(f"✅ DONE ✅")
 
     for role_ in role_dict:
         await remove_all_roles(role_)
@@ -121,26 +128,68 @@ async def settings(ctx):
     guild_settings = server_settings[str(ctx.guild.id)]
     segs_allowed = guild_settings.get("segs_allowed", False)
     backshots_allowed = guild_settings.get("backshots_allowed", False)
-    await ctx.send(f"`Segs:      {segs_allowed}{' '*segs_allowed}` {segs_allowed*' - !preventsegs'+(1-segs_allowed)*' - !allowsegs'}\n"
-                   f"`Backshots: {backshots_allowed}{' '*backshots_allowed}` {backshots_allowed*' - !preventbackshots'+(1-backshots_allowed)*' - !allowbackshots'}")
+    segs_role = guild_settings.get("segs_role", False)
+    backshots_role = guild_settings.get("backshots_role", False)
+
+    if backshots_role and ctx.guild.get_role(backshots_role):
+        backshots_role_name = '@' + ctx.guild.get_role(backshots_role).name
+    else:
+        backshots_role_name = "Does not exist, run !setbackshotsrole"
+
+    if segs_role and ctx.guild.get_role(segs_role):
+        segs_role_name = '@' + ctx.guild.get_role(segs_role).name
+    else:
+        segs_role_name = "Does not exist, run !setsegsrole"
+    await ctx.send(f"`Segs:           {segs_allowed}{' '*segs_allowed}` {segs_allowed*' - !preventsegs'+(1-segs_allowed)*' - !allowsegs'}\n" +
+                   f"`Segs Role:      {segs_role_name}`\n" * segs_allowed +
+                   '\n' +
+                   f"`Backshots:      {backshots_allowed}{' '*backshots_allowed}` {backshots_allowed*' - !preventbackshots'+(1-backshots_allowed)*' - !allowbackshots'}\n" +
+                   f"`Backshots Role: {backshots_role_name}`"*backshots_allowed)
 
 
-# ROLES
+# ROLES #FIXME need to combine all of this into one function buh
 @client.command()
 @commands.has_permissions(administrator=True)
-async def setcustomsegsrole(ctx):
+async def setsegsrole(ctx):
     """
-    !setcustomsegsrole <new role id>
+    !setsegsrole <role id/mention>
     Can only be used by administrators
     """
     guild_id = str(ctx.guild.id)
     guild = ctx.guild
-    role_id = ctx.message.content.split()[1]
-    if role := discord.utils.get(guild.roles, id=int(role_id)) if "<" not in role_id else guild.get_role(int(role_id[3:-1])):
-        server_settings.setdefault(guild_id, {})['segsrole'] = role.id
-        save_settings()
-    await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the segs role to `@{role.name} - {role.id}`')
-    await ctx.send(f"Segs role has been changed to `@{role.name}`")
+    if len(ctx.message.content.split()) > 1:
+        role_id = ctx.message.content.split()[1]
+        if role := discord.utils.get(guild.roles, id=int(role_id)) if "<" not in role_id else guild.get_role(int(role_id[3:-1])):
+            server_settings.setdefault(guild_id, {})['segs_role'] = role.id
+            save_settings()
+            await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the segs role to `@{role.name} - {role.id}`')
+            await ctx.send(f"Segs role has been changed to `@{role.name}`")
+        else:
+            await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
+    else:
+        await ctx.send(f"Command usage: `!setsegsrole <role id/mention>`")
+
+
+@client.command(aliases=['setbackshotrole'])
+@commands.has_permissions(administrator=True)
+async def setbackshotsrole(ctx):
+    """
+    !setbackshotsrole <new role id>
+    Can only be used by administrators
+    """
+    guild_id = str(ctx.guild.id)
+    guild = ctx.guild
+    if len(ctx.message.content.split()) > 1:
+        role_id = ctx.message.content.split()[1]
+        if role := discord.utils.get(guild.roles, id=int(role_id)) if "<" not in role_id else guild.get_role(int(role_id[3:-1])):
+            server_settings.setdefault(guild_id, {})['backshots_role'] = role.id
+            save_settings()
+            await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the backshots role to `@{role.name} - {role.id}`')
+            await ctx.send(f"Segs role has been changed to `@{role.name}`")
+        else:
+            await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
+    else:
+        await ctx.send(f"Command usage: `!setbackshotsrole <role id/mention>`")
 
 
 # SEGS
@@ -177,23 +226,23 @@ async def segs(ctx):
     """
     !segs @victim
     Cannot be used on users who have been shot or segsed
-    Distributes Backshot Realm role for 60 seconds with a small chance to backfire
+    Distributes Segs Role for 60 seconds with a small chance to backfire
     """
     caller = ctx.author
     guild_id = str(ctx.guild.id)
-    if server_settings.get(guild_id, {}).get('segs_allowed', False):
+    if server_settings.get(guild_id, {}).get('segs_allowed', False) and server_settings.get(guild_id, {}).get('segs_role', False):
         mentions = ctx.message.mentions
-        role_name = "Segs Realm"
-        role = discord.utils.get(ctx.guild.roles, name=role_name)
+        role = ctx.guild.get_role(server_settings.get(guild_id, {}).get('segs_role'))
+        if not role:
+            await ctx.send(f"*Segs role does not exist!*\nRun !setsegsrole to use segs")
+            await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} ({ctx.guild.name}) but the role does not exist')
+            return
+
+        role_name = role.name
         shadow_realm = discord.utils.get(ctx.guild.roles, name="Shadow Realm")
         condition = role not in caller.roles
         if mentions and condition:
             target = mentions[0]
-            if not role:
-                await ctx.send(f"`@{role_name}` *does not exist! Create it first to use segs*")
-                await log_channel.send(f'❓ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} ({ctx.guild.name}) but the role does not exist')
-                return
-
             if role in target.roles:
                 await ctx.send(f"https://cdn.discordapp.com/attachments/696842659989291130/1322717837730517083/segsed.webp?ex=6771e47b&is=677092fb&hm=8a7252a7bc87bbc129d4e7cc23f62acc770952cde229642cf3bfd77bd40f2769&")
                 await log_channel.send(f'❌ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} ({ctx.guild.name}) but they were already segsed')
@@ -281,23 +330,23 @@ async def backshot(ctx):
     """
     Usage: !backshot @victim
     Cannot be used on users who have been shot or backshot
-    Distributes Backshot Realm role for 60 seconds with a small chance to backfire
+    Distributes Backshots Role for 60 seconds with a small chance to backfire
     """
     caller = ctx.author
     guild_id = str(ctx.guild.id)
-    if server_settings.get(guild_id, {}).get('backshots_allowed', False):
+    if server_settings.get(guild_id, {}).get('backshots_allowed', False) and server_settings.get(guild_id, {}).get('backshots_role', False):
         mentions = ctx.message.mentions
-        role_name = "Backshot Realm"
-        role = discord.utils.get(ctx.guild.roles, name=role_name)
+        role = ctx.guild.get_role(server_settings.get(guild_id, {}).get('backshots_role'))
+        if not role:
+            await ctx.send(f"*Backshots role does not exist!*\nRun !setbackshotsrole use backshots")
+            await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} ({ctx.guild.name}) but the role does not exist')
+            return
+
+        role_name = role.name
         shadow_realm = discord.utils.get(ctx.guild.roles, name="Shadow Realm")
         condition = role not in caller.roles
         if mentions and condition:
             target = mentions[0]
-            if not role:
-                await ctx.send(f"`@{role_name}` *does not exist! Create it first to use backshots*")
-                await log_channel.send(f'❓ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name}) but the role does not exist')
-                return
-
             if role in target.roles:
                 await ctx.send(f"https://cdn.discordapp.com/attachments/696842659989291130/1322220705131008011/backshotted.webp?ex=6770157d&is=676ec3fd&hm=1197f229994962781ed6415a6a5cf1641c4c2d7ca56c9c3d559d44469988d15e&")
                 await log_channel.send(f'❌ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name}) but they were already backshotted')
