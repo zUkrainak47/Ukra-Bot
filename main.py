@@ -84,7 +84,7 @@ async def on_ready():
             guild = await client.fetch_guild(int(guild_id))
             if not guild:
                 continue
-            await log_channel.send(f"`===== {guild.name} - {guild_id} - {role_name} =====`")
+            react_to = await log_channel.send(f"`===== {guild.name} - {guild_id} - {role_name} =====`")
             role = guild.get_role(server_settings.get(guild_id, {}).get(role_name))
             if not role:
                 role_dict[role_name][guild_id].clear()
@@ -114,8 +114,8 @@ async def on_ready():
                 except discord.HTTPException as e:
                     # Handle potential HTTP errors
                     await log_channel.send(f"❓ Failed to remove `@{role.name}` from {member.mention}: {e}")
-        else:
-            await log_channel.send(f"✅ DONE ✅")
+            message = await log_channel.fetch_message(react_to.id)
+            await message.add_reaction('✅')
 
     for role_ in role_dict:
         await remove_all_roles(role_)
@@ -151,7 +151,7 @@ async def compliment(ctx):
                 await ctx.send(f"{random.choice(fp.readlines())}")
         await log_channel.send(f'✅ {ctx.author.mention} casted a compliment in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
     else:
-        await log_channel.send(f"🫡 {ctx.author.mention} tried to cast a compliment in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but compliments aren't allowed in this server")
+        await log_channel.send(f"🫡 {ctx.author.mention} tried to cast a compliment in {ctx.channel.mention} but compliments aren't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
 
 
 @client.command()
@@ -322,7 +322,7 @@ async def segs(ctx):
         role = ctx.guild.get_role(server_settings.get(guild_id, {}).get('segs_role'))
         if not role:
             await ctx.send(f"*Segs role does not exist!*\nRun !setsegsrole to use segs")
-            await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but the role does not exist')
+            await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id}) ')
             return
 
         role_name = role.name
@@ -332,12 +332,12 @@ async def segs(ctx):
             target = mentions[0]
             if role in target.roles:
                 await ctx.send(f"https://cdn.discordapp.com/attachments/696842659989291130/1322717837730517083/segsed.webp?ex=6771e47b&is=677092fb&hm=8a7252a7bc87bbc129d4e7cc23f62acc770952cde229642cf3bfd77bd40f2769&")
-                await log_channel.send(f'❌ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but they were already segsed')
+                await log_channel.send(f'❌ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but they were already segsed ({ctx.guild.name} - {ctx.guild.id})')
                 return
 
             if shadow_realm in target.roles:
                 await ctx.send(f"I will not allow this")
-                await log_channel.send(f'💀 {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but they were dead')
+                await log_channel.send(f'💀 {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but they were dead ({ctx.guild.name} - {ctx.guild.id})')
                 return
 
             try:
@@ -353,7 +353,7 @@ async def segs(ctx):
                     save_distributed_segs()
 
                 else:
-                    distributed_segs[str(ctx.guild.id)].append(target.id)
+                    distributed_segs[str(ctx.guild.id)].append(caller.id)
                     save_distributed_segs()
                     await caller.add_roles(role)
                     if target.id == 1322197604297085020:
@@ -363,27 +363,27 @@ async def segs(ctx):
                     await log_channel.send(f'❌ {caller.mention} failed to segs {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
                     await asyncio.sleep(60)
                     await caller.remove_roles(role)
-                    distributed_segs[str(ctx.guild.id)].remove(target.id)
+                    distributed_segs[str(ctx.guild.id)].remove(caller.id)
                     save_distributed_segs()
 
             except discord.errors.Forbidden:
                 await ctx.send(f"*Insufficient permissions to execute segs*\n*Make sure I have a role that is higher than* `@{role_name}` <:madgeclap:1322719157241905242>")
-                await log_channel.send(f"❓ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but I don't have the necessary permissions to execute segs")
+                await log_channel.send(f"❓ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but I don't have the necessary permissions to execute segs ({ctx.guild.name} - {ctx.guild.id})")
 
         elif not mentions:
             await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
-            await log_channel.send(f"❓ {caller.mention} tried to segs in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but they didn't mention the victim")
+            await log_channel.send(f"❓ {caller.mention} tried to segs in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
 
         elif not condition:
             await ctx.send(f"Segsed people can't segs, dummy <:pepela:1322718719977197671>")
-            await log_channel.send(f'❌ {caller.mention} tried to segs in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but they were segsed themselves')
+            await log_channel.send(f'❌ {caller.mention} tried to segs in {ctx.channel.mention} but they were segsed themselves ({ctx.guild.name} - {ctx.guild.id})')
 
     elif 'segs' in server_settings.get(guild_id, {}).get('allowed_commands', []):
         await ctx.send(f"*Segs role does not exist!*\nRun !setsegsrole to use segs")
-        await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but the role does not exist')
+        await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
 
     else:
-        await log_channel.send(f"🫡 {caller.mention} tried to segs in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but segs isn't allowed in this server")
+        await log_channel.send(f"🫡 {caller.mention} tried to segs in {ctx.channel.mention} but segs isn't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
 
 
 # BACKSHOTS
@@ -429,7 +429,7 @@ async def backshot(ctx):
         role = ctx.guild.get_role(server_settings.get(guild_id, {}).get('backshots_role'))
         if not role:
             await ctx.send(f"*Backshots role does not exist!*\nRun !setbackshotsrole use backshots")
-            await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but the role does not exist')
+            await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
             return
 
         role_name = role.name
@@ -439,12 +439,12 @@ async def backshot(ctx):
             target = mentions[0]
             if role in target.roles:
                 await ctx.send(f"https://cdn.discordapp.com/attachments/696842659989291130/1322220705131008011/backshotted.webp?ex=6770157d&is=676ec3fd&hm=1197f229994962781ed6415a6a5cf1641c4c2d7ca56c9c3d559d44469988d15e&")
-                await log_channel.send(f'❌ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but they were already backshotted')
+                await log_channel.send(f'❌ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but they were already backshotted ({ctx.guild.name} - {ctx.guild.id})')
                 return
 
             if shadow_realm in target.roles:
                 await ctx.send(f"I will not allow this")
-                await log_channel.send(f'💀 {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but they were dead')
+                await log_channel.send(f'💀 {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but they were dead ({ctx.guild.name} - {ctx.guild.id})')
                 return
 
             try:
@@ -460,34 +460,34 @@ async def backshot(ctx):
                     save_distributed_backshots()
 
                 else:
-                    distributed_backshots[str(ctx.guild.id)].append(target.id)
+                    distributed_backshots[str(ctx.guild.id)].append(caller.id)
                     save_distributed_backshots()
                     await caller.add_roles(role)
                     await ctx.send(f'OOPS! You missed the backshot <:teripoint:1322718769679827024>' + ' <:HUH:1322719443519934585>' * (caller.mention == target.mention))
                     await log_channel.send(f'❌ {caller.mention} failed to give {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
                     await asyncio.sleep(60)
                     await caller.remove_roles(role)
-                    distributed_backshots[str(ctx.guild.id)].remove(target.id)
+                    distributed_backshots[str(ctx.guild.id)].remove(caller.id)
                     save_distributed_backshots()
 
             except discord.errors.Forbidden:
                 await ctx.send(f"*Insufficient permissions to execute backshot*\n*Make sure I have a role that is higher than* `@{role_name}` <:madgeclap:1322719157241905242>")
-                await log_channel.send(f"❓ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but I don't have the necessary permissions to execute backshots")
+                await log_channel.send(f"❓ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but I don't have the necessary permissions to execute backshots ({ctx.guild.name} - {ctx.guild.id})")
 
         elif not mentions:
             await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
-            await log_channel.send(f"❓ {caller.mention} tried to to give devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but they didn't mention the victim")
+            await log_channel.send(f"❓ {caller.mention} tried to to give devious backshots in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
 
         elif not condition:
             await ctx.send(f"Backshotted people can't backshoot, dummy <:pepela:1322718719977197671>")
-            await log_channel.send(f'❌ {caller.mention} tried to give devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but they were backshotted themselves')
+            await log_channel.send(f'❌ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but they were backshotted themselves ({ctx.guild.name} - {ctx.guild.id})')
 
     elif 'backshot' in server_settings.get(guild_id, {}).get('allowed_commands', []):
         await ctx.send(f"*Backshots role does not exist!*\nRun !setbackshotsrole use backshots")
-        await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but the role does not exist')
+        await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
 
     else:
-        await log_channel.send(f"🫡 {caller.mention} tried to give devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id}) but backshots aren't allowed in this server")
+        await log_channel.send(f"🫡 {caller.mention} tried to give devious backshots in {ctx.channel.mention} but backshots aren't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
         return
 
 
