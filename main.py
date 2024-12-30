@@ -125,7 +125,7 @@ async def on_ready():
 @client.command()
 async def listcommands(ctx):
     """Lists all commands!"""
-    await ctx.send("listcommands\nping\nsettings\ncompliment\nsegs\nsetsegsrole\nbackshot\nsetbackshotrole\nenable\ndisable")
+    await ctx.send("listcommands\nsettings\ncompliment\nsegs\nsetsegsrole\nbackshot\nsetbackshotrole\nenable\ndisable\nping\nrng")
 
 
 @client.command()
@@ -135,6 +135,18 @@ async def ping(ctx):
     """
     await ctx.send(f"Pong! {round(client.latency * 1000)}ms")
 
+
+@client.command()
+async def rng(ctx):
+    """
+    !rng <n1> <n2>
+    Returns a random number between n1 and n2
+    """
+    contents = ctx.message.content.split()
+    if len(contents) == 3 and contents[1].isnumeric() and contents[2].isnumeric() and int(contents[1]) < int(contents[2]):
+        await ctx.send(f"{random.randint(int(contents[1]), int(contents[2]))}")
+    else:
+        await ctx.send("Usage: `!rng n1 n2` where n1 and n2 are numbers, n1 > n2")
 
 @client.command()
 async def compliment(ctx):
@@ -311,7 +323,7 @@ async def disable(ctx):
 @client.command()
 async def segs(ctx):
     """
-    !segs @victim
+    !segs @victim, gives victim the Segs Role
     Cannot be used on users who have been shot or segsed
     Distributes Segs Role for 60 seconds with a small chance to backfire
     """
@@ -418,7 +430,7 @@ async def segs(ctx):
 @client.command(aliases=['backshoot'])
 async def backshot(ctx):
     """
-    !backshot @victim
+    !backshot @victim, gives victim the Backshot Role
     Cannot be used on users who have been shot or backshot
     Distributes Backshots Role for 60 seconds with a small chance to backfire
     """
