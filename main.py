@@ -150,12 +150,13 @@ async def compliment(ctx):
     Compliments user based on 3x100 most popular compliments lmfaoooooo
     """
     if 'compliment' in server_settings.get(str(ctx.guild.id), {}).get('allowed_commands', []):
+        with open(Path('dev', 'compliments.txt')) as fp:
+            compliment_ = random.choice(fp.readlines())
+            fp.close()
         if mentions := ctx.message.mentions:
-            with open(Path('dev', 'compliments.txt')) as fp:
-                await ctx.send(f"{mentions[0].mention}, {random.choice(fp.readlines()).lower()}")
+            await ctx.send(f"{mentions[0].mention}, {compliment_[0].lower()}{compliment_[1:]}")
         else:
-            with open(Path('dev', 'compliments.txt')) as fp:
-                await ctx.send(f"{random.choice(fp.readlines())}")
+            await ctx.send(compliment_)
         await log_channel.send(f'✅ {ctx.author.mention} casted a compliment in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
     else:
         await log_channel.send(f"🫡 {ctx.author.mention} tried to cast a compliment in {ctx.channel.mention} but compliments aren't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
@@ -229,7 +230,7 @@ async def setbackshotsrole(ctx):
             server_settings.setdefault(guild_id, {})['backshots_role'] = role.id
             save_settings()
             await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the backshots role to `@{role.name} - {role.id}`')
-            await ctx.send(f"Segs role has been changed to `@{role.name}`")
+            await ctx.send(f"Backshot role has been changed to `@{role.name}`")
         else:
             await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
     else:
@@ -349,7 +350,7 @@ async def segs(ctx):
 
             try:
                 if random.random() > 0.05 and (target.id != 1322197604297085020 or target.id == 1322197604297085020 and caller.id in allowed_users):
-                    distributed_segs[str(ctx.guild.id)].append(target.id)
+                    distributed_segs.setdefault(str(ctx.guild.id), []).append(target.id)
                     save_distributed_segs()
                     await target.add_roles(role)
                     await ctx.send(f'{caller.mention} has segsed {target.mention} ' + '<:HUH:1322719443519934585> ' * (caller.mention == target.mention) + '<:peeposcheme:1322225542027804722>' * (caller.mention != target.mention))
@@ -360,7 +361,7 @@ async def segs(ctx):
                     save_distributed_segs()
 
                 else:
-                    distributed_segs[str(ctx.guild.id)].append(caller.id)
+                    distributed_segs.setdefault(str(ctx.guild.id), []).append(caller.id)
                     save_distributed_segs()
                     await caller.add_roles(role)
                     if target.id == 1322197604297085020:
@@ -456,7 +457,7 @@ async def backshot(ctx):
 
             try:
                 if random.random() > 0.05 and (target.id != 1322197604297085020 or target.id == 1322197604297085020 and caller.id in allowed_users):
-                    distributed_backshots[str(ctx.guild.id)].append(target.id)
+                    distributed_backshots.setdefault(str(ctx.guild.id), []).append(target.id)
                     save_distributed_backshots()
                     await target.add_roles(role)
                     await ctx.send(f'{caller.mention} has given {target.mention} devious backshots ' + '<:HUH:1322719443519934585> ' * (caller.mention == target.mention) + '<:peeposcheme:1322225542027804722>' * (caller.mention != target.mention))
@@ -467,7 +468,7 @@ async def backshot(ctx):
                     save_distributed_backshots()
 
                 else:
-                    distributed_backshots[str(ctx.guild.id)].append(caller.id)
+                    distributed_backshots.setdefault(str(ctx.guild.id), []).append(caller.id)
                     save_distributed_backshots()
                     await caller.add_roles(role)
                     await ctx.send(f'OOPS! You missed the backshot <:teripoint:1322718769679827024>' + ' <:HUH:1322719443519934585>' * (caller.mention == target.mention))
