@@ -123,12 +123,6 @@ async def on_ready():
 
 
 @client.command()
-async def listcommands(ctx):
-    """Lists all commands!"""
-    await ctx.send("listcommands\nsettings\ncompliment\nsegs\nsetsegsrole\nbackshot\nsetbackshotrole\nenable\ndisable\nping\nrng")
-
-
-@client.command()
 async def ping(ctx):
     """
     pong
@@ -146,7 +140,8 @@ async def rng(ctx):
     if len(contents) == 3 and contents[1].isnumeric() and contents[2].isnumeric() and int(contents[1]) < int(contents[2]):
         await ctx.send(f"{random.randint(int(contents[1]), int(contents[2]))}")
     else:
-        await ctx.send("Usage: `!rng n1 n2` where n1 and n2 are numbers, n1 > n2")
+        await ctx.send("Usage: `!rng n1 n2` where n1 and n2 are numbers, n1 < n2")
+
 
 @client.command()
 async def compliment(ctx):
