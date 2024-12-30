@@ -122,12 +122,28 @@ async def on_ready():
         save_dict[role_]()
 
 
+@client.command(aliases=['pp', 'shoot'])
+async def ignore(ctx):
+    """Ignored command"""
+    return
+
+
 @client.command()
 async def ping(ctx):
-    """
-    pong
-    """
+    """pong"""
     await ctx.send(f"Pong! {round(client.latency * 1000)}ms")
+
+
+@client.command()
+async def uptime(ctx):
+    """check how long the bot has been running for"""
+    end = time.perf_counter()
+    run_time = end - start
+    to_hours = time.strftime("%T", time.gmtime(run_time))
+    decimals = f'{(run_time % 1):.3f}'
+    msg = f'Bot has been up for {to_hours}:{str(decimals)[2:]}'
+
+    await ctx.send(msg)
 
 
 @client.command()
@@ -141,6 +157,12 @@ async def rng(ctx):
         await ctx.send(f"{random.randint(int(contents[1]), int(contents[2]))}")
     else:
         await ctx.send("Usage: `!rng n1 n2` where n1 and n2 are numbers, n1 < n2")
+
+
+@client.command()
+async def botpp(ctx):
+    """Makes the bot send !pp for jarv bot"""
+    await ctx.send("!pp")
 
 
 @client.command()
@@ -287,6 +309,18 @@ async def disable(ctx):
                        f"Available commands: {', '.join(toggleable_commands)}")
 
 
+# Create a shared cooldown
+shared_cooldown = commands.CooldownMapping.from_cooldown(1, 120, commands.BucketType.user)
+
+
+def check_cooldown(ctx):
+    # Retrieve the cooldown bucket for the current user
+    bucket = shared_cooldown.get_bucket(ctx.message)
+    if bucket is None:
+        return None  # No cooldown bucket found
+    return bucket.update_rate_limit()  # Returns the remaining cooldown time
+
+
 # SEGS
 # @client.command(aliases=['disallowsegs', 'disablesegs'])
 # @commands.has_permissions(administrator=True)
@@ -336,7 +370,16 @@ async def segs(ctx):
         role_name = role.name
         shadow_realm = discord.utils.get(ctx.guild.roles, name="Shadow Realm")
         condition = role not in caller.roles
-        if mentions and condition:
+
+        if not mentions:
+            await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
+            await log_channel.send(f"❓ {caller.mention} tried to segs in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
+
+        elif not condition:
+            await ctx.send(f"Segsed people can't segs, dummy <:pepela:1322718719977197671>")
+            await log_channel.send(f'❌ {caller.mention} tried to segs in {ctx.channel.mention} but they were segsed themselves ({ctx.guild.name} - {ctx.guild.id})')
+
+        else:
             target = mentions[0]
             if role in target.roles:
                 await ctx.send(f"https://cdn.discordapp.com/attachments/696842659989291130/1322717837730517083/segsed.webp?ex=6771e47b&is=677092fb&hm=8a7252a7bc87bbc129d4e7cc23f62acc770952cde229642cf3bfd77bd40f2769&")
@@ -346,6 +389,13 @@ async def segs(ctx):
             if shadow_realm in target.roles:
                 await ctx.send(f"I will not allow this")
                 await log_channel.send(f'💀 {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but they were dead ({ctx.guild.name} - {ctx.guild.id})')
+                return
+
+            retry_after = check_cooldown(ctx)
+            if retry_after:
+                await ctx.send(f"YOURE ON COOLDOWN FOR THESE ACTIVITIES\ntry again in {round(retry_after)} seconds :3")
+                await log_channel.send(
+                    f'🕐 {caller.mention} tried to segs in {ctx.channel.mention} but they were on cooldown ({ctx.guild.name} - {ctx.guild.id})')
                 return
 
             try:
@@ -377,14 +427,6 @@ async def segs(ctx):
             except discord.errors.Forbidden:
                 await ctx.send(f"*Insufficient permissions to execute segs*\n*Make sure I have a role that is higher than* `@{role_name}` <:madgeclap:1322719157241905242>")
                 await log_channel.send(f"❓ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but I don't have the necessary permissions to execute segs ({ctx.guild.name} - {ctx.guild.id})")
-
-        elif not mentions:
-            await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
-            await log_channel.send(f"❓ {caller.mention} tried to segs in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
-
-        elif not condition:
-            await ctx.send(f"Segsed people can't segs, dummy <:pepela:1322718719977197671>")
-            await log_channel.send(f'❌ {caller.mention} tried to segs in {ctx.channel.mention} but they were segsed themselves ({ctx.guild.name} - {ctx.guild.id})')
 
     elif 'segs' in server_settings.get(guild_id, {}).get('allowed_commands', []):
         await ctx.send(f"*Segs role does not exist!*\nRun !setsegsrole to use segs")
@@ -443,7 +485,16 @@ async def backshot(ctx):
         role_name = role.name
         shadow_realm = discord.utils.get(ctx.guild.roles, name="Shadow Realm")
         condition = role not in caller.roles
-        if mentions and condition:
+
+        if not mentions:
+            await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
+            await log_channel.send(f"❓ {caller.mention} tried to to give devious backshots in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
+
+        elif not condition:
+            await ctx.send(f"Backshotted people can't backshoot, dummy <:pepela:1322718719977197671>")
+            await log_channel.send(f'❌ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but they were backshotted themselves ({ctx.guild.name} - {ctx.guild.id})')
+
+        else:
             target = mentions[0]
             if role in target.roles:
                 await ctx.send(f"https://cdn.discordapp.com/attachments/696842659989291130/1322220705131008011/backshotted.webp?ex=6770157d&is=676ec3fd&hm=1197f229994962781ed6415a6a5cf1641c4c2d7ca56c9c3d559d44469988d15e&")
@@ -453,6 +504,13 @@ async def backshot(ctx):
             if shadow_realm in target.roles:
                 await ctx.send(f"I will not allow this")
                 await log_channel.send(f'💀 {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but they were dead ({ctx.guild.name} - {ctx.guild.id})')
+                return
+
+            retry_after = check_cooldown(ctx)
+            if retry_after:
+                await ctx.send(f"YOURE ON COOLDOWN FOR THESE ACTIVITIES\ntry again in {round(retry_after)} seconds :3")
+                await log_channel.send(
+                    f'🕐 {caller.mention} tried to give devious backshots in {ctx.channel.mention} but they were on cooldown ({ctx.guild.name} - {ctx.guild.id})')
                 return
 
             try:
@@ -481,14 +539,6 @@ async def backshot(ctx):
             except discord.errors.Forbidden:
                 await ctx.send(f"*Insufficient permissions to execute backshot*\n*Make sure I have a role that is higher than* `@{role_name}` <:madgeclap:1322719157241905242>")
                 await log_channel.send(f"❓ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but I don't have the necessary permissions to execute backshots ({ctx.guild.name} - {ctx.guild.id})")
-
-        elif not mentions:
-            await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
-            await log_channel.send(f"❓ {caller.mention} tried to to give devious backshots in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
-
-        elif not condition:
-            await ctx.send(f"Backshotted people can't backshoot, dummy <:pepela:1322718719977197671>")
-            await log_channel.send(f'❌ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but they were backshotted themselves ({ctx.guild.name} - {ctx.guild.id})')
 
     elif 'backshot' in server_settings.get(guild_id, {}).get('allowed_commands', []):
         await ctx.send(f"*Backshots role does not exist!*\nRun !setbackshotsrole use backshots")
