@@ -161,8 +161,24 @@ async def rng(ctx):
 
 @client.command()
 async def botpp(ctx):
-    """Makes the bot send !pp for jarv bot"""
-    await ctx.send("!pp")
+    """Makes the bot send !pp if Jarv Bot is in the server"""
+    try:
+        await ctx.guild.fetch_member(155149108183695360)
+        await ctx.send("!pp")
+    except discord.errors.NotFound:
+        await ctx.send("Jarv Bot is not in the server")
+
+
+@client.command()
+async def botafk(ctx):
+    """
+    Only usable by bot developer
+    Sends message announcing the bot is shutting down
+    """
+    if ctx.author.id not in allowed_users:
+        await ctx.send("You can't use this command, silly")
+    else:
+        await ctx.send("Ukra Bot is going down <:o7:1323425011234639942>")
 
 
 @client.command()
