@@ -156,9 +156,26 @@ async def rng(ctx):
     """
     contents = ctx.message.content.split()
     if len(contents) == 3 and contents[1].isnumeric() and contents[2].isnumeric() and int(contents[1]) < int(contents[2]):
-        await ctx.send(f"{random.randint(int(contents[1]), int(contents[2]))}")
+        await ctx.reply(f"{random.randint(int(contents[1]), int(contents[2]))}")
     else:
-        await ctx.send("Usage: `!rng n1 n2` where n1 and n2 are numbers, n1 < n2")
+        await ctx.reply("Usage: `!rng n1 n2` where n1 and n2 are numbers, n1 < n2")
+
+
+@client.command(aliases=['choice'])
+async def choose(ctx):
+    """
+    Chooses from provided options, separated by |
+    Example: !choice option | option 2 | another option
+    !choice <choice1> | <choice2> ...
+    """
+    contents = ' '.join(ctx.message.content.split()[1:])
+    if [s for s in contents if s not in '! ']:
+        if len(contents.split('|')) == 1:
+            await ctx.reply(f"Separate options with `|`")
+            return
+        await ctx.reply(f"{random.choice(contents.split('|'))}")
+    else:
+        await ctx.reply("Example usage: `!choice option | option 2 | another option`")
 
 
 @client.command()
