@@ -108,9 +108,11 @@ async def on_ready():
                 except discord.Forbidden:
                     # In case the bot doesn't have permission to remove the role
                     await log_channel.send(f"❌ Failed to remove `@{role.name}` from {member.mention} (permission error)")
+                    role_dict[role_name][guild_id].remove(member_id)
                 except discord.NotFound:
                     # Handle case where the member is not found in the guild
                     await log_channel.send(f"❌ Member {member.mention} not found in {guild.name}")
+                    role_dict[role_name][guild_id].remove(member_id)
                 except discord.HTTPException as e:
                     # Handle potential HTTP errors
                     await log_channel.send(f"❓ Failed to remove `@{role.name}` from {member.mention}: {e}")
@@ -149,8 +151,8 @@ async def uptime(ctx):
 @client.command()
 async def rng(ctx):
     """
-    !rng <n1> <n2>
     Returns a random number between n1 and n2
+    !rng <n1> <n2>
     """
     contents = ctx.message.content.split()
     if len(contents) == 3 and contents[1].isnumeric() and contents[2].isnumeric() and int(contents[1]) < int(contents[2]):
@@ -172,8 +174,8 @@ async def botpp(ctx):
 @client.command()
 async def botafk(ctx):
     """
-    Only usable by bot developer
     Sends message announcing the bot is shutting down
+    Only usable by bot developer
     """
     if ctx.author.id not in allowed_users:
         await ctx.send("You can't use this command, silly")
@@ -184,8 +186,8 @@ async def botafk(ctx):
 @client.command()
 async def compliment(ctx):
     """
-    !compliment @user
     Compliments user based on 3x100 most popular compliments lmfaoooooo
+    !compliment @user
     """
     if 'compliment' in server_settings.get(str(ctx.guild.id), {}).get('allowed_commands', []):
         with open(Path('dev', 'compliments.txt')) as fp:
@@ -230,49 +232,87 @@ async def settings(ctx):
                    '```')
 
 
-# ROLES #FIXME need to combine all of this into one function buh
+# ROLES
+# @client.command()
+# @commands.has_permissions(administrator=True)
+# async def setsegsrole(ctx):
+#     """
+#     !setsegsrole <role id/mention>
+#     Can only be used by administrators
+#     """
+#     guild_id = str(ctx.guild.id)
+#     guild = ctx.guild
+#     if len(ctx.message.content.split()) > 1:
+#         role_id = ctx.message.content.split()[1]
+#         if role := discord.utils.get(guild.roles, id=int(role_id)) if "<" not in role_id else guild.get_role(int(role_id[3:-1])):
+#             server_settings.setdefault(guild_id, {})['segs_role'] = role.id
+#             save_settings()
+#             await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the segs role to `@{role.name} - {role.id}`')
+#             await ctx.send(f"Segs role has been changed to `@{role.name}`")
+#         else:
+#             await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
+#     else:
+#         await ctx.send(f"Command usage: `!setsegsrole <role id/mention>`")
+#
+#
+# @client.command(aliases=['setbackshotrole'])
+# @commands.has_permissions(administrator=True)
+# async def setbackshotsrole(ctx):
+#     """
+#     !setbackshotsrole <role id/mention>
+#     Can only be used by administrators
+#     """
+#     guild_id = str(ctx.guild.id)
+#     guild = ctx.guild
+#     if len(ctx.message.content.split()) > 1:
+#         role_id = ctx.message.content.split()[1]
+#         if role := discord.utils.get(guild.roles, id=int(role_id)) if "<" not in role_id else guild.get_role(int(role_id[3:-1])):
+#             server_settings.setdefault(guild_id, {})['backshots_role'] = role.id
+#             save_settings()
+#             await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the backshots role to `@{role.name} - {role.id}`')
+#             await ctx.send(f"Backshot role has been changed to `@{role.name}`")
+#         else:
+#             await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
+#     else:
+#         await ctx.send(f"Command usage: `!setbackshotsrole <role id/mention>`")
+
+
 @client.command()
 @commands.has_permissions(administrator=True)
-async def setsegsrole(ctx):
+async def setrole(ctx):
     """
-    !setsegsrole <role id/mention>
+    Changes role that is distributed when executing !segs or !backshot
     Can only be used by administrators
+    !setrole (segs/backshot) <role id/mention>
+    example: !setrole segs @Segs Role
     """
+    allowed_roles = ['segs', 'backshot', 'backshots']
     guild_id = str(ctx.guild.id)
     guild = ctx.guild
-    if len(ctx.message.content.split()) > 1:
-        role_id = ctx.message.content.split()[1]
-        if role := discord.utils.get(guild.roles, id=int(role_id)) if "<" not in role_id else guild.get_role(int(role_id[3:-1])):
-            server_settings.setdefault(guild_id, {})['segs_role'] = role.id
+    split_msg = ctx.message.content.split()
+    if len(split_msg) == 3:
+        role_type = split_msg[1]
+        if role_type not in allowed_roles:
+            await ctx.send(f"Example usage: `!setrole segs @Segs Role`")
+            return
+        if role_type == 'backshot':
+            role_type = 'backshots'
+        role_id = split_msg[2]
+        if "<" in role_id:
+            role_id = role_id[3:-1]
+        if not role_id.isnumeric():
+            await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
+            return
+        if role := discord.utils.get(guild.roles, id=int(role_id)):
+            server_settings.setdefault(guild_id, {})[f'{role_type}_role'] = role.id
             save_settings()
-            await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the segs role to `@{role.name} - {role.id}`')
-            await ctx.send(f"Segs role has been changed to `@{role.name}`")
+            await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the {role_type} role to `@{role.name} - {role.id}`')
+            await ctx.send(f"{role_type.capitalize()} role has been changed to `@{role.name}`")
         else:
             await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
     else:
-        await ctx.send(f"Command usage: `!setsegsrole <role id/mention>`")
-
-
-@client.command(aliases=['setbackshotrole'])
-@commands.has_permissions(administrator=True)
-async def setbackshotsrole(ctx):
-    """
-    !setbackshotsrole <role id/mention>
-    Can only be used by administrators
-    """
-    guild_id = str(ctx.guild.id)
-    guild = ctx.guild
-    if len(ctx.message.content.split()) > 1:
-        role_id = ctx.message.content.split()[1]
-        if role := discord.utils.get(guild.roles, id=int(role_id)) if "<" not in role_id else guild.get_role(int(role_id[3:-1])):
-            server_settings.setdefault(guild_id, {})['backshots_role'] = role.id
-            save_settings()
-            await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the backshots role to `@{role.name} - {role.id}`')
-            await ctx.send(f"Backshot role has been changed to `@{role.name}`")
-        else:
-            await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
-    else:
-        await ctx.send(f"Command usage: `!setbackshotsrole <role id/mention>`")
+        print(split_msg)
+        await ctx.send(f"Command usage: `!setrole (segs/backshot) <role id/mention>`")
 
 
 # ENABLING/DISABLING
@@ -292,8 +332,8 @@ async def enable(ctx):
         server_settings.get(guild_id).get('allowed_commands').append(cmd)
         await log_channel.send(f'<:wicked:1323075389131587646> {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
         success = f"!{cmd} has been enabled"
-        success += '. **Please run !setsegsrole**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('segs_role')))) * cmd == 'segs')
-        success += '. **Please run !setbackshotrole**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('backshot_role')))) * cmd == 'backshot')
+        success += '. **Please run !setrole segs**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('segs_role')))) * cmd == 'segs')
+        success += '. **Please run !setrole backshot**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('backshots_role')))) * cmd == 'backshot')
         await ctx.send(success)
         save_settings()
     elif cmd in toggleable_commands:
@@ -369,9 +409,9 @@ def check_cooldown(ctx):
 @client.command()
 async def segs(ctx):
     """
-    !segs @victim, gives victim the Segs Role
-    Cannot be used on users who have been shot or segsed
     Distributes Segs Role for 60 seconds with a small chance to backfire
+    Cannot be used on users who have been shot or segsed
+    !segs @victim, gives victim the Segs Role
     """
     caller = ctx.author
     guild_id = str(ctx.guild.id)
@@ -441,7 +481,7 @@ async def segs(ctx):
                     save_distributed_segs()
 
             except discord.errors.Forbidden:
-                await ctx.send(f"*Insufficient permissions to execute segs*\n*Make sure I have a role that is higher than* `@{role_name}` <:madgeclap:1322719157241905242>")
+                await ctx.send(f"*Insufficient permissions to execute segs*\n*Make sure I have a role that is higher than* `@{role_name}` <a:madgeclap:1322719157241905242>")
                 await log_channel.send(f"❓ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but I don't have the necessary permissions to execute segs ({ctx.guild.name} - {ctx.guild.id})")
 
     elif 'segs' in server_settings.get(guild_id, {}).get('allowed_commands', []):
@@ -484,9 +524,9 @@ async def segs(ctx):
 @client.command(aliases=['backshoot'])
 async def backshot(ctx):
     """
-    !backshot @victim, gives victim the Backshot Role
-    Cannot be used on users who have been shot or backshot
     Distributes Backshots Role for 60 seconds with a small chance to backfire
+    Cannot be used on users who have been shot or backshot
+    !backshot @victim, gives victim the Backshot Role
     """
     caller = ctx.author
     guild_id = str(ctx.guild.id)
@@ -553,7 +593,7 @@ async def backshot(ctx):
                     save_distributed_backshots()
 
             except discord.errors.Forbidden:
-                await ctx.send(f"*Insufficient permissions to execute backshot*\n*Make sure I have a role that is higher than* `@{role_name}` <:madgeclap:1322719157241905242>")
+                await ctx.send(f"*Insufficient permissions to execute backshot*\n*Make sure I have a role that is higher than* `@{role_name}` <a:madgeclap:1322719157241905242>")
                 await log_channel.send(f"❓ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but I don't have the necessary permissions to execute backshots ({ctx.guild.name} - {ctx.guild.id})")
 
     elif 'backshot' in server_settings.get(guild_id, {}).get('allowed_commands', []):
