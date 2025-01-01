@@ -186,54 +186,56 @@ async def dnd(ctx):
     Examples: !dnd 2d6, !dnd d20, !dnd 5, !dnd
     !roll <n1>d<n1> where n1 and n2 are numbers, d is a separator, 0 < n1 <= 100, 0 < n2 <= 1000
     """
-    contents = ''.join(ctx.message.content.split()[1:])
-    if not len(contents):
-        await ctx.reply(f"Rolling **1d6**: `{random.choice(range(1, 7))}`")
-    elif 'd' in contents and len(contents) == 2:  # !dnd 5d20
-        if contents.split('d')[0]:
-            print(contents)
-            print(contents.split('d'))
-            number_of_dice, dice_size = contents.split('d')
-            if not number_of_dice.lstrip("-").isnumeric():
-                await ctx.reply(f"**{number_of_dice}** isn't a number")
-            elif not dice_size.lstrip("-").isnumeric():
-                await ctx.reply(f"**{dice_size}** isn't a number")
-            elif int(number_of_dice) < 0 or int(dice_size) < 0:
-                suspect = min(int(number_of_dice), int(dice_size))
-                await ctx.reply(f"**{suspect}** isn't greater than 0 <:stare:1323734104780312636>")
-            elif int(number_of_dice) > 100:
-                await ctx.reply(f"You don't need more than 100 dice rolls <:sunfire2:1324080466223169609>")
-            elif int(dice_size) > 1000:
-                await ctx.reply(f"Let's keep dice size under 1000 <:sunfire2:1324080466223169609>")
-            else:
-                result = random.choices(range(1, int(dice_size)+1), k=int(number_of_dice))
-                await ctx.reply(f"Rolling **{number_of_dice}d{dice_size}**: `{str(result)[1:-1]}`\nTotal: `{sum(result)}`")
+    guild_id = str(ctx.guild.id)
+    if 'dnd' in server_settings.get(guild_id, {}).get('allowed_commands', []):
+        contents = ''.join(ctx.message.content.split()[1:])
+        if not len(contents):
+            await ctx.reply(f"Rolling **1d6**: `{random.choice(range(1, 7))}`")
+        elif 'd' in contents and len(contents) == 2:  # !dnd 5d20
+            if contents.split('d')[0]:
+                print(contents)
+                print(contents.split('d'))
+                number_of_dice, dice_size = contents.split('d')
+                if not number_of_dice.lstrip("-").isnumeric():
+                    await ctx.reply(f"**{number_of_dice}** isn't a number")
+                elif not dice_size.lstrip("-").isnumeric():
+                    await ctx.reply(f"**{dice_size}** isn't a number")
+                elif int(number_of_dice) < 0 or int(dice_size) < 0:
+                    suspect = min(int(number_of_dice), int(dice_size))
+                    await ctx.reply(f"**{suspect}** isn't greater than 0 <:stare:1323734104780312636>")
+                elif int(number_of_dice) > 100:
+                    await ctx.reply(f"You don't need more than 100 dice rolls <:sunfire2:1324080466223169609>")
+                elif int(dice_size) > 1000:
+                    await ctx.reply(f"Let's keep dice size under 1000 <:sunfire2:1324080466223169609>")
+                else:
+                    result = random.choices(range(1, int(dice_size)+1), k=int(number_of_dice))
+                    await ctx.reply(f"Rolling **{number_of_dice}d{dice_size}**: `{str(result)[1:-1]}`\nTotal: `{sum(result)}`")
 
-        elif contents[1:].lstrip('-').isnumeric():  # !dnd d10  =  !dnd 1d10
-            print(contents)
-            print(contents.split('d'))
-            dice_size = int(contents[1:])
-            if int(dice_size) < 0:
-                await ctx.reply(f"**{dice_size}** isn't greater than 0 <:stare:1323734104780312636>")
-            elif int(dice_size) > 1000:
-                await ctx.reply(f"Let's keep dice size under 1000 <:sunfire2:1324080466223169609>")
+            elif contents[1:].lstrip('-').isnumeric():  # !dnd d10  =  !dnd 1d10
+                print(contents)
+                print(contents.split('d'))
+                dice_size = int(contents[1:])
+                if int(dice_size) < 0:
+                    await ctx.reply(f"**{dice_size}** isn't greater than 0 <:stare:1323734104780312636>")
+                elif int(dice_size) > 1000:
+                    await ctx.reply(f"Let's keep dice size under 1000 <:sunfire2:1324080466223169609>")
+                else:
+                    await ctx.reply(f"Rolling **1d{dice_size}**: `{random.choice(range(1, dice_size+1))}`")
+
             else:
-                await ctx.reply(f"Rolling **1d{dice_size}**: `{random.choice(range(1, dice_size+1))}`")
+                await ctx.reply("Example usage: `!roll 2d6`")
+
+        elif 'd' not in contents and len(contents) == 2 and contents.lstrip("-").isnumeric():  # !dnd 10  =  !dnd 10d6
+            if int(contents) < 0:
+                await ctx.reply(f"**{contents}** isn't greater than 0 <:stare:1323734104780312636>")
+            elif int(contents) > 100:
+                await ctx.reply(f"You don't need more than 100 dice rolls <:sunfire2:1324080466223169609>")
+            else:
+                result = random.choices(range(1, 7), k=int(contents))
+                await ctx.reply(f"Rolling **{contents}d6**: `{str(result)[1:-1]}`\nTotal: `{sum(result)}`")
 
         else:
             await ctx.reply("Example usage: `!roll 2d6`")
-
-    elif 'd' not in contents and len(contents) == 2 and contents.lstrip("-").isnumeric():  # !dnd 10  =  !dnd 10d6
-        if int(contents) < 0:
-            await ctx.reply(f"**{contents}** isn't greater than 0 <:stare:1323734104780312636>")
-        elif int(contents) > 100:
-            await ctx.reply(f"You don't need more than 100 dice rolls <:sunfire2:1324080466223169609>")
-        else:
-            result = random.choices(range(1, 7), k=int(contents))
-            await ctx.reply(f"Rolling **{contents}d6**: `{str(result)[1:-1]}`\nTotal: `{sum(result)}`")
-
-    else:
-        await ctx.reply("Example usage: `!roll 2d6`")
 
 
 @client.command()
@@ -281,12 +283,14 @@ async def compliment(ctx):
 async def settings(ctx):
     """Shows current server settings"""
     guild_settings = server_settings[str(ctx.guild.id)]
-    allowed_commands = guild_settings.get("allowed_commands", set())
+    allowed_commands = guild_settings.setdefault('allowed_commands', ['compliment', 'dnd'])
+    save_settings()
     segs_allowed = 'segs' in allowed_commands
     segs_role = guild_settings.get("segs_role", False)
     backshots_allowed = 'backshot' in allowed_commands
     backshots_role = guild_settings.get("backshots_role", False)
     compliments_allowed = 'compliment' in allowed_commands
+    dnd_allowed = 'dnd' in allowed_commands
 
     if backshots_role and ctx.guild.get_role(backshots_role):
         backshots_role_name = '@' + ctx.guild.get_role(backshots_role).name
@@ -303,7 +307,9 @@ async def settings(ctx):
                    f"Backshots:      {allow_dict[backshots_allowed]}\n" +
                    f"Backshots Role: {backshots_role_name}\n" * backshots_allowed +
                    '\n' +
-                   f"Compliments:    {allow_dict[compliments_allowed]}" +
+                   f"Compliments:    {allow_dict[compliments_allowed]}\n" +
+                   '\n' +
+                   f"DND:            {allow_dict[dnd_allowed]}" +
                    '```')
 
 
@@ -391,7 +397,7 @@ async def setrole(ctx):
 
 
 # ENABLING/DISABLING
-toggleable_commands = ['segs', 'backshot', 'compliment']
+toggleable_commands = ['segs', 'backshot', 'compliment', 'dnd']
 
 
 @client.command(aliases=['allow'])
@@ -403,7 +409,7 @@ async def enable(ctx):
     """
     guild_id = str(ctx.guild.id)
     cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
-    if cmd in toggleable_commands and cmd not in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', []):
+    if cmd in toggleable_commands and cmd not in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', ['compliment', 'dnd']):
         server_settings.get(guild_id).get('allowed_commands').append(cmd)
         await log_channel.send(f'<:wicked:1323075389131587646> {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
         success = f"!{cmd} has been enabled"
@@ -427,8 +433,8 @@ async def disable(ctx):
     """
     guild_id = str(ctx.guild.id)
     cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
-    if cmd in toggleable_commands and cmd in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', []):
-        server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', set()).remove(cmd)
+    if cmd in toggleable_commands and cmd in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', ['compliment', 'dnd']):
+        server_settings.get(guild_id).get('allowed_commands').remove(cmd)
         await log_channel.send(f'<:deadge:1323075561089929300> {ctx.author.mention} disabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
         success = f"!{cmd} has been disabled"
         await ctx.send(success)
