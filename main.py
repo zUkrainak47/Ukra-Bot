@@ -283,7 +283,7 @@ async def compliment(ctx):
 async def settings(ctx):
     """Shows current server settings"""
     guild_settings = server_settings[str(ctx.guild.id)]
-    allowed_commands = guild_settings.setdefault('allowed_commands', ['compliment', 'dnd'])
+    allowed_commands = guild_settings.setdefault('allowed_commands', default_allowed_commands)
     save_settings()
     segs_allowed = 'segs' in allowed_commands
     segs_role = guild_settings.get("segs_role", False)
@@ -292,24 +292,25 @@ async def settings(ctx):
     compliments_allowed = 'compliment' in allowed_commands
     dnd_allowed = 'dnd' in allowed_commands
 
-    if backshots_role and ctx.guild.get_role(backshots_role):
-        backshots_role_name = '@' + ctx.guild.get_role(backshots_role).name
-    else:
-        backshots_role_name = "Does not exist, run !setbackshotsrole"
-
     if segs_role and ctx.guild.get_role(segs_role):
         segs_role_name = '@' + ctx.guild.get_role(segs_role).name
     else:
-        segs_role_name = "Does not exist, run !setsegsrole"
-    await ctx.send(f"```Segs:           {allow_dict[segs_allowed]}\n" +
-                   f"Segs Role:      {segs_role_name}\n" * segs_allowed +
+        segs_role_name = "N/A" + ", run !setrole segs" * segs_allowed
+
+    if backshots_role and ctx.guild.get_role(backshots_role):
+        backshots_role_name = '@' + ctx.guild.get_role(backshots_role).name
+    else:
+        backshots_role_name = "N/A" + ", run !setrole backshot" * backshots_allowed
+
+    await ctx.send(f"```Segs:            {allow_dict[segs_allowed]}\n" +
+                   f"Segs Role:       {segs_role_name}\n" +
                    '\n' +
-                   f"Backshots:      {allow_dict[backshots_allowed]}\n" +
-                   f"Backshots Role: {backshots_role_name}\n" * backshots_allowed +
+                   f"Backshots:       {allow_dict[backshots_allowed]}\n" +
+                   f"Backshots Role:  {backshots_role_name}\n" +
                    '\n' +
-                   f"Compliments:    {allow_dict[compliments_allowed]}\n" +
+                   f"Compliments:     {allow_dict[compliments_allowed]}\n" +
                    '\n' +
-                   f"DND:            {allow_dict[dnd_allowed]}" +
+                   f"DND:             {allow_dict[dnd_allowed]}" +
                    '```')
 
 
@@ -398,7 +399,7 @@ async def setrole(ctx):
 
 # ENABLING/DISABLING
 toggleable_commands = ['segs', 'backshot', 'compliment', 'dnd']
-
+default_allowed_commands = ['compliment', 'dnd']
 
 @client.command(aliases=['allow'])
 @commands.has_permissions(administrator=True)
@@ -409,7 +410,7 @@ async def enable(ctx):
     """
     guild_id = str(ctx.guild.id)
     cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
-    if cmd in toggleable_commands and cmd not in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', ['compliment', 'dnd']):
+    if cmd in toggleable_commands and cmd not in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands):
         server_settings.get(guild_id).get('allowed_commands').append(cmd)
         await log_channel.send(f'<:wicked:1323075389131587646> {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
         success = f"!{cmd} has been enabled"
@@ -433,7 +434,7 @@ async def disable(ctx):
     """
     guild_id = str(ctx.guild.id)
     cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
-    if cmd in toggleable_commands and cmd in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', ['compliment', 'dnd']):
+    if cmd in toggleable_commands and cmd in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands):
         server_settings.get(guild_id).get('allowed_commands').remove(cmd)
         await log_channel.send(f'<:deadge:1323075561089929300> {ctx.author.mention} disabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
         success = f"!{cmd} has been disabled"
