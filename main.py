@@ -29,6 +29,18 @@ intents.members = True
 intents.message_content = True
 client = commands.Bot(command_prefix="!", intents=intents)
 
+# EMOJIS
+yay = '<:yay:1322721331896389702>'
+o7 = '<:o7:1323425011234639942>'
+peeposcheme = '<:peeposcheme:1322225542027804722>'
+sunfire2 = '<:sunfire2:1324080466223169609>'
+stare = '<:stare:1323734104780312636>'
+HUH = '<:HUH:1322719443519934585>'
+wicked = '<:wicked:1323075389131587646>'
+deadge = '<:deadge:1323075561089929300>'
+teripoint = '<:teripoint:1322718769679827024>'
+madgeclap = '<a:madgeclap:1322719157241905242>'
+pepela = '<:pepela:1322718719977197671>'
 
 SETTINGS_FILE = Path("dev", "server_settings.json")
 if os.path.exists(SETTINGS_FILE):
@@ -139,7 +151,7 @@ async def on_ready():
     log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
 
     # await log_channel.send(f'{client.user} has connected to Discord!')
-    await log_channel.send(f'<:yay:1322721331896389702>\n{bot_name} has connected to Discord!')
+    await log_channel.send(f'{yay}\n{bot_name} has connected to Discord!')
     role_dict = {'backshots_role': distributed_backshots,
                  'segs_role': distributed_segs}
     save_dict = {'backshots_role': save_distributed_backshots,
@@ -269,11 +281,11 @@ async def dnd(ctx):
                     await ctx.reply(f"**{dice_size}** isn't a number")
                 elif int(number_of_dice) < 0 or int(dice_size) < 0:
                     suspect = min(int(number_of_dice), int(dice_size))
-                    await ctx.reply(f"**{suspect}** isn't greater than 0 <:stare:1323734104780312636>")
+                    await ctx.reply(f"**{suspect}** isn't greater than 0 {stare}")
                 elif int(number_of_dice) > 100:
-                    await ctx.reply(f"You don't need more than 100 dice rolls <:sunfire2:1324080466223169609>")
+                    await ctx.reply(f"You don't need more than 100 dice rolls {sunfire2}")
                 elif int(dice_size) > 1000:
-                    await ctx.reply(f"Let's keep dice size under 1000 <:sunfire2:1324080466223169609>")
+                    await ctx.reply(f"Let's keep dice size under 1000 {sunfire2}")
                 else:
                     result = random.choices(range(1, int(dice_size)+1), k=int(number_of_dice))
                     await ctx.reply(f"Rolling **{number_of_dice}d{dice_size}**: `{str(result)[1:-1]}`\nTotal: `{sum(result)}`")
@@ -283,9 +295,9 @@ async def dnd(ctx):
                 print(contents.split('d'))
                 dice_size = int(contents[1:])
                 if int(dice_size) < 0:
-                    await ctx.reply(f"**{dice_size}** isn't greater than 0 <:stare:1323734104780312636>")
+                    await ctx.reply(f"**{dice_size}** isn't greater than 0 {stare}")
                 elif int(dice_size) > 1000:
-                    await ctx.reply(f"Let's keep dice size under 1000 <:sunfire2:1324080466223169609>")
+                    await ctx.reply(f"Let's keep dice size under 1000 {sunfire2}")
                 else:
                     await ctx.reply(f"Rolling **1d{dice_size}**: `{random.choice(range(1, dice_size+1))}`")
 
@@ -294,9 +306,9 @@ async def dnd(ctx):
 
         elif 'd' not in contents and len(contents) == 2 and contents.lstrip("-").isnumeric():  # !dnd 10  =  !dnd 10d6
             if int(contents) < 0:
-                await ctx.reply(f"**{contents}** isn't greater than 0 <:stare:1323734104780312636>")
+                await ctx.reply(f"**{contents}** isn't greater than 0 {stare}")
             elif int(contents) > 100:
-                await ctx.reply(f"You don't need more than 100 dice rolls <:sunfire2:1324080466223169609>")
+                await ctx.reply(f"You don't need more than 100 dice rolls {sunfire2}")
             else:
                 result = random.choices(range(1, 7), k=int(contents))
                 await ctx.reply(f"Rolling **{contents}d6**: `{str(result)[1:-1]}`\nTotal: `{sum(result)}`")
@@ -324,7 +336,7 @@ async def botafk(ctx):
     if ctx.author.id not in allowed_users:
         await ctx.send("You can't use this command, silly")
     else:
-        await ctx.send("Ukra Bot is going down <:o7:1323425011234639942>")
+        await ctx.send(f"Ukra Bot is going down {o7}")
 
 
 @client.command()
@@ -488,7 +500,7 @@ async def enable(ctx):
     cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
     if cmd in toggleable_commands and cmd not in server_settings.get(guild_id).get('allowed_commands'):
         server_settings.get(guild_id).get('allowed_commands').append(cmd)
-        await log_channel.send(f'<:wicked:1323075389131587646> {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
+        await log_channel.send(f'{wicked} {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
         success = f"{cmd} has been enabled"
         success += '. **Please run !setrole segs**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('segs_role')))) * cmd == 'segs')
         success += '. **Please run !setrole backshot**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('backshots_role')))) * cmd == 'backshot')
@@ -513,7 +525,7 @@ async def disable(ctx):
     cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
     if cmd in toggleable_commands and cmd in server_settings.get(guild_id).get('allowed_commands'):
         server_settings.get(guild_id).get('allowed_commands').remove(cmd)
-        await log_channel.send(f'<:deadge:1323075561089929300> {ctx.author.mention} disabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
+        await log_channel.send(f'{deadge} {ctx.author.mention} disabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
         success = f"{cmd} has been disabled"
         await ctx.send(success)
         save_settings()
@@ -592,7 +604,7 @@ async def segs(ctx):
             await log_channel.send(f"❓ {caller.mention} tried to segs in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
 
         elif not condition:
-            await ctx.send(f"Segsed people can't segs, dummy <:pepela:1322718719977197671>")
+            await ctx.send(f"Segsed people can't segs, dummy {pepela}")
             await log_channel.send(f'❌ {caller.mention} tried to segs in {ctx.channel.mention} but they were segsed themselves ({ctx.guild.name} - {ctx.guild.id})')
 
         else:
@@ -619,7 +631,7 @@ async def segs(ctx):
                     distributed_segs.setdefault(str(ctx.guild.id), []).append(target.id)
                     save_distributed_segs()
                     await target.add_roles(role)
-                    await ctx.send(f'{caller.mention} has segsed {target.mention} ' + '<:HUH:1322719443519934585> ' * (caller.mention == target.mention) + '<:peeposcheme:1322225542027804722>' * (caller.mention != target.mention))
+                    await ctx.send(f'{caller.mention} has segsed {target.mention} ' + f'{HUH} ' * (caller.mention == target.mention) + peeposcheme * (caller.mention != target.mention))
                     await log_channel.send(f'✅ {caller.mention} has segsed {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
                     await asyncio.sleep(60)
                     await target.remove_roles(role)
@@ -633,7 +645,7 @@ async def segs(ctx):
                     if target.id == 1322197604297085020:
                         await ctx.send(f'You thought you could segs me? **NAHHHH** get segsed yourself')
                     else:
-                        await ctx.send(f'OOPS! Segs failed <:teripoint:1322718769679827024>' + ' <:HUH:1322719443519934585>' * (caller.mention == target.mention))
+                        await ctx.send(f'OOPS! Segs failed {teripoint}' + f' {HUH}' * (caller.mention == target.mention))
                     await log_channel.send(f'❌ {caller.mention} failed to segs {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
                     await asyncio.sleep(60)
                     await caller.remove_roles(role)
@@ -641,7 +653,7 @@ async def segs(ctx):
                     save_distributed_segs()
 
             except discord.errors.Forbidden:
-                await ctx.send(f"*Insufficient permissions to execute segs*\n*Make sure I have a role that is higher than* `@{role_name}` <a:madgeclap:1322719157241905242>")
+                await ctx.send(f"*Insufficient permissions to execute segs*\n*Make sure I have a role that is higher than* `@{role_name}` {madgeclap}")
                 await log_channel.send(f"❓ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but I don't have the necessary permissions to execute segs ({ctx.guild.name} - {ctx.guild.id})")
 
     elif 'segs' in server_settings.get(guild_id).get('allowed_commands'):
@@ -708,7 +720,7 @@ async def backshot(ctx):
             await log_channel.send(f"❓ {caller.mention} tried to to give devious backshots in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
 
         elif not condition:
-            await ctx.send(f"Backshotted people can't backshoot, dummy <:pepela:1322718719977197671>")
+            await ctx.send(f"Backshotted people can't backshoot, dummy {pepela}")
             await log_channel.send(f'❌ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but they were backshotted themselves ({ctx.guild.name} - {ctx.guild.id})')
 
         else:
@@ -735,7 +747,7 @@ async def backshot(ctx):
                     distributed_backshots.setdefault(str(ctx.guild.id), []).append(target.id)
                     save_distributed_backshots()
                     await target.add_roles(role)
-                    await ctx.send(f'{caller.mention} has given {target.mention} devious backshots ' + '<:HUH:1322719443519934585> ' * (caller.mention == target.mention) + '<:peeposcheme:1322225542027804722>' * (caller.mention != target.mention))
+                    await ctx.send(f'{caller.mention} has given {target.mention} devious backshots ' + f'{HUH} ' * (caller.mention == target.mention) + peeposcheme * (caller.mention != target.mention))
                     await log_channel.send(f'✅ {caller.mention} has given {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
                     await asyncio.sleep(60)
                     await target.remove_roles(role)
@@ -746,7 +758,7 @@ async def backshot(ctx):
                     distributed_backshots.setdefault(str(ctx.guild.id), []).append(caller.id)
                     save_distributed_backshots()
                     await caller.add_roles(role)
-                    await ctx.send(f'OOPS! You missed the backshot <:teripoint:1322718769679827024>' + ' <:HUH:1322719443519934585>' * (caller.mention == target.mention))
+                    await ctx.send(f'OOPS! You missed the backshot {teripoint}' + f' {HUH}' * (caller.mention == target.mention))
                     await log_channel.send(f'❌ {caller.mention} failed to give {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
                     await asyncio.sleep(60)
                     await caller.remove_roles(role)
@@ -754,7 +766,7 @@ async def backshot(ctx):
                     save_distributed_backshots()
 
             except discord.errors.Forbidden:
-                await ctx.send(f"*Insufficient permissions to execute backshot*\n*Make sure I have a role that is higher than* `@{role_name}` <a:madgeclap:1322719157241905242>")
+                await ctx.send(f"*Insufficient permissions to execute backshot*\n*Make sure I have a role that is higher than* `@{role_name}` {madgeclap}")
                 await log_channel.send(f"❓ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but I don't have the necessary permissions to execute backshots ({ctx.guild.name} - {ctx.guild.id})")
 
     elif 'backshot' in server_settings.get(guild_id).get('allowed_commands'):
@@ -954,6 +966,8 @@ class Currency(commands.Cog):
         result = random.choice(results)
         guild_id = str(ctx.guild.id)
         if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
             if not len(contents):
                 await ctx.reply(f"Result is `{result.capitalize()}`!")
@@ -964,8 +978,12 @@ class Currency(commands.Cog):
                 if i.isnumeric() and not num_ok:
                     number = int(i)
                     num_ok = True
-                if i.lower() in results and not gamble_choice_ok:
-                    gamble_choice = i.lower()
+                if i.lower() == 'all':
+                    number = server_settings.get(guild_id).get('currency').get(author_id)
+                    num_ok = True
+                if i.lower() in results + ['head', 'tail'] and not gamble_choice_ok:
+                    gamble_choice = (i.lower() + 's') if ('s' not in i.lower()) else i.lower()
+                    print(gamble_choice)
                     gamble_choice_ok = True
                 if num_ok and gamble_choice_ok:
                     break
@@ -973,15 +991,13 @@ class Currency(commands.Cog):
                 await ctx.reply(f"If you want to gamble with coins, include the __amount__ you're betting and __what you're betting on (heads/tails)__\nAnyway, the result is `{result.capitalize()}`!")
                 return
             try:
-                author_id = str(ctx.author.id)
-                make_sure_user_has_currency(guild_id, author_id)
                 if number <= server_settings.get(guild_id).get('currency').get(author_id):
                     did_you_win = result == gamble_choice
                     delta = int(number * 2 * (did_you_win - 0.5))
                     server_settings[guild_id]['currency'][author_id] += delta
                     num = server_settings.get(guild_id).get('currency').get(author_id)
                     save_settings()
-                    messages_dict = {True: f"You win! The result was `{result.capitalize()}` <:yay:1322721331896389702>", False: f"You lose! The result was `{result.capitalize()}` <:o7:1323425011234639942>"}
+                    messages_dict = {True: f"You win! The result was `{result.capitalize()}` {yay}", False: f"You lose! The result was `{result.capitalize()}` {o7}"}
                     await ctx.reply(f"## {messages_dict[did_you_win]}\n\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
                 else:
                     await ctx.reply("Gambling failed! That's more coins than you own")
@@ -989,6 +1005,45 @@ class Currency(commands.Cog):
                 await ctx.reply("Gambling failed!")
         else:
             await ctx.reply(f"Result is `{random.choice(results)}`!")
+
+    @commands.command()
+    async def gamble(self, ctx):
+        """
+        Takes a bet, 50% win rate
+        !gamble number
+        """
+        results = [1, 0]
+        result = random.choice(results)
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            contents = ctx.message.content.split()[1:]
+            if not len(contents):
+                await ctx.reply("Please include the amount you'd like the gamble")
+                return
+            for i in contents:
+                if i.isnumeric():
+                    number = int(i)
+                    break
+                if i.lower() == 'all':
+                    number = server_settings.get(guild_id).get('currency').get(author_id)
+                    break
+            else:
+                await ctx.reply("Please include the amount you'd like the gamble")
+                return
+            try:
+                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                    delta = int(number * 2 * (result - 0.5))
+                    server_settings[guild_id]['currency'][author_id] += delta
+                    num = server_settings.get(guild_id).get('currency').get(author_id)
+                    save_settings()
+                    messages_dict = {1: f"You win! {yay}", 0: f"You lose! {o7}"}
+                    await ctx.reply(f"## {messages_dict[result]}\n\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
+                else:
+                    await ctx.reply("Gambling failed! That's more coins than you own")
+            except:
+                await ctx.reply("Gambling failed!")
 
     @commands.command()
     async def bless(self, ctx):
