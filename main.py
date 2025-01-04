@@ -888,11 +888,58 @@ async def leaderboard(ctx):
         for member_id, coins in sorted_members:
             try:
                 member = ctx.guild.get_member(int(member_id))
-                top_users.append([member.display_name, coins])
+                if int(member_id) != ctx.author.id:
+                    top_users.append([member.display_name, coins])
+                else:
+                    top_users.append([f"__{member.display_name}__", coins])
+
             except discord.NotFound:
                 pass
-        top_users = top_users[:25]
-        await ctx.send(f"## Top {min(25, len(top_users))} Richest Users:\n{'\n'.join([f"**{top_user_nickname}:** {top_user_coins:,} {coin}" for top_user_nickname, top_user_coins in top_users])}")
+        top_users = top_users[:10]
+        await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{index} - {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
+
+
+@client.command(aliases=['coin'])
+async def coinflip(ctx):
+    results = ['heads', 'tails']
+    result = random.choice(results)
+    guild_id = str(ctx.guild.id)
+    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+        contents = ctx.message.content.split()[1:]
+        if not len(contents):
+            await ctx.reply(f"Result is `{result.capitalize()}`!")
+            return
+        num_ok = False
+        gamble_choice_ok = False
+        for i in contents:
+            if i.isnumeric() and not num_ok:
+                number = int(i)
+                num_ok = True
+            if i.lower() in results and not gamble_choice_ok:
+                gamble_choice = i.lower()
+                gamble_choice_ok = True
+            if num_ok and gamble_choice_ok:
+                break
+        else:
+            await ctx.reply(f"If you want to gamble with coins, include the __amount__ you're betting and __what you're betting on (heads/tails)__\nAnyway, the result is `{result.capitalize()}`!")
+            return
+        try:
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                did_you_win = result == gamble_choice
+                delta = int(number * 2 * (did_you_win - 0.5))
+                server_settings[guild_id]['currency'][author_id] += delta
+                num = server_settings.get(guild_id).get('currency').get(author_id)
+                save_settings()
+                messages_dict = {True: f"You win! The result was `{result.capitalize()}` <:yay:1322721331896389702>", False: f"You lose! The result was `{result.capitalize()}` <:o7:1323425011234639942>"}
+                await ctx.send(f"## {messages_dict[did_you_win]}\n\n**{ctx.author.display_name}:** {delta:,}\nBalance: {num:,} {coin}")
+            else:
+                await ctx.send("Gambling failed! That's more coins than you own")
+        except:
+            await ctx.send("Gambling failed!")
+    else:
+        await ctx.reply(f"Result is `{random.choice(results)}`!")
 
 
 @client.event
