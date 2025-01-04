@@ -770,182 +770,235 @@ async def backshot(ctx):
 coin = "<:fishingecoin:1324905329657643179>"
 
 
-@client.command(aliases=['b', 'bal'])
-async def balance(ctx):
-    guild_id = str(ctx.guild.id)
-    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
-        if mentions := ctx.message.mentions:
-            member_id = str(mentions[0].id)
-            num = make_sure_user_has_currency(guild_id, member_id)
-            save_settings()
-            await ctx.send(f"**{mentions[0].display_name}:** {num:,} {coin}")
+class Currency(commands.Cog):
+    """Commands related to the currency system"""
 
-        else:
-            author_id = str(ctx.author.id)
-            num = make_sure_user_has_currency(guild_id, author_id)
-            save_settings()
-            await ctx.send(f"**{ctx.author.display_name}:** {num:,} {coin}")
+    def __init__(self, bot):
+        self.bot = bot
 
-
-@client.command(aliases=['d'])
-async def daily(ctx):
-    guild_id = str(ctx.guild.id)
-    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
-        author_id = str(ctx.author.id)
-        make_sure_user_has_currency(guild_id, author_id)
-
-        now = datetime.now()
-        last_used = user_last_used.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(days=1))
-        if last_used and last_used.date() == now.date():
-            await ctx.send(f"You can use `daily` again <t:{get_reset_timestamp()}:R>")
-            return
-        today_coins = random.randint(90, 260)
-        server_settings[guild_id]['currency'][author_id] += today_coins
-        save_settings()
-        user_last_used[guild_id][author_id] = now
-        save_last_used()
-        await ctx.send(f"## Daily coins claimed!\n**{ctx.author.display_name}:** +{today_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
-
-
-@client.command(aliases=['w'])
-async def weekly(ctx):
-    guild_id = str(ctx.guild.id)
-    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
-        author_id = str(ctx.author.id)
-        make_sure_user_has_currency(guild_id, author_id)
-
-        now = datetime.now()
-        # Get the last reset time
-        last_used_w = user_last_used_w.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(weeks=1))
-
-        # Calculate the start of the current week (Monday 12 AM)
-        start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
-
-        if last_used_w >= start_of_week:
-            reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
-            await ctx.send(f"You can use `weekly` again <t:{reset_timestamp}:R>")
-            return
-
-        # Award coins and update settings
-        weekly_coins = random.randint(500, 2000)  # Adjust reward range as desired
-        server_settings[guild_id]['currency'][author_id] += weekly_coins
-        save_settings()
-        user_last_used_w[guild_id][author_id] = now
-        save_last_used_w()
-
-        # Send confirmation message
-        reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
-        await ctx.send(f"## Weekly coins claimed!\n**{ctx.author.display_name}:** +{weekly_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
-
-
-@client.command(aliases=['pay'])
-async def give(ctx):
-    guild_id = str(ctx.guild.id)
-    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
-        author_id = str(ctx.author.id)
-        make_sure_user_has_currency(guild_id, author_id)
-        if mentions := ctx.message.mentions:
-            target_id = str(mentions[0].id)
-            if mentions[0].id == ctx.author.id:
-                await ctx.send("You can't send coins to yourself, silly")
-                return
-            contents = ctx.message.content.split()[1:]
-            for i in contents:
-                if i.isnumeric():
-                    number = int(i)
-                    break
-            else:
-                await ctx.send("Please include the amount you'd like the give")
-                return
-        else:
-            await ctx.send("Something went wrong, please make sure that the command has a user mention")
-            return
-
-        try:
-            make_sure_user_has_currency(guild_id, target_id)
-            if number <= server_settings.get(guild_id).get('currency').get(author_id):
-                server_settings[guild_id]['currency'][target_id] += number
-                server_settings[guild_id]['currency'][author_id] -= number
-                num1 = server_settings.get(guild_id).get('currency').get(author_id)
-                num2 = server_settings.get(guild_id).get('currency').get(target_id)
+    @commands.command(aliases=['b', 'bal'])
+    async def balance(self, ctx):
+        """
+        Check your or someone else's balance
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            if mentions := ctx.message.mentions:
+                member_id = str(mentions[0].id)
+                num = make_sure_user_has_currency(guild_id, member_id)
                 save_settings()
-                await ctx.send(f"## Transaction successful!\n\n**{ctx.author.display_name}:** {num1:,} {coin}\n**{mentions[0].display_name}:** {num2:,} {coin}")
+                await ctx.reply(f"**{mentions[0].display_name}:** {num:,} {coin}")
+
             else:
-                await ctx.send("Transaction failed! That's more coins than you own")
-        except:
-            await ctx.send("Transaction failed!")
+                author_id = str(ctx.author.id)
+                num = make_sure_user_has_currency(guild_id, author_id)
+                save_settings()
+                await ctx.reply(f"**{ctx.author.display_name}:** {num:,} {coin}")
 
-
-@client.command(aliases=['lb'])
-async def leaderboard(ctx):
-    guild_id = str(ctx.guild.id)
-    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
-        author_id = str(ctx.author.id)
-        make_sure_user_has_currency(guild_id, author_id)
-        members = server_settings.get(guild_id).get('currency')
-        sorted_members = sorted(list(members.items()), key=lambda x: x[1], reverse=True)[:50]
-        top_users = []
-        for member_id, coins in sorted_members:
-            try:
-                member = ctx.guild.get_member(int(member_id))
-                if int(member_id) != ctx.author.id:
-                    top_users.append([member.display_name, coins])
-                else:
-                    top_users.append([f"__{member.display_name}__", coins])
-
-            except discord.NotFound:
-                pass
-        top_users = top_users[:10]
-        await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{index} - {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
-
-
-@client.command(aliases=['coin'])
-async def coinflip(ctx):
-    results = ['heads', 'tails']
-    result = random.choice(results)
-    guild_id = str(ctx.guild.id)
-    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
-        contents = ctx.message.content.split()[1:]
-        if not len(contents):
-            await ctx.reply(f"Result is `{result.capitalize()}`!")
-            return
-        num_ok = False
-        gamble_choice_ok = False
-        for i in contents:
-            if i.isnumeric() and not num_ok:
-                number = int(i)
-                num_ok = True
-            if i.lower() in results and not gamble_choice_ok:
-                gamble_choice = i.lower()
-                gamble_choice_ok = True
-            if num_ok and gamble_choice_ok:
-                break
-        else:
-            await ctx.reply(f"If you want to gamble with coins, include the __amount__ you're betting and __what you're betting on (heads/tails)__\nAnyway, the result is `{result.capitalize()}`!")
-            return
-        try:
+    @commands.command(aliases=['fish', 'fishinge'])
+    @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
+    async def work(self, ctx):
+        """
+        Work and get a small number of coins
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-            if number <= server_settings.get(guild_id).get('currency').get(author_id):
-                did_you_win = result == gamble_choice
-                delta = int(number * 2 * (did_you_win - 0.5))
-                server_settings[guild_id]['currency'][author_id] += delta
-                num = server_settings.get(guild_id).get('currency').get(author_id)
-                save_settings()
-                messages_dict = {True: f"You win! The result was `{result.capitalize()}` <:yay:1322721331896389702>", False: f"You lose! The result was `{result.capitalize()}` <:o7:1323425011234639942>"}
-                await ctx.send(f"## {messages_dict[did_you_win]}\n\n**{ctx.author.display_name}:** {delta:,}\nBalance: {num:,} {coin}")
+
+            work_coins = random.randint(20, 50)
+            server_settings[guild_id]['currency'][author_id] += work_coins
+            save_settings()
+            cast_command = ctx.message.content.split()[0].lower().lstrip('!')
+            await ctx.reply(f"## {cast_command.capitalize()} successful!\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can {cast_command} every 5 minutes")
+
+    @work.error
+    async def work_error(self, ctx, error):
+        """Handle errors for the command, including cooldowns."""
+        if isinstance(error, commands.CommandOnCooldown):
+            retry_after = round(error.retry_after, 1)
+            cast_command = ctx.message.content.split()[0].lower().lstrip('!')
+            await ctx.reply(f"Gotta wait until you can {cast_command} again buhh\ntry again in {retry_after} seconds")
+        else:
+            raise error  # Re-raise other errors to let the default handler deal with them
+
+    @commands.command(aliases=['d'])
+    async def daily(self, ctx):
+        """
+        Claim daily coins
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+
+            now = datetime.now()
+            last_used = user_last_used.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(days=1))
+            if last_used and last_used.date() == now.date():
+                await ctx.reply(f"You can use `daily` again <t:{get_reset_timestamp()}:R>")
+                return
+            today_coins = random.randint(90, 260)
+            server_settings[guild_id]['currency'][author_id] += today_coins
+            save_settings()
+            user_last_used[guild_id][author_id] = now
+            save_last_used()
+            await ctx.reply(f"## Daily coins claimed!\n**{ctx.author.display_name}:** +{today_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
+
+    @commands.command(aliases=['w'])
+    async def weekly(self, ctx):
+        """
+        Claim weekly coins
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+
+            now = datetime.now()
+            # Get the last reset time
+            last_used_w = user_last_used_w.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(weeks=1))
+
+            # Calculate the start of the current week (Monday 12 AM)
+            start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
+
+            if last_used_w >= start_of_week:
+                reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
+                await ctx.reply(f"You can use `weekly` again <t:{reset_timestamp}:R>")
+                return
+
+            # Award coins and update settings
+            weekly_coins = random.randint(500, 2000)  # Adjust reward range as desired
+            server_settings[guild_id]['currency'][author_id] += weekly_coins
+            save_settings()
+            user_last_used_w[guild_id][author_id] = now
+            save_last_used_w()
+
+            # Send confirmation message
+            reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
+            await ctx.reply(f"## Weekly coins claimed!\n**{ctx.author.display_name}:** +{weekly_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
+
+    @commands.command(aliases=['pay'])
+    async def give(self, ctx):
+        """
+        Give someone an amount of coins
+        !give @user <number>
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            if mentions := ctx.message.mentions:
+                target_id = str(mentions[0].id)
+                if mentions[0].id == ctx.author.id:
+                    await ctx.reply("You can't send coins to yourself, silly")
+                    return
+                contents = ctx.message.content.split()[1:]
+                for i in contents:
+                    if i.isnumeric():
+                        number = int(i)
+                        break
+                else:
+                    await ctx.reply("Please include the amount you'd like the give")
+                    return
             else:
-                await ctx.send("Gambling failed! That's more coins than you own")
-        except:
-            await ctx.send("Gambling failed!")
-    else:
-        await ctx.reply(f"Result is `{random.choice(results)}`!")
+                await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+                return
+
+            try:
+                make_sure_user_has_currency(guild_id, target_id)
+                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                    server_settings[guild_id]['currency'][target_id] += number
+                    server_settings[guild_id]['currency'][author_id] -= number
+                    num1 = server_settings.get(guild_id).get('currency').get(author_id)
+                    num2 = server_settings.get(guild_id).get('currency').get(target_id)
+                    save_settings()
+                    await ctx.reply(f"## Transaction successful!\n\n**{ctx.author.display_name}:** {num1:,} {coin}\n**{mentions[0].display_name}:** {num2:,} {coin}")
+                else:
+                    await ctx.reply("Transaction failed! That's more coins than you own")
+            except:
+                await ctx.reply("Transaction failed!")
+
+    @commands.command(aliases=['lb'])
+    async def leaderboard(self, ctx):
+        """
+        View the top 10 richest user of the server
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            members = server_settings.get(guild_id).get('currency')
+            sorted_members = sorted(list(members.items()), key=lambda x: x[1], reverse=True)[:50]
+            top_users = []
+            for member_id, coins in sorted_members:
+                try:
+                    member = ctx.guild.get_member(int(member_id))
+                    if int(member_id) != ctx.author.id:
+                        top_users.append([member.display_name, coins])
+                    else:
+                        top_users.append([f"__{member.display_name}__", coins])
+
+                except discord.NotFound:
+                    pass
+            top_users = top_users[:10]
+            await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{index} - {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
+
+    @commands.command(aliases=['coin'])
+    async def coinflip(self, ctx):
+        """
+        Flips a coin, takes an optional bet
+        !coin heads/tails number
+        Example: !coin heads 50
+        """
+        results = ['heads', 'tails']
+        result = random.choice(results)
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            contents = ctx.message.content.split()[1:]
+            if not len(contents):
+                await ctx.reply(f"Result is `{result.capitalize()}`!")
+                return
+            num_ok = False
+            gamble_choice_ok = False
+            for i in contents:
+                if i.isnumeric() and not num_ok:
+                    number = int(i)
+                    num_ok = True
+                if i.lower() in results and not gamble_choice_ok:
+                    gamble_choice = i.lower()
+                    gamble_choice_ok = True
+                if num_ok and gamble_choice_ok:
+                    break
+            else:
+                await ctx.reply(f"If you want to gamble with coins, include the __amount__ you're betting and __what you're betting on (heads/tails)__\nAnyway, the result is `{result.capitalize()}`!")
+                return
+            try:
+                author_id = str(ctx.author.id)
+                make_sure_user_has_currency(guild_id, author_id)
+                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                    did_you_win = result == gamble_choice
+                    delta = int(number * 2 * (did_you_win - 0.5))
+                    server_settings[guild_id]['currency'][author_id] += delta
+                    num = server_settings.get(guild_id).get('currency').get(author_id)
+                    save_settings()
+                    messages_dict = {True: f"You win! The result was `{result.capitalize()}` <:yay:1322721331896389702>", False: f"You lose! The result was `{result.capitalize()}` <:o7:1323425011234639942>"}
+                    await ctx.reply(f"## {messages_dict[did_you_win]}\n\n**{ctx.author.display_name}:** {delta:,}\nBalance: {num:,} {coin}")
+                else:
+                    await ctx.reply("Gambling failed! That's more coins than you own")
+            except:
+                await ctx.reply("Gambling failed!")
+        else:
+            await ctx.reply(f"Result is `{random.choice(results)}`!")
+
+
+async def setup():
+    await client.add_cog(Currency(client))
 
 
 @client.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):
-        await ctx.send(f"You can't use this command due to lack of permissions :3")
+        await ctx.reply(f"You can't use this command due to lack of permissions :3")
 
 
 def log_shutdown():
@@ -967,12 +1020,14 @@ def log_shutdown():
 atexit.register(log_shutdown)
 
 
-def main():
-    client.run(token=TOKEN)
+async def main():
+    async with client:
+        await setup()
+        await client.start(token=TOKEN)
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
 
 
 # async def send_message(message, user_message):
