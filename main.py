@@ -18,12 +18,14 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 server_settings = {}
 user_last_used = {}
+user_last_used_w = {}
 allowed_users = [369809123925295104]
 bot_name = 'Ukra Bot'
 allow_dict = {True:  "Enabled ",
               False: "Disabled"}
 
 intents = Intents.default()
+intents.members = True
 intents.message_content = True
 client = commands.Bot(command_prefix="!", intents=intents)
 
@@ -43,6 +45,15 @@ if os.path.exists(LAST_USED_FILE):
         user_last_used = {guild_id: {user_id: datetime.fromisoformat(last_used) for user_id, last_used in data_.items()} for guild_id, data_ in data.items()}
 else:
     user_last_used = {}
+
+
+LAST_USED_W_FILE = Path("dev", "last_used_w.json")
+if os.path.exists(LAST_USED_W_FILE):
+    with open(LAST_USED_W_FILE, "r") as file:
+        data = json.load(file)
+        user_last_used_w = {guild_id: {user_id: datetime.fromisoformat(last_used_w) for user_id, last_used_w in data_.items()} for guild_id, data_ in data.items()}
+else:
+    user_last_used_w = {}
 
 
 DISTRIBUTED_SEGS = Path("dev", "distributed_segs.json")
@@ -78,6 +89,19 @@ def save_last_used():
     }
     with open(LAST_USED_FILE, "w") as file:
         json.dump(serializable_data, file, indent=4)
+
+
+def save_last_used_w():
+    serializable_data = {
+        guild_id: {
+            user_id: last_used_w.isoformat()
+            for user_id, last_used_w in user_data.items()
+        }
+        for guild_id, user_data in user_last_used_w.items()
+    }
+    with open(LAST_USED_W_FILE, "w") as file:
+        json.dump(serializable_data, file, indent=4)
+
 
 
 def save_distributed_segs():
@@ -230,7 +254,7 @@ async def dnd(ctx):
     """
     guild_id = str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
-    if 'dnd' in server_settings.get(guild_id).get('allowed_commands', []):
+    if 'dnd' in server_settings.get(guild_id).get('allowed_commands'):
         contents = ''.join(ctx.message.content.split()[1:])
         if not len(contents):
             await ctx.reply(f"Rolling **1d6**: `{random.choice(range(1, 7))}`")
@@ -750,10 +774,17 @@ coin = "<:fishingecoin:1324905329657643179>"
 async def balance(ctx):
     guild_id = str(ctx.guild.id)
     if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
-        author_id = str(ctx.author.id)
-        num = make_sure_user_has_currency(guild_id, author_id)
-        save_settings()
-        await ctx.send(f"**{ctx.author.display_name}:** {num} {coin}")
+        if mentions := ctx.message.mentions:
+            member_id = str(mentions[0].id)
+            num = make_sure_user_has_currency(guild_id, member_id)
+            save_settings()
+            await ctx.send(f"**{mentions[0].display_name}:** {num:,} {coin}")
+
+        else:
+            author_id = str(ctx.author.id)
+            num = make_sure_user_has_currency(guild_id, author_id)
+            save_settings()
+            await ctx.send(f"**{ctx.author.display_name}:** {num:,} {coin}")
 
 
 @client.command(aliases=['d'])
@@ -773,7 +804,76 @@ async def daily(ctx):
         save_settings()
         user_last_used[guild_id][author_id] = now
         save_last_used()
-        await ctx.send(f"**{ctx.author.display_name}:** +{today_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id)} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
+        await ctx.send(f"## Daily coins claimed!\n**{ctx.author.display_name}:** +{today_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
+
+
+@client.command(aliases=['w'])
+async def weekly(ctx):
+    guild_id = str(ctx.guild.id)
+    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+        author_id = str(ctx.author.id)
+        make_sure_user_has_currency(guild_id, author_id)
+
+        now = datetime.now()
+        # Get the last reset time
+        last_used_w = user_last_used_w.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(weeks=1))
+
+        # Calculate the start of the current week (Monday 12 AM)
+        start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
+
+        if last_used_w >= start_of_week:
+            reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
+            await ctx.send(f"You can use `weekly` again <t:{reset_timestamp}:R>")
+            return
+
+        # Award coins and update settings
+        weekly_coins = random.randint(500, 2000)  # Adjust reward range as desired
+        server_settings[guild_id]['currency'][author_id] += weekly_coins
+        save_settings()
+        user_last_used_w[guild_id][author_id] = now
+        save_last_used_w()
+
+        # Send confirmation message
+        reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
+        await ctx.send(f"## Weekly coins claimed!\n**{ctx.author.display_name}:** +{weekly_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
+
+
+@client.command(aliases=['pay'])
+async def give(ctx):
+    guild_id = str(ctx.guild.id)
+    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+        author_id = str(ctx.author.id)
+        make_sure_user_has_currency(guild_id, author_id)
+        if mentions := ctx.message.mentions:
+            target_id = str(mentions[0].id)
+            if mentions[0].id == ctx.author.id:
+                await ctx.send("You can't send coins to yourself, silly")
+                return
+            contents = ctx.message.content.split()[1:]
+            for i in contents:
+                if i.isnumeric():
+                    number = int(i)
+                    break
+            else:
+                await ctx.send("Please include the amount you'd like the give")
+                return
+        else:
+            await ctx.send("Something went wrong, please make sure that the command has a user mention")
+            return
+
+        try:
+            make_sure_user_has_currency(guild_id, target_id)
+            if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                server_settings[guild_id]['currency'][target_id] += number
+                server_settings[guild_id]['currency'][author_id] -= number
+                num1 = server_settings.get(guild_id).get('currency').get(author_id)
+                num2 = server_settings.get(guild_id).get('currency').get(target_id)
+                save_settings()
+                await ctx.send(f"## Transaction successful!\n\n**{ctx.author.display_name}:** {num1:,} {coin}\n**{mentions[0].display_name}:** {num2:,} {coin}")
+            else:
+                await ctx.send("Transaction failed! That's more coins than you own")
+        except:
+            await ctx.send("Transaction failed!")
 
 
 @client.command(aliases=['lb'])
@@ -787,12 +887,12 @@ async def leaderboard(ctx):
         top_users = []
         for member_id, coins in sorted_members:
             try:
-                member = await ctx.guild.fetch_member(int(member_id))
+                member = ctx.guild.get_member(int(member_id))
                 top_users.append([member.display_name, coins])
             except discord.NotFound:
                 pass
-        top_users = top_users[:20]
-        await ctx.send(f"**Top {min(20, len(top_users))} Richest Users:**\n{'\n'.join([f"{top_user_nickname}: {top_user_coins} {coin}" for top_user_nickname, top_user_coins in top_users])}")
+        top_users = top_users[:25]
+        await ctx.send(f"## Top {min(25, len(top_users))} Richest Users:\n{'\n'.join([f"**{top_user_nickname}:** {top_user_coins:,} {coin}" for top_user_nickname, top_user_coins in top_users])}")
 
 
 @client.event
