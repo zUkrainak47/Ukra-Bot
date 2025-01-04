@@ -1,6 +1,7 @@
 # from typing import Final
 import asyncio
 import datetime
+from datetime import datetime, timedelta
 import os
 import random
 from dotenv import load_dotenv
@@ -16,6 +17,7 @@ start = time.perf_counter()
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 server_settings = {}
+user_last_used = {}
 allowed_users = [369809123925295104]
 bot_name = 'Ukra Bot'
 allow_dict = {True:  "Enabled ",
@@ -32,6 +34,15 @@ if os.path.exists(SETTINGS_FILE):
         server_settings = json.load(file)
 else:
     server_settings = {}
+
+
+LAST_USED_FILE = Path("dev", "last_used.json")
+if os.path.exists(LAST_USED_FILE):
+    with open(LAST_USED_FILE, "r") as file:
+        data = json.load(file)
+        user_last_used = {guild_id: {user_id: datetime.fromisoformat(last_used) for user_id, last_used in data_.items()} for guild_id, data_ in data.items()}
+else:
+    user_last_used = {}
 
 
 DISTRIBUTED_SEGS = Path("dev", "distributed_segs.json")
@@ -57,6 +68,18 @@ def save_settings():
         json.dump(server_settings, file, indent=4)
 
 
+def save_last_used():
+    serializable_data = {
+        guild_id: {
+            user_id: last_used.isoformat()
+            for user_id, last_used in user_data.items()
+        }
+        for guild_id, user_data in user_last_used.items()
+    }
+    with open(LAST_USED_FILE, "w") as file:
+        json.dump(serializable_data, file, indent=4)
+
+
 def save_distributed_segs():
     with open(DISTRIBUTED_SEGS, "w") as file:
         json.dump(distributed_segs, file, indent=4)
@@ -65,6 +88,25 @@ def save_distributed_segs():
 def save_distributed_backshots():
     with open(DISTRIBUTED_BACKSHOTS, "w") as file:
         json.dump(distributed_backshots, file, indent=4)
+
+
+def make_sure_server_settings_exist(guild_id):
+    server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands)
+    server_settings.get(guild_id).setdefault('currency', {})
+    save_settings()
+
+
+def make_sure_user_has_currency(guild_id, author_id):
+    make_sure_server_settings_exist(guild_id)
+    return server_settings.get(guild_id).get('currency').setdefault(author_id, 750)
+
+
+def get_reset_timestamp():
+    """Calculate time remaining until the next reset at 12 AM."""
+    now = datetime.now()
+    tomorrow = now + timedelta(days=1)
+    reset_time = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0)
+    return int(reset_time.timestamp())
 
 
 @client.event
@@ -187,7 +229,8 @@ async def dnd(ctx):
     !roll <n1>d<n1> where n1 and n2 are numbers, d is a separator, 0 < n1 <= 100, 0 < n2 <= 1000
     """
     guild_id = str(ctx.guild.id)
-    if 'dnd' in server_settings.get(guild_id, {}).get('allowed_commands', []):
+    make_sure_server_settings_exist(guild_id)
+    if 'dnd' in server_settings.get(guild_id).get('allowed_commands', []):
         contents = ''.join(ctx.message.content.split()[1:])
         if not len(contents):
             await ctx.reply(f"Rolling **1d6**: `{random.choice(range(1, 7))}`")
@@ -266,7 +309,9 @@ async def compliment(ctx):
     Compliments user based on 3x100 most popular compliments lmfaoooooo
     !compliment @user
     """
-    if 'compliment' in server_settings.get(str(ctx.guild.id), {}).get('allowed_commands', []):
+    guild_id = str(ctx.guild.id)
+    make_sure_server_settings_exist(guild_id)
+    if 'compliment' in server_settings.get(guild_id).get('allowed_commands'):
         with open(Path('dev', 'compliments.txt')) as fp:
             compliment_ = random.choice(fp.readlines())
             fp.close()
@@ -282,15 +327,17 @@ async def compliment(ctx):
 @client.command()
 async def settings(ctx):
     """Shows current server settings"""
-    guild_settings = server_settings[str(ctx.guild.id)]
-    allowed_commands = guild_settings.setdefault('allowed_commands', default_allowed_commands)
-    save_settings()
+    guild_id = str(ctx.guild.id)
+    make_sure_server_settings_exist(guild_id)
+    guild_settings = server_settings.get(guild_id)
+    allowed_commands = guild_settings.get('allowed_commands')
     segs_allowed = 'segs' in allowed_commands
     segs_role = guild_settings.get("segs_role", False)
     backshots_allowed = 'backshot' in allowed_commands
     backshots_role = guild_settings.get("backshots_role", False)
     compliments_allowed = 'compliment' in allowed_commands
     dnd_allowed = 'dnd' in allowed_commands
+    currency_allowed = 'currency_system' in allowed_commands
 
     if segs_role and ctx.guild.get_role(segs_role):
         segs_role_name = '@' + ctx.guild.get_role(segs_role).name
@@ -302,15 +349,17 @@ async def settings(ctx):
     else:
         backshots_role_name = "N/A" + ", run !setrole backshot" * backshots_allowed
 
-    await ctx.send(f"```Segs:            {allow_dict[segs_allowed]}\n" +
-                   f"Segs Role:       {segs_role_name}\n" +
+    await ctx.send(f"```Segs:             {allow_dict[segs_allowed]}\n" +
+                   f"Segs Role:        {segs_role_name}\n" +
                    '\n' +
-                   f"Backshots:       {allow_dict[backshots_allowed]}\n" +
-                   f"Backshots Role:  {backshots_role_name}\n" +
+                   f"Backshots:        {allow_dict[backshots_allowed]}\n" +
+                   f"Backshots Role:   {backshots_role_name}\n" +
                    '\n' +
-                   f"Compliments:     {allow_dict[compliments_allowed]}\n" +
+                   f"Compliments:      {allow_dict[compliments_allowed]}\n" +
                    '\n' +
-                   f"DND:             {allow_dict[dnd_allowed]}" +
+                   f"DND:              {allow_dict[dnd_allowed]}\n" +
+                   '\n' +
+                   f"Currency System:  {allow_dict[currency_allowed]}" +
                    '```')
 
 
@@ -370,6 +419,7 @@ async def setrole(ctx):
     """
     allowed_roles = ['segs', 'backshot', 'backshots']
     guild_id = str(ctx.guild.id)
+    make_sure_server_settings_exist(guild_id)
     guild = ctx.guild
     split_msg = ctx.message.content.split()
     if len(split_msg) == 3:
@@ -386,7 +436,7 @@ async def setrole(ctx):
             await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
             return
         if role := discord.utils.get(guild.roles, id=int(role_id)):
-            server_settings.setdefault(guild_id, {})[f'{role_type}_role'] = role.id
+            server_settings.get(guild_id)[f'{role_type}_role'] = role.id
             save_settings()
             await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the {role_type} role to `@{role.name} - {role.id}`')
             await ctx.send(f"{role_type.capitalize()} role has been changed to `@{role.name}`")
@@ -398,8 +448,9 @@ async def setrole(ctx):
 
 
 # ENABLING/DISABLING
-toggleable_commands = ['segs', 'backshot', 'compliment', 'dnd']
-default_allowed_commands = ['compliment', 'dnd']
+toggleable_commands = ['segs', 'backshot', 'compliment', 'dnd', 'currency_system']
+default_allowed_commands = ['compliment', 'dnd', 'currency_system']
+
 
 @client.command(aliases=['allow'])
 @commands.has_permissions(administrator=True)
@@ -409,17 +460,18 @@ async def enable(ctx):
     Can only be used by administrators
     """
     guild_id = str(ctx.guild.id)
+    make_sure_server_settings_exist(guild_id)
     cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
-    if cmd in toggleable_commands and cmd not in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands):
+    if cmd in toggleable_commands and cmd not in server_settings.get(guild_id).get('allowed_commands'):
         server_settings.get(guild_id).get('allowed_commands').append(cmd)
         await log_channel.send(f'<:wicked:1323075389131587646> {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
-        success = f"!{cmd} has been enabled"
-        success += '. **Please run !setrole segs**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('segs_role')))) * cmd == 'segs')
-        success += '. **Please run !setrole backshot**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('backshots_role')))) * cmd == 'backshot')
+        success = f"{cmd} has been enabled"
+        success += '. **Please run !setrole segs**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('segs_role')))) * cmd == 'segs')
+        success += '. **Please run !setrole backshot**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('backshots_role')))) * cmd == 'backshot')
         await ctx.send(success)
         save_settings()
     elif cmd in toggleable_commands:
-        await ctx.send(f"!{cmd} is already enabled")
+        await ctx.send(f"{cmd} is already enabled")
     else:
         await ctx.send(f"Command usage: `!enable <cmd>`\n"
                        f"Available commands: {', '.join(toggleable_commands)}")
@@ -433,15 +485,16 @@ async def disable(ctx):
     Can only be used by administrators
     """
     guild_id = str(ctx.guild.id)
+    make_sure_server_settings_exist(guild_id)
     cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
-    if cmd in toggleable_commands and cmd in server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands):
+    if cmd in toggleable_commands and cmd in server_settings.get(guild_id).get('allowed_commands'):
         server_settings.get(guild_id).get('allowed_commands').remove(cmd)
         await log_channel.send(f'<:deadge:1323075561089929300> {ctx.author.mention} disabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
-        success = f"!{cmd} has been disabled"
+        success = f"{cmd} has been disabled"
         await ctx.send(success)
         save_settings()
     elif cmd in toggleable_commands:
-        await ctx.send(f"!{cmd} is already disabled")
+        await ctx.send(f"{cmd} is already disabled")
     else:
         await ctx.send(f"Command usage: `!disable <cmd>`\n"
                        f"Available commands: {', '.join(toggleable_commands)}")
@@ -497,9 +550,10 @@ async def segs(ctx):
     """
     caller = ctx.author
     guild_id = str(ctx.guild.id)
-    if 'segs' in server_settings.get(guild_id, {}).get('allowed_commands', []) and server_settings.get(guild_id, {}).get('segs_role', False):
+    make_sure_server_settings_exist(guild_id)
+    if 'segs' in server_settings.get(guild_id).get('allowed_commands') and server_settings.get(guild_id).get('segs_role'):
         mentions = ctx.message.mentions
-        role = ctx.guild.get_role(server_settings.get(guild_id, {}).get('segs_role'))
+        role = ctx.guild.get_role(server_settings.get(guild_id).get('segs_role'))
         if not role:
             await ctx.send(f"*Segs role does not exist!*\nRun !setsegsrole to use segs")
             await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id}) ')
@@ -566,7 +620,7 @@ async def segs(ctx):
                 await ctx.send(f"*Insufficient permissions to execute segs*\n*Make sure I have a role that is higher than* `@{role_name}` <a:madgeclap:1322719157241905242>")
                 await log_channel.send(f"❓ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but I don't have the necessary permissions to execute segs ({ctx.guild.name} - {ctx.guild.id})")
 
-    elif 'segs' in server_settings.get(guild_id, {}).get('allowed_commands', []):
+    elif 'segs' in server_settings.get(guild_id).get('allowed_commands'):
         await ctx.send(f"*Segs role does not exist!*\nRun !setsegsrole to use segs")
         await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
 
@@ -612,9 +666,10 @@ async def backshot(ctx):
     """
     caller = ctx.author
     guild_id = str(ctx.guild.id)
-    if 'backshot' in server_settings.get(guild_id, {}).get('allowed_commands', []) and server_settings.get(guild_id, {}).get('backshots_role', False):
+    make_sure_server_settings_exist(guild_id)
+    if 'backshot' in server_settings.get(guild_id).get('allowed_commands') and server_settings.get(guild_id).get('backshots_role'):
         mentions = ctx.message.mentions
-        role = ctx.guild.get_role(server_settings.get(guild_id, {}).get('backshots_role'))
+        role = ctx.guild.get_role(server_settings.get(guild_id).get('backshots_role'))
         if not role:
             await ctx.send(f"*Backshots role does not exist!*\nRun !setbackshotsrole use backshots")
             await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
@@ -678,13 +733,72 @@ async def backshot(ctx):
                 await ctx.send(f"*Insufficient permissions to execute backshot*\n*Make sure I have a role that is higher than* `@{role_name}` <a:madgeclap:1322719157241905242>")
                 await log_channel.send(f"❓ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but I don't have the necessary permissions to execute backshots ({ctx.guild.name} - {ctx.guild.id})")
 
-    elif 'backshot' in server_settings.get(guild_id, {}).get('allowed_commands', []):
+    elif 'backshot' in server_settings.get(guild_id).get('allowed_commands'):
         await ctx.send(f"*Backshots role does not exist!*\nRun !setbackshotsrole use backshots")
         await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
 
     else:
         await log_channel.send(f"🫡 {caller.mention} tried to give devious backshots in {ctx.channel.mention} but backshots aren't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
         return
+
+
+# CURRENCY
+coin = "<:fishingecoin:1324905329657643179>"
+
+
+@client.command(aliases=['b', 'bal'])
+async def balance(ctx):
+    guild_id = str(ctx.guild.id)
+    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+        author_id = str(ctx.author.id)
+        num = make_sure_user_has_currency(guild_id, author_id)
+        save_settings()
+        await ctx.send(f"**{ctx.author.display_name}:** {num} {coin}")
+
+
+@client.command(aliases=['d'])
+async def daily(ctx):
+    guild_id = str(ctx.guild.id)
+    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+        author_id = str(ctx.author.id)
+        make_sure_user_has_currency(guild_id, author_id)
+
+        now = datetime.now()
+        last_used = user_last_used.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(days=1))
+        if last_used and last_used.date() == now.date():
+            await ctx.send(f"You can use `daily` again <t:{get_reset_timestamp()}:R>")
+            return
+        today_coins = random.randint(90, 260)
+        server_settings[guild_id]['currency'][author_id] += today_coins
+        save_settings()
+        user_last_used[guild_id][author_id] = now
+        save_last_used()
+        await ctx.send(f"**{ctx.author.display_name}:** +{today_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id)} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
+
+
+@client.command(aliases=['lb'])
+async def leaderboard(ctx):
+    guild_id = str(ctx.guild.id)
+    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+        author_id = str(ctx.author.id)
+        make_sure_user_has_currency(guild_id, author_id)
+        members = server_settings.get(guild_id).get('currency')
+        sorted_members = sorted(list(members.items()), key=lambda x: x[1], reverse=True)[:50]
+        top_users = []
+        for member_id, coins in sorted_members:
+            try:
+                member = await ctx.guild.fetch_member(int(member_id))
+                top_users.append(member.display_name)
+            except discord.NotFound:
+                pass
+        top_users = top_users[:20]
+        await ctx.send(f"**Top {min(20, len(top_users))} Richest Users:**\n{'\n'.join([f"{top_user_nickname}: {top_user_coins} {coin}" for top_user_nickname, top_user_coins in top_users])}")
+
+
+@client.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send(f"You can't use this command due to lack of permissions :3")
 
 
 def log_shutdown():
