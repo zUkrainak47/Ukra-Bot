@@ -788,7 +788,7 @@ async def leaderboard(ctx):
         for member_id, coins in sorted_members:
             try:
                 member = await ctx.guild.fetch_member(int(member_id))
-                top_users.append(member.display_name)
+                top_users.append([member.display_name, coins])
             except discord.NotFound:
                 pass
         top_users = top_users[:20]
