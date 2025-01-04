@@ -787,13 +787,13 @@ class Currency(commands.Cog):
                 member_id = str(mentions[0].id)
                 num = make_sure_user_has_currency(guild_id, member_id)
                 save_settings()
-                await ctx.reply(f"**{mentions[0].display_name}:** {num:,} {coin}")
+                await ctx.reply(f"**{mentions[0].display_name}'s balance:** {num:,} {coin}")
 
             else:
                 author_id = str(ctx.author.id)
                 num = make_sure_user_has_currency(guild_id, author_id)
                 save_settings()
-                await ctx.reply(f"**{ctx.author.display_name}:** {num:,} {coin}")
+                await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
 
     @commands.command(aliases=['fish', 'fishinge'])
     @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
@@ -982,13 +982,91 @@ class Currency(commands.Cog):
                     num = server_settings.get(guild_id).get('currency').get(author_id)
                     save_settings()
                     messages_dict = {True: f"You win! The result was `{result.capitalize()}` <:yay:1322721331896389702>", False: f"You lose! The result was `{result.capitalize()}` <:o7:1323425011234639942>"}
-                    await ctx.reply(f"## {messages_dict[did_you_win]}\n\n**{ctx.author.display_name}:** {delta:,}\nBalance: {num:,} {coin}")
+                    await ctx.reply(f"## {messages_dict[did_you_win]}\n\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
                 else:
                     await ctx.reply("Gambling failed! That's more coins than you own")
             except:
                 await ctx.reply("Gambling failed!")
         else:
             await ctx.reply(f"Result is `{random.choice(results)}`!")
+
+    @commands.command()
+    async def bless(self, ctx):
+        """
+        Bless someone with an amount of coins out of thin air
+        Only usable by bot developoer
+        !bless @user <number>
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            if ctx.author.id in allowed_users:
+                if mentions := ctx.message.mentions:
+                    target_id = str(mentions[0].id)
+                    # if mentions[0].id == ctx.author.id:
+                    #     await ctx.reply("You can't send coins to yourself, silly")
+                    #     return
+                    contents = ctx.message.content.split()[1:]
+                    for i in contents:
+                        if i.isnumeric():
+                            number = int(i)
+                            break
+                    else:
+                        await ctx.reply("Please include the amount you'd like to bless the user with")
+                        return
+                else:
+                    await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+                    return
+
+                try:
+                    make_sure_user_has_currency(guild_id, target_id)
+                    server_settings[guild_id]['currency'][target_id] += number
+                    num = server_settings.get(guild_id).get('currency').get(target_id)
+                    save_settings()
+                    await ctx.reply(f"## Blessing successful!\n\n**{mentions[0].display_name}:** +{number} {coin}\nBalance: {num:,} {coin}")
+                except:
+                    await ctx.reply("Blessing failed!")
+            else:
+                await ctx.reply(f"You can't use this command due to lack of permissions :3")
+
+    @commands.command()
+    async def curse(self, ctx):
+        """
+        Curse someone by magically removing a number of coins from their balance
+        Only usable by bot developoer
+        !curse @user <number>
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            if ctx.author.id in allowed_users:
+                if mentions := ctx.message.mentions:
+                    target_id = str(mentions[0].id)
+                    # if mentions[0].id == ctx.author.id:
+                    #     await ctx.reply("You can't send coins to yourself, silly")
+                    #     return
+                    contents = ctx.message.content.split()[1:]
+                    for i in contents:
+                        if i.isnumeric():
+                            number = int(i)
+                            break
+                    else:
+                        await ctx.reply("Please include the amount you'd like to curse the user out of")
+                        return
+                else:
+                    await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+                    return
+
+                try:
+                    make_sure_user_has_currency(guild_id, target_id)
+                    current_balance = server_settings[guild_id]['currency'][target_id]
+                    number = min(current_balance, number)
+                    server_settings[guild_id]['currency'][target_id] -= number
+                    num = server_settings.get(guild_id).get('currency').get(target_id)
+                    save_settings()
+                    await ctx.reply(f"## Curse successful!\n\n**{mentions[0].display_name}:** -{number} {coin}\nBalance: {num:,} {coin}")
+                except:
+                    await ctx.reply("Curse failed!")
+            else:
+                await ctx.reply(f"You can't use this command due to lack of permissions :3")
 
 
 async def setup():
