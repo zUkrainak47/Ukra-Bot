@@ -130,6 +130,7 @@ def save_distributed_backshots():
 def make_sure_server_settings_exist(guild_id):
     server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands)
     server_settings.get(guild_id).setdefault('currency', {})
+    server_settings.get(guild_id).setdefault('daily_streak', {})
     save_settings()
 
 
@@ -855,18 +856,27 @@ class Currency(commands.Cog):
         if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-
+            user_streak = server_settings.get(guild_id).get('daily_streak').setdefault(author_id, 0)
             now = datetime.now()
-            last_used = user_last_used.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(days=1))
-            if last_used and last_used.date() == now.date():
-                await ctx.reply(f"You can use `daily` again <t:{get_reset_timestamp()}:R>")
+            last_used = user_last_used.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(days=2))
+            # print((now - timedelta(days=1)).date())
+            if last_used.date() == now.date():
+                await ctx.reply(f"You can use `daily` again <t:{get_reset_timestamp()}:R>\nYour current streak is **{user_streak:,}**")
                 return
-            today_coins = random.randint(90, 260)
-            server_settings[guild_id]['currency'][author_id] += today_coins
+            if last_used.date() == (now - timedelta(days=1)).date():
+                server_settings[guild_id]['daily_streak'][author_id] += 1
+                streak_msg = f"Streak extended to `{user_streak+1}`"
+            else:
+                server_settings[guild_id]['daily_streak'][author_id] = 1
+                streak_msg = "Streak set to `1`"
+            user_streak = server_settings.get(guild_id).get('daily_streak').get(author_id)
+
+            today_coins = random.randint(140, 260)
+            server_settings[guild_id]['currency'][author_id] += int(today_coins * user_streak**0.5)
             save_settings()
             user_last_used[guild_id][author_id] = now
             save_last_used()
-            await ctx.reply(f"## Daily coins claimed!\n**{ctx.author.display_name}:** +{today_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
+            await ctx.reply(f"# Daily coins claimed! {streak_msg}\n**{ctx.author.display_name}:** +{today_coins} {coin} (+{int(today_coins * (user_streak**0.5 - 1))} {coin} streak bonus = {int(today_coins * user_streak**0.5)} {coin})\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
 
     @commands.command(aliases=['w'])
     async def weekly(self, ctx):
@@ -995,7 +1005,6 @@ class Currency(commands.Cog):
                     num_ok = True
                 if i.lower() in results + ['head', 'tail'] and not gamble_choice_ok:
                     gamble_choice = (i.lower() + 's') if ('s' not in i.lower()) else i.lower()
-                    print(gamble_choice)
                     gamble_choice_ok = True
                 if num_ok and gamble_choice_ok:
                     break
@@ -1060,7 +1069,7 @@ class Currency(commands.Cog):
     @commands.command(aliases=['slot'])
     async def slots(self, ctx):
         """
-        Takes a bet, spins three wheels of 10 emojis, if all of them match you win 75x the bet
+        Takes a bet, spins three wheels of 10 emojis, if all of them match you win 50x the bet, if they are :sunfire2: you win 500x the bet
         !slots number
         """
         guild_id = str(ctx.guild.id)
@@ -1085,7 +1094,7 @@ class Currency(commands.Cog):
             result = ((results[0] == results[1]) and (results[1] == results[2]))
             try:
                 if number <= server_settings.get(guild_id).get('currency').get(author_id):
-                    delta = 75 * number if result else -number
+                    delta = 500 * number if ((results[0] == sunfire2) and result) else 50 * number if result else -number
                     server_settings[guild_id]['currency'][author_id] += delta
                     num = server_settings.get(guild_id).get('currency').get(author_id)
                     save_settings()
