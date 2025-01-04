@@ -39,8 +39,10 @@ HUH = '<:HUH:1322719443519934585>'
 wicked = '<:wicked:1323075389131587646>'
 deadge = '<:deadge:1323075561089929300>'
 teripoint = '<:teripoint:1322718769679827024>'
-madgeclap = '<a:madgeclap:1322719157241905242>'
 pepela = '<:pepela:1322718719977197671>'
+madgeclap = '<a:madgeclap:1322719157241905242>'
+
+slot_options = [yay, o7, peeposcheme, sunfire2, stare, HUH, wicked, deadge, teripoint, pepela]
 
 SETTINGS_FILE = Path("dev", "server_settings.json")
 if os.path.exists(SETTINGS_FILE):
@@ -1030,7 +1032,7 @@ class Currency(commands.Cog):
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
             if not len(contents):
-                await ctx.reply("Please include the amount you'd like the gamble")
+                await ctx.reply("Please include the amount you'd like to gamble")
                 return
             for i in contents:
                 if i.isnumeric():
@@ -1040,7 +1042,7 @@ class Currency(commands.Cog):
                     number = server_settings.get(guild_id).get('currency').get(author_id)
                     break
             else:
-                await ctx.reply("Please include the amount you'd like the gamble")
+                await ctx.reply("Please include the amount you'd like to gamble")
                 return
             try:
                 if number <= server_settings.get(guild_id).get('currency').get(author_id):
@@ -1050,6 +1052,47 @@ class Currency(commands.Cog):
                     save_settings()
                     messages_dict = {1: f"You win! {yay}", 0: f"You lose! {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}\n\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
+                else:
+                    await ctx.reply("Gambling failed! That's more coins than you own")
+            except:
+                await ctx.reply("Gambling failed!")
+
+    @commands.command(aliases=['slot'])
+    async def slots(self, ctx):
+        """
+        Takes a bet, spins three wheels of 10 emojis, if all of them match you win 75x the bet
+        !slots number
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            contents = ctx.message.content.split()[1:]
+            if not len(contents):
+                await ctx.reply("Please include the amount you'd like to gamble")
+                return
+            for i in contents:
+                if i.isnumeric():
+                    number = int(i)
+                    break
+                if i.lower() == 'all':
+                    number = server_settings.get(guild_id).get('currency').get(author_id)
+                    break
+            else:
+                await ctx.reply("Please include the amount you'd like to gamble")
+                return
+            results = [random.choice(slot_options) for _ in range(3)]
+            result = ((results[0] == results[1]) and (results[1] == results[2]))
+            try:
+                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                    delta = 75 * number if result else -number
+                    server_settings[guild_id]['currency'][author_id] += delta
+                    num = server_settings.get(guild_id).get('currency').get(author_id)
+                    save_settings()
+                    messages_dict = {True: f"# {' | '.join(results)}\n## You win!", False: f"# {' | '.join(results)}\n## You lose!"}
+                    await ctx.reply(f"{messages_dict[result]}\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
+                    if result:
+                        await log_channel.send(f"**{ctx.author.mention}** actually won the slot wheel in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
                 else:
                     await ctx.reply("Gambling failed! That's more coins than you own")
             except:
