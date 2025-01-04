@@ -115,7 +115,6 @@ def save_last_used_w():
         json.dump(serializable_data, file, indent=4)
 
 
-
 def save_distributed_segs():
     with open(DISTRIBUTED_SEGS, "w") as file:
         json.dump(distributed_segs, file, indent=4)
@@ -143,6 +142,16 @@ def get_reset_timestamp():
     tomorrow = now + timedelta(days=1)
     reset_time = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0)
     return int(reset_time.timestamp())
+
+
+async def print_reset_time(r, ctx, custom_message=''):
+    if r > 60:
+        r /= 60
+        time_ = 'minutes'
+    else:
+        time_ = 'seconds'
+    reply = custom_message + f"try again in {round(r, 1)} {time_}"
+    await ctx.reply(reply)
 
 
 @client.event
@@ -621,7 +630,7 @@ async def segs(ctx):
 
             retry_after = check_cooldown(ctx)
             if retry_after:
-                await ctx.send(f"YOURE ON COOLDOWN FOR THESE ACTIVITIES\ntry again in {round(retry_after)} seconds :3")
+                await print_reset_time(retry_after, ctx, 'YOURE ON COOLDOWN FOR THESE ACTIVITIES\n')
                 await log_channel.send(
                     f'🕐 {caller.mention} tried to segs in {ctx.channel.mention} but they were on cooldown ({ctx.guild.name} - {ctx.guild.id})')
                 return
@@ -737,7 +746,7 @@ async def backshot(ctx):
 
             retry_after = check_cooldown(ctx)
             if retry_after:
-                await ctx.send(f"YOURE ON COOLDOWN FOR THESE ACTIVITIES\ntry again in {round(retry_after)} seconds :3")
+                await print_reset_time(retry_after, ctx, 'YOURE ON COOLDOWN FOR THESE ACTIVITIES\n')
                 await log_channel.send(
                     f'🕐 {caller.mention} tried to give devious backshots in {ctx.channel.mention} but they were on cooldown ({ctx.guild.name} - {ctx.guild.id})')
                 return
@@ -830,7 +839,8 @@ class Currency(commands.Cog):
         if isinstance(error, commands.CommandOnCooldown):
             retry_after = round(error.retry_after, 1)
             cast_command = ctx.message.content.split()[0].lower().lstrip('!')
-            await ctx.reply(f"Gotta wait until you can {cast_command} again buhh\ntry again in {retry_after} seconds")
+            await print_reset_time(retry_after, ctx, f"Gotta wait until you can {cast_command} again buhh\n")
+
         else:
             raise error  # Re-raise other errors to let the default handler deal with them
 
