@@ -1157,11 +1157,11 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
 
-    @commands.command()
+    @commands.command(aliases=['1d'])
     async def dice(self, ctx):
         """
         Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet
-        !dice number
+        !1d number
         """
         dice_roll = random.choice(range(1, 7))
         result = (dice_roll == 6)
@@ -1180,6 +1180,36 @@ class Currency(commands.Cog):
                     num = server_settings.get(guild_id).get('currency').get(author_id)
                     save_settings()
                     messages_dict = {1: f"You win! The dice rolled `{dice_roll}` {yay}", 0: f"You lose! The dice rolled `{dice_roll}` {o7}"}
+                    await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
+                else:
+                    await ctx.reply(f"Gambling failed! That's more {coin} than you own")
+            except:
+                await ctx.reply("Gambling failed!")
+
+    @commands.command(aliases=['2d'])
+    async def twodice(self, ctx):
+        """
+        Takes a bet, rolls 2d6, if it rolled 12 you win 35x the bet
+        !2d number
+        """
+        dice_roll_1 = random.choice(range(1, 7))
+        dice_roll_2 = random.choice(range(1, 7))
+        result = (dice_roll_1 == dice_roll_2 == 6)
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            contents = ctx.message.content.split()[1:]
+            number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
+            if number == -1:
+                number = 0
+            try:
+                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                    delta = number * 35 * result - number * (not result)
+                    server_settings[guild_id]['currency'][author_id] += delta
+                    num = server_settings.get(guild_id).get('currency').get(author_id)
+                    save_settings()
+                    messages_dict = {1: f"You win! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {yay}", 0: f"You lose! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
                 else:
                     await ctx.reply(f"Gambling failed! That's more {coin} than you own")
@@ -1353,6 +1383,8 @@ class Currency(commands.Cog):
                 number = 0
             results = [random.choice(slot_options) for _ in range(3)]
             result = ((results[0] == results[1]) and (results[1] == results[2]))
+            if result:
+                print(results[0] == results[1] == results[2])
             try:
                 if number <= server_settings.get(guild_id).get('currency').get(author_id):
                     delta = 500 * number if ((results[0] == sunfire2) and result) else 50 * number if result else -number
