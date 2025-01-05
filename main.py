@@ -824,6 +824,31 @@ class Currency(commands.Cog):
                 await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
 
     @commands.command()
+    @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
+    async def dig(self, ctx):
+        """
+        Dig and get a very small number of coins
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            dig_coins = random.randint(1, 11)
+            server_settings[guild_id]['currency'][author_id] += dig_coins
+            save_settings()
+            await ctx.reply(f"## Digging successful!\n**{ctx.author.display_name}:** +{dig_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can dig every 20 seconds")
+
+    @dig.error
+    async def work_error(self, ctx, error):
+        """Handle errors for the command, including cooldowns."""
+        if isinstance(error, commands.CommandOnCooldown):
+            retry_after = round(error.retry_after, 1)
+            await print_reset_time(retry_after, ctx, f"Gotta wait until you can dig again buhh\n")
+
+        else:
+            raise error  # Re-raise other errors to let the default handler deal with them
+
+    @commands.command()
     @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
     async def work(self, ctx):
         """
