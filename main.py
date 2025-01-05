@@ -149,6 +149,25 @@ def get_reset_timestamp():
     return int(reset_time.timestamp())
 
 
+def convert_msg_to_number(message, guild, author):
+    """
+    Takes user command message's split(), returns the number user wants to gamble, the source, and the original number
+    returns -1, 0, 0 if unsuccessful
+    """
+    for i in message:
+        if '%' in i and i.rstrip('%').isdecimal():
+            return int(server_settings.get(guild).get('currency').get(author) * int(i.rstrip('%'))/100), 'percent', i
+        if 'k' in i and i.rstrip('k').isdecimal():
+            return int(i.rstrip('k')) * 1000, 'k', i
+        if i.isdecimal():
+            return int(i), 'n', i
+        if i.lower() == 'all':
+            return server_settings.get(guild).get('currency').get(author), 'all', i
+        if i.lower() == 'half':
+            return server_settings.get(guild).get('currency').get(author) // 2, 'half', i
+    return -1, 0, 0
+
+
 async def print_reset_time(r, ctx, custom_message=''):
     if r > 60:
         r /= 60
@@ -248,7 +267,7 @@ async def rng(ctx):
     !rng <n1> <n2>
     """
     contents = ctx.message.content.split()
-    if len(contents) == 3 and contents[1].isnumeric() and contents[2].isnumeric() and int(contents[1]) < int(contents[2]):
+    if len(contents) == 3 and contents[1].isdecimal() and contents[2].isdecimal() and int(contents[1]) < int(contents[2]):
         await ctx.reply(f"{random.randint(int(contents[1]), int(contents[2]))}")
     else:
         await ctx.reply("Usage: `!rng n1 n2` where n1 and n2 are numbers, n1 < n2")
@@ -290,9 +309,9 @@ async def dnd(ctx):
                 print(contents)
                 print(contents.split('d'))
                 number_of_dice, dice_size = contents.split('d')
-                if not number_of_dice.lstrip("-").isnumeric():
+                if not number_of_dice.lstrip("-").isdecimal():
                     await ctx.reply(f"**{number_of_dice}** isn't a number")
-                elif not dice_size.lstrip("-").isnumeric():
+                elif not dice_size.lstrip("-").isdecimal():
                     await ctx.reply(f"**{dice_size}** isn't a number")
                 elif int(number_of_dice) < 0 or int(dice_size) < 0:
                     suspect = min(int(number_of_dice), int(dice_size))
@@ -305,7 +324,7 @@ async def dnd(ctx):
                     result = random.choices(range(1, int(dice_size)+1), k=int(number_of_dice))
                     await ctx.reply(f"Rolling **{number_of_dice}d{dice_size}**: `{str(result)[1:-1]}`\nTotal: `{sum(result)}`")
 
-            elif contents[1:].lstrip('-').isnumeric():  # !dnd d10  =  !dnd 1d10
+            elif contents[1:].lstrip('-').isdecimal():  # !dnd d10  =  !dnd 1d10
                 print(contents)
                 print(contents.split('d'))
                 dice_size = int(contents[1:])
@@ -319,7 +338,7 @@ async def dnd(ctx):
             else:
                 await ctx.reply("Example usage: `!roll 2d6`")
 
-        elif 'd' not in contents and len(contents) == 2 and contents.lstrip("-").isnumeric():  # !dnd 10  =  !dnd 10d6
+        elif 'd' not in contents and len(contents) == 2 and contents.lstrip("-").isdecimal():  # !dnd 10  =  !dnd 10d6
             if int(contents) < 0:
                 await ctx.reply(f"**{contents}** isn't greater than 0 {stare}")
             elif int(contents) > 100:
@@ -483,7 +502,7 @@ async def setrole(ctx):
         role_id = split_msg[2]
         if "<" in role_id:
             role_id = role_id[3:-1]
-        if not role_id.isnumeric():
+        if not role_id.isdecimal():
             await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
             return
         if role := discord.utils.get(guild.roles, id=int(role_id)):
@@ -959,7 +978,7 @@ class Currency(commands.Cog):
                 return
 
             # Award coins and update settings
-            weekly_coins = random.randint(500, 2000)  # Adjust reward range as desired
+            weekly_coins = random.randint(1500, 2500)  # Adjust reward range as desired
             server_settings[guild_id]['currency'][author_id] += weekly_coins
             save_settings()
             user_last_used_w[guild_id][author_id] = now
@@ -985,12 +1004,16 @@ class Currency(commands.Cog):
                     await ctx.reply("You can't send coins to yourself, silly")
                     return
                 contents = ctx.message.content.split()[1:]
-                for i in contents:
-                    if i.isnumeric():
-                        number = int(i)
-                        break
-                else:
+                # for i in contents:
+                #     if i.isdecimal():
+                #         number = int(i)
+                #         break
+                number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
+                if number == -1:
                     await ctx.reply("Please include the amount you'd like the give")
+                    return
+                if not number:
+                    await ctx.reply("You gotta send something at least")
                     return
             else:
                 await ctx.reply("Something went wrong, please make sure that the command has a user mention")
@@ -1055,7 +1078,7 @@ class Currency(commands.Cog):
             num_ok = False
             gamble_choice_ok = False
             for i in contents:
-                if i.isnumeric() and not num_ok:
+                if i.isdecimal() and not num_ok:
                     number = int(i)
                     num_ok = True
                 if i.lower() == 'all':
@@ -1089,7 +1112,7 @@ class Currency(commands.Cog):
     async def gamble(self, ctx):
         """
         Takes a bet, 50% win rate
-        !gamble number
+        !g number
         """
         results = [1, 0]
         result = random.choice(results)
@@ -1101,14 +1124,15 @@ class Currency(commands.Cog):
             if not len(contents):
                 await ctx.reply("Please include the amount you'd like to gamble")
                 return
-            for i in contents:
-                if i.isnumeric():
-                    number = int(i)
-                    break
-                if i.lower() == 'all':
-                    number = server_settings.get(guild_id).get('currency').get(author_id)
-                    break
-            else:
+            # for i in contents:
+            #     if i.isdecimal():
+            #         number = int(i)
+            #         break
+            #     if i.lower() == 'all':
+            #         number = server_settings.get(guild_id).get('currency').get(author_id)
+            #         break
+            number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
+            if number == -1:
                 await ctx.reply("Please include the amount you'd like to gamble")
                 return
             try:
@@ -1153,23 +1177,34 @@ class Currency(commands.Cog):
                     return
 
                 contents = ctx.message.content.split()[1:]
-                for i in contents:
-                    if i.isnumeric():
-                        number = int(i)
-                        break
-                    if i.lower() == 'all':
-                        number = min(server_settings.get(guild_id).get('currency').get(author_id), server_settings.get(guild_id).get('currency').get(target_id))
-                        break
-                else:
-                    if mentions[0].id in active_pvp_requests.get(guild_id):
-                        # print('target has pvp request pending', active_pvp_requests)
-                        await ctx.reply(f"**{mentions[0].display_name}** already has a pvp request pending")
-                        return
-                    await ctx.reply("Please include the amount you'd like to pvp with")
-                    return
-                if number == 0:
-                    await ctx.reply("You gotta bet something to pvp")
-                    return
+                # for i in contents:
+                #     if i.isdecimal():
+                #         number = int(i)
+                #         break
+                #     if i.lower() == 'all':
+                #         number = min(server_settings.get(guild_id).get('currency').get(author_id), server_settings.get(guild_id).get('currency').get(target_id))
+                #         break
+                number, source, msg = convert_msg_to_number(contents, guild_id, author_id)
+                if source == '%':
+                    number = int(min(server_settings.get(guild_id).get('currency').get(author_id),
+                                     server_settings.get(guild_id).get('currency').get(target_id)) * int(msg.rstrip('%')) / 100)
+                elif source == 'all':
+                    number = min(server_settings.get(guild_id).get('currency').get(author_id),
+                                 server_settings.get(guild_id).get('currency').get(target_id))
+                elif source == 'half':
+                    number = min(server_settings.get(guild_id).get('currency').get(author_id),
+                                 server_settings.get(guild_id).get('currency').get(target_id)) // 2
+                elif number == -1:
+                    number = 0
+                #     if mentions[0].id in active_pvp_requests.get(guild_id):
+                #         # print('target has pvp request pending', active_pvp_requests)
+                #         await ctx.reply(f"**{mentions[0].display_name}** already has a pvp request pending")
+                #         return
+                #     await ctx.reply("Please include the amount you'd like to pvp with")
+                #     return
+                # if number == 0:
+                #     await ctx.reply("You gotta bet something to pvp")
+                #     return
             else:
                 await ctx.reply("Something went wrong, please make sure that the command has a user mention")
                 return
@@ -1194,7 +1229,7 @@ class Currency(commands.Cog):
                 # if (number <= server_settings.get(guild_id).get('currency').get(author_id)) and (number <= server_settings.get(guild_id).get('currency').get(target_id)):
                 if mentions[0].id == bot_id:
                     bot_challenged = True
-                else:
+                elif number > 0:
                     bot_challenged = False
                     react_to = await ctx.send(f'**{mentions[0].display_name}**, do you accept the PVP for {number} {coin}?')
                     await react_to.add_reaction('✅')
@@ -1206,11 +1241,18 @@ class Currency(commands.Cog):
                                 str(reaction.emoji) in ['✅', '❌'] and
                                 reaction.message.id == react_to.id
                         )
-
+                else:
+                    bot_challenged = False
                 try:
-                    if not bot_challenged:
+                    if not bot_challenged and (number > 0):
                         reaction, user = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
-                    if bot_challenged or str(reaction.emoji) == '✅':
+                    if bot_challenged or (number in (0, -1)) or str(reaction.emoji) == '✅':
+                        if number > server_settings.get(guild_id).get('currency').get(author_id):
+                            await ctx.reply(f"PVP failed! That's more {coin} than you own")
+                            return
+                        if number > server_settings.get(guild_id).get('currency').get(target_id):
+                            await ctx.reply(f"PVP failed! That's more {coin} than **{mentions[0].display_name}** owns")
+                            return
                         for_author = number * result
                         for_target = -number * result
                         server_settings[guild_id]['currency'][author_id] += for_author
@@ -1219,9 +1261,9 @@ class Currency(commands.Cog):
                         num2 = server_settings.get(guild_id).get('currency').get(str(loser.id))
                         save_settings()
                         await ctx.reply(
-                            f"## PVP winner is **{winner.display_name}**!\n"
-                            f"**{winner.display_name}:** +{number:,} {coin}, balance: {num1:,} {coin}\n"
-                            f"**{loser.display_name}:** -{number:,} {coin}, balance: {num2:,} {coin}"
+                            f"## PVP winner is **{winner.display_name}**!\n" +
+                            f"**{winner.display_name}:** +{number:,} {coin}, balance: {num1:,} {coin}\n" * (number > 0) +
+                            f"**{loser.display_name}:** -{number:,} {coin}, balance: {num2:,} {coin}" * (number > 0)
                         )
                         active_pvp_requests.get(guild_id).discard(mentions[0].id)
                         active_pvp_requests.get(guild_id).discard(ctx.author.id)
@@ -1238,7 +1280,8 @@ class Currency(commands.Cog):
                     active_pvp_requests.get(guild_id).discard(mentions[0].id)
                     active_pvp_requests.get(guild_id).discard(ctx.author.id)
                     # print('removing pvp users from active requests', active_pvp_requests)
-            except:
+            except Exception as e:
+                print(e)
                 await ctx.reply("PVP failed!")
 
     @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
@@ -1253,19 +1296,19 @@ class Currency(commands.Cog):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
-            if not len(contents):
-                await ctx.reply("Please include the amount you'd like to gamble")
-                return
-            for i in contents:
-                if i.isnumeric():
-                    number = int(i)
-                    break
-                if i.lower() == 'all':
-                    number = server_settings.get(guild_id).get('currency').get(author_id)
-                    break
-            else:
-                await ctx.reply("Please include the amount you'd like to gamble")
-                return
+            # if not len(contents):
+            #     await ctx.reply("Please include the amount you'd like to gamble")
+            #     return
+            # for i in contents:
+            #     if i.isdecimal():
+            #         number = int(i)
+            #         break
+            #     if i.lower() == 'all':
+            #         number = server_settings.get(guild_id).get('currency').get(author_id)
+            #         break
+            number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
+            if number == -1:
+                number = 0
             results = [random.choice(slot_options) for _ in range(3)]
             result = ((results[0] == results[1]) and (results[1] == results[2]))
             try:
@@ -1274,8 +1317,8 @@ class Currency(commands.Cog):
                     server_settings[guild_id]['currency'][author_id] += delta
                     num = server_settings.get(guild_id).get('currency').get(author_id)
                     save_settings()
-                    messages_dict = {True: f"# {' | '.join(results)}\n## You win!", False: f"# {' | '.join(results)}\n## You lose!"}
-                    await ctx.reply(f"{messages_dict[result]}\n**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
+                    messages_dict = {True: f"# {' | '.join(results)}\n## You win{' BIG' * (results[0] == sunfire2)}!", False: f"# {' | '.join(results)}\n## You lose!"}
+                    await ctx.reply(f"{messages_dict[result]}\n" + f"**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number != 0))
                     if result:
                         await log_channel.send(f"**{ctx.author.mention}** actually won the slot wheel in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
                 else:
@@ -1311,7 +1354,7 @@ class Currency(commands.Cog):
                     #     return
                     contents = ctx.message.content.split()[1:]
                     for i in contents:
-                        if i.isnumeric():
+                        if i.isdecimal():
                             number = int(i)
                             break
                     else:
@@ -1349,7 +1392,7 @@ class Currency(commands.Cog):
                     #     return
                     contents = ctx.message.content.split()[1:]
                     for i in contents:
-                        if i.isnumeric():
+                        if i.isdecimal():
                             number = int(i)
                             break
                     else:
