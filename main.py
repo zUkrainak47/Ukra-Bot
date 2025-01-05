@@ -159,6 +159,7 @@ async def print_reset_time(r, ctx, custom_message=''):
 
 @client.event
 async def on_ready():
+    print('Bot is up!')
     global log_channel
     log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
 
@@ -819,7 +820,7 @@ class Currency(commands.Cog):
                 save_settings()
                 await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
 
-    @commands.command(aliases=['fish', 'fishinge'])
+    @commands.command()
     @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
     async def work(self, ctx):
         """
@@ -829,15 +830,39 @@ class Currency(commands.Cog):
         if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-
-            work_coins = random.randint(20, 50)
+            work_coins = random.randint(45, 55)
             server_settings[guild_id]['currency'][author_id] += work_coins
             save_settings()
-            cast_command = ctx.message.content.split()[0].lower().lstrip('!')
-            await ctx.reply(f"## {cast_command.capitalize()} successful!\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can {cast_command} every 5 minutes")
+            await ctx.reply(f"## Work successful!\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can work every 5 minutes")
 
     @work.error
     async def work_error(self, ctx, error):
+        """Handle errors for the command, including cooldowns."""
+        if isinstance(error, commands.CommandOnCooldown):
+            retry_after = round(error.retry_after, 1)
+            await print_reset_time(retry_after, ctx, f"Gotta wait until you can work again buhh\n")
+
+        else:
+            raise error  # Re-raise other errors to let the default handler deal with them
+
+    @commands.command(aliases=['fish'])
+    @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
+    async def fishinge(self, ctx):
+        """
+        Fish and get a random number of coins
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            fish_coins = random.randint(1, 150)
+            server_settings[guild_id]['currency'][author_id] += fish_coins
+            save_settings()
+            cast_command = ctx.message.content.split()[0].lower().lstrip('!')
+            await ctx.reply(f"## {cast_command.capitalize()} successful!\n**{ctx.author.display_name}:** +{fish_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can {cast_command} every 10 minutes")
+
+    @fishinge.error
+    async def fishinge_error(self, ctx, error):
         """Handle errors for the command, including cooldowns."""
         if isinstance(error, commands.CommandOnCooldown):
             retry_after = round(error.retry_after, 1)
@@ -876,7 +901,7 @@ class Currency(commands.Cog):
             save_settings()
             user_last_used[guild_id][author_id] = now
             save_last_used()
-            await ctx.reply(f"# Daily coins claimed! {streak_msg}\n**{ctx.author.display_name}:** +{today_coins} {coin} (+{int(today_coins * (user_streak**0.5 - 1))} {coin} streak bonus = {int(today_coins * user_streak**0.5)} {coin})\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
+            await ctx.reply(f"# Daily coins claimed! {streak_msg}\n**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{int(today_coins * (user_streak**0.5 - 1)):,} {coin} streak bonus = {int(today_coins * user_streak**0.5):,} {coin})\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
 
     @commands.command(aliases=['w'])
     async def weekly(self, ctx):
@@ -909,7 +934,7 @@ class Currency(commands.Cog):
 
             # Send confirmation message
             reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
-            await ctx.reply(f"## Weekly coins claimed!\n**{ctx.author.display_name}:** +{weekly_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
+            await ctx.reply(f"## Weekly coins claimed!\n**{ctx.author.display_name}:** +{weekly_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
 
     @commands.command(aliases=['pay'])
     async def give(self, ctx):
@@ -1027,7 +1052,7 @@ class Currency(commands.Cog):
         else:
             await ctx.reply(f"Result is `{random.choice(results)}`!")
 
-    @commands.command()
+    @commands.command(aliases=['g'])
     async def gamble(self, ctx):
         """
         Takes a bet, 50% win rate
@@ -1066,6 +1091,7 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
 
+    @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
     @commands.command(aliases=['slot'])
     async def slots(self, ctx):
         """
@@ -1107,6 +1133,17 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
 
+    @slots.error
+    async def slots_error(self, ctx, error):
+        """Handle errors for the command, including cooldowns."""
+        # if isinstance(error, commands.CommandOnCooldown):
+        #     retry_after = round(error.retry_after, 1)
+        #     await print_reset_time(retry_after, ctx)
+        #
+        # else:
+        #     raise error  # Re-raise other errors to let the default handler deal with them
+        pass
+
     @commands.command()
     async def bless(self, ctx):
         """
@@ -1139,7 +1176,7 @@ class Currency(commands.Cog):
                     server_settings[guild_id]['currency'][target_id] += number
                     num = server_settings.get(guild_id).get('currency').get(target_id)
                     save_settings()
-                    await ctx.reply(f"## Blessing successful!\n\n**{mentions[0].display_name}:** +{number} {coin}\nBalance: {num:,} {coin}")
+                    await ctx.reply(f"## Blessing successful!\n\n**{mentions[0].display_name}:** +{number:,} {coin}\nBalance: {num:,} {coin}")
                 except:
                     await ctx.reply("Blessing failed!")
             else:
@@ -1179,7 +1216,7 @@ class Currency(commands.Cog):
                     server_settings[guild_id]['currency'][target_id] -= number
                     num = server_settings.get(guild_id).get('currency').get(target_id)
                     save_settings()
-                    await ctx.reply(f"## Curse successful!\n\n**{mentions[0].display_name}:** -{number} {coin}\nBalance: {num:,} {coin}")
+                    await ctx.reply(f"## Curse successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}")
                 except:
                     await ctx.reply("Curse failed!")
             else:
