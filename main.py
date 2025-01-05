@@ -184,7 +184,6 @@ async def on_ready():
     global log_channel
     log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
 
-    # await log_channel.send(f'{client.user} has connected to Discord!')
     await log_channel.send(f'{yay}\n{bot_name} has connected to Discord!')
     role_dict = {'backshots_role': distributed_backshots,
                  'segs_role': distributed_segs}
@@ -434,50 +433,6 @@ async def settings(ctx):
 
 
 # ROLES
-# @client.command()
-# @commands.has_permissions(administrator=True)
-# async def setsegsrole(ctx):
-#     """
-#     !setsegsrole <role id/mention>
-#     Can only be used by administrators
-#     """
-#     guild_id = str(ctx.guild.id)
-#     guild = ctx.guild
-#     if len(ctx.message.content.split()) > 1:
-#         role_id = ctx.message.content.split()[1]
-#         if role := discord.utils.get(guild.roles, id=int(role_id)) if "<" not in role_id else guild.get_role(int(role_id[3:-1])):
-#             server_settings.setdefault(guild_id, {})['segs_role'] = role.id
-#             save_settings()
-#             await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the segs role to `@{role.name} - {role.id}`')
-#             await ctx.send(f"Segs role has been changed to `@{role.name}`")
-#         else:
-#             await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
-#     else:
-#         await ctx.send(f"Command usage: `!setsegsrole <role id/mention>`")
-#
-#
-# @client.command(aliases=['setbackshotrole'])
-# @commands.has_permissions(administrator=True)
-# async def setbackshotsrole(ctx):
-#     """
-#     !setbackshotsrole <role id/mention>
-#     Can only be used by administrators
-#     """
-#     guild_id = str(ctx.guild.id)
-#     guild = ctx.guild
-#     if len(ctx.message.content.split()) > 1:
-#         role_id = ctx.message.content.split()[1]
-#         if role := discord.utils.get(guild.roles, id=int(role_id)) if "<" not in role_id else guild.get_role(int(role_id[3:-1])):
-#             server_settings.setdefault(guild_id, {})['backshots_role'] = role.id
-#             save_settings()
-#             await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the backshots role to `@{role.name} - {role.id}`')
-#             await ctx.send(f"Backshot role has been changed to `@{role.name}`")
-#         else:
-#             await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
-#     else:
-#         await ctx.send(f"Command usage: `!setbackshotsrole <role id/mention>`")
-
-
 @client.command()
 @commands.has_permissions(administrator=True)
 async def setrole(ctx):
@@ -583,34 +538,6 @@ def check_cooldown(ctx):
 
 
 # SEGS
-# @client.command(aliases=['disallowsegs', 'disablesegs'])
-# @commands.has_permissions(administrator=True)
-# async def preventsegs(ctx):
-#     """
-#     Disables !segs
-#     Can only be used by administrators
-#     """
-#     guild_id = str(ctx.guild.id)
-#     server_settings.setdefault(guild_id, {})['segs_allowed'] = False
-#     await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} disallowed segs')
-#     await ctx.send(f"Segs no longer allowed")
-#     save_settings()
-#
-#
-# @client.command(aliases=['enablesegs'])
-# @commands.has_permissions(administrator=True)
-# async def allowsegs(ctx):
-#     """
-#     Enables !segs
-#     Can only be used by administrators
-#     """
-#     guild_id = str(ctx.guild.id)
-#     server_settings.setdefault(guild_id, {})['segs_allowed'] = True
-#     await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} allowed segs')
-#     await ctx.send(f"Segs has been allowed" + '. **Please run !setsegsrole**' * (1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('segs_role')))))
-#     save_settings()
-
-
 @client.command()
 async def segs(ctx):
     """
@@ -699,34 +626,6 @@ async def segs(ctx):
 
 
 # BACKSHOTS
-# @client.command(aliases=['disallowbackshots', 'disablebackshots'])
-# @commands.has_permissions(administrator=True)
-# async def preventbackshots(ctx):
-#     """
-#     Disables !backshot
-#     Can only be used by administrators
-#     """
-#     guild_id = str(ctx.guild.id)
-#     server_settings.setdefault(guild_id, {})['backshots_allowed'] = False
-#     await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} disallowed backshots')
-#     await ctx.send(f"Backshots no longer allowed")
-#     save_settings()
-#
-#
-# @client.command(aliases=['enablebackshots'])
-# @commands.has_permissions(administrator=True)
-# async def allowbackshots(ctx):
-#     """
-#     Enables !backshot
-#     Can only be used by administrators
-#     """
-#     guild_id = str(ctx.guild.id)
-#     server_settings.setdefault(guild_id, {})['backshots_allowed'] = True
-#     await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} - {ctx.author.mention} allowed backshots')
-#     await ctx.send(f"Backshots have been allowed" + '. **Please run !setbackshotsrole**' * (1-bool(ctx.guild.get_role(server_settings.get(guild_id, {}).get('backshots_role')))))
-#     save_settings()
-
-
 @client.command(aliases=['backshoot'])
 async def backshot(ctx):
     """
@@ -1004,10 +903,6 @@ class Currency(commands.Cog):
                     await ctx.reply(f"You can't send {coin} to yourself, silly")
                     return
                 contents = ctx.message.content.split()[1:]
-                # for i in contents:
-                #     if i.isdecimal():
-                #         number = int(i)
-                #         break
                 number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
                 if number == -1:
                     await ctx.reply("Please include the amount you'd like the give")
@@ -1131,16 +1026,6 @@ class Currency(commands.Cog):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
-            # if not len(contents):
-            #     await ctx.reply("Please include the amount you'd like to gamble")
-            #     return
-            # for i in contents:
-            #     if i.isdecimal():
-            #         number = int(i)
-            #         break
-            #     if i.lower() == 'all':
-            #         number = server_settings.get(guild_id).get('currency').get(author_id)
-            #         break
             number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
             if number == -1:
                 number = 0
@@ -1157,7 +1042,8 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
 
-    @commands.command(aliases=['1d'])
+    @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
+    @commands.command(aliases=['1d', 'onedice'])
     async def dice(self, ctx):
         """
         Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet
@@ -1186,6 +1072,11 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
 
+    @dice.error
+    async def dice_error(self, ctx, error):
+        pass
+
+    @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
     @commands.command(aliases=['2d'])
     async def twodice(self, ctx):
         """
@@ -1216,6 +1107,10 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
 
+    @twodice.error
+    async def twodice_error(self, ctx, error):
+        pass
+
     @commands.command()
     async def pvp(self, ctx):
         """
@@ -1225,13 +1120,11 @@ class Currency(commands.Cog):
         results = [1, -1]
         result = random.choice(results)
         guild_id = str(ctx.guild.id)
-        active_pvp_requests.setdefault(guild_id, set())
-        # print('pvp requests at the start of command', active_pvp_requests)
         if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            active_pvp_requests.setdefault(guild_id, set())
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             if ctx.author.id in active_pvp_requests.get(guild_id):
-                # print('caller has pvp request pending', active_pvp_requests)
                 await ctx.reply(f"You already have a pvp request pending")
                 return
             if mentions := ctx.message.mentions:
@@ -1240,18 +1133,10 @@ class Currency(commands.Cog):
                     await ctx.reply("You can't pvp yourself, silly")
                     return
                 if mentions[0].id in active_pvp_requests.get(guild_id):
-                    # print('target has pvp request pending', active_pvp_requests)
                     await ctx.reply(f"**{mentions[0].display_name}** already has a pvp request pending")
                     return
 
                 contents = ctx.message.content.split()[1:]
-                # for i in contents:
-                #     if i.isdecimal():
-                #         number = int(i)
-                #         break
-                #     if i.lower() == 'all':
-                #         number = min(server_settings.get(guild_id).get('currency').get(author_id), server_settings.get(guild_id).get('currency').get(target_id))
-                #         break
                 number, source, msg = convert_msg_to_number(contents, guild_id, author_id)
                 if source == '%':
                     number = int(min(server_settings.get(guild_id).get('currency').get(author_id),
@@ -1264,15 +1149,6 @@ class Currency(commands.Cog):
                                  server_settings.get(guild_id).get('currency').get(target_id)) // 2
                 elif number == -1:
                     number = 0
-                #     if mentions[0].id in active_pvp_requests.get(guild_id):
-                #         # print('target has pvp request pending', active_pvp_requests)
-                #         await ctx.reply(f"**{mentions[0].display_name}** already has a pvp request pending")
-                #         return
-                #     await ctx.reply("Please include the amount you'd like to pvp with")
-                #     return
-                # if number == 0:
-                #     await ctx.reply("You gotta bet something to pvp")
-                #     return
             else:
                 await ctx.reply("Something went wrong, please make sure that the command has a user mention")
                 return
@@ -1286,15 +1162,11 @@ class Currency(commands.Cog):
 
             active_pvp_requests.get(guild_id).add(mentions[0].id)
             active_pvp_requests.get(guild_id).add(ctx.author.id)
-            # print('adding pvp users to active requests', active_pvp_requests)
 
             make_sure_user_has_currency(guild_id, target_id)
             winner = ctx.author if result == 1 else mentions[0]
             loser = ctx.author if result == -1 else mentions[0]
             try:
-                # print(number <= server_settings.get(guild_id).get('currency').get(author_id))
-                # print(number <= server_settings.get(guild_id).get('currency').get(target_id))
-                # if (number <= server_settings.get(guild_id).get('currency').get(author_id)) and (number <= server_settings.get(guild_id).get('currency').get(target_id)):
                 if mentions[0].id == bot_id:
                     bot_challenged = True
                 elif number > 0:
@@ -1304,13 +1176,12 @@ class Currency(commands.Cog):
                     await react_to.add_reaction('❌')
 
                     def check(reaction, user):
-                        return (
-                                user == mentions[0] and
+                        return (user == mentions[0] and
                                 str(reaction.emoji) in ['✅', '❌'] and
-                                reaction.message.id == react_to.id
-                        )
+                                reaction.message.id == react_to.id)
                 else:
                     bot_challenged = False
+
                 try:
                     if not bot_challenged and (number > 0):
                         reaction, user = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
@@ -1339,22 +1210,30 @@ class Currency(commands.Cog):
                         )
                         active_pvp_requests.get(guild_id).discard(mentions[0].id)
                         active_pvp_requests.get(guild_id).discard(ctx.author.id)
-                        # print('removing pvp users from active requests', active_pvp_requests)
 
                     else:
                         await ctx.reply(f"{mentions[0].display_name} declined the PVP request")
                         active_pvp_requests.get(guild_id).discard(mentions[0].id)
                         active_pvp_requests.get(guild_id).discard(ctx.author.id)
-                        # print('removing pvp users from active requests', active_pvp_requests)
 
                 except asyncio.TimeoutError:
                     await ctx.reply(f"{mentions[0].display_name} did not respond in time")
                     active_pvp_requests.get(guild_id).discard(mentions[0].id)
                     active_pvp_requests.get(guild_id).discard(ctx.author.id)
-                    # print('removing pvp users from active requests', active_pvp_requests)
+
             except Exception as e:
                 print(e)
                 await ctx.reply("PVP failed!")
+        else:
+            if mentions := ctx.message.mentions:
+                if mentions[0].id == ctx.author.id:
+                    await ctx.reply("You can't pvp yourself, silly")
+                    return
+                winner = ctx.author if result == 1 else mentions[0]
+                await ctx.reply(f"## PVP winner is **{winner.display_name}**!")
+            else:
+                await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+                return
 
     @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
     @commands.command(aliases=['slot'])
@@ -1368,16 +1247,6 @@ class Currency(commands.Cog):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
-            # if not len(contents):
-            #     await ctx.reply("Please include the amount you'd like to gamble")
-            #     return
-            # for i in contents:
-            #     if i.isdecimal():
-            #         number = int(i)
-            #         break
-            #     if i.lower() == 'all':
-            #         number = server_settings.get(guild_id).get('currency').get(author_id)
-            #         break
             number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
             if number == -1:
                 number = 0
@@ -1402,13 +1271,6 @@ class Currency(commands.Cog):
 
     @slots.error
     async def slots_error(self, ctx, error):
-        """Handle errors for the command, including cooldowns."""
-        # if isinstance(error, commands.CommandOnCooldown):
-        #     retry_after = round(error.retry_after, 1)
-        #     await print_reset_time(retry_after, ctx)
-        #
-        # else:
-        #     raise error  # Re-raise other errors to let the default handler deal with them
         pass
 
     @commands.command()
@@ -1423,9 +1285,6 @@ class Currency(commands.Cog):
             if ctx.author.id in allowed_users:
                 if mentions := ctx.message.mentions:
                     target_id = str(mentions[0].id)
-                    # if mentions[0].id == ctx.author.id:
-                    #     await ctx.reply("You can't send coins to yourself, silly")
-                    #     return
                     contents = ctx.message.content.split()[1:]
                     for i in contents:
                         if i.isdecimal():
@@ -1461,9 +1320,6 @@ class Currency(commands.Cog):
             if ctx.author.id in allowed_users:
                 if mentions := ctx.message.mentions:
                     target_id = str(mentions[0].id)
-                    # if mentions[0].id == ctx.author.id:
-                    #     await ctx.reply("You can't send coins to yourself, silly")
-                    #     return
                     contents = ctx.message.content.split()[1:]
                     for i in contents:
                         if i.isdecimal():
