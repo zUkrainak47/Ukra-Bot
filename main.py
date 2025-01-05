@@ -833,10 +833,15 @@ class Currency(commands.Cog):
         if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-            dig_coins = random.randint(1, 11)
+            dig_coins = int(random.randint(1, 400)**0.5)
+            if dig_coins == 20:
+                dig_coins = 2500
+                dig_message = '# You found Gold!'
+            else:
+                dig_message = '## Digging successful!'
             server_settings[guild_id]['currency'][author_id] += dig_coins
             save_settings()
-            await ctx.reply(f"## Digging successful!\n**{ctx.author.display_name}:** +{dig_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can dig every 20 seconds")
+            await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can dig every 20 seconds")
 
     @dig.error
     async def work_error(self, ctx, error):
