@@ -1248,9 +1248,13 @@ class Currency(commands.Cog):
                         reaction, user = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
                     if bot_challenged or (number in (0, -1)) or str(reaction.emoji) == '✅':
                         if number > server_settings.get(guild_id).get('currency').get(author_id):
+                            active_pvp_requests.get(guild_id).discard(mentions[0].id)
+                            active_pvp_requests.get(guild_id).discard(ctx.author.id)
                             await ctx.reply(f"PVP failed! That's more {coin} than you own")
                             return
                         if number > server_settings.get(guild_id).get('currency').get(target_id):
+                            active_pvp_requests.get(guild_id).discard(mentions[0].id)
+                            active_pvp_requests.get(guild_id).discard(ctx.author.id)
                             await ctx.reply(f"PVP failed! That's more {coin} than **{mentions[0].display_name}** owns")
                             return
                         for_author = number * result
