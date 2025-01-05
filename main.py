@@ -156,7 +156,7 @@ def convert_msg_to_number(message, guild, author):
     """
     for i in message:
         if '%' in i and i.rstrip('%').isdecimal():
-            return int(server_settings.get(guild).get('currency').get(author) * int(i.rstrip('%'))/100), 'percent', i
+            return int(server_settings.get(guild).get('currency').get(author) * int(i.rstrip('%'))/100), '%', i
         if 'k' in i and i.rstrip('k').isdecimal():
             return int(i.rstrip('k')) * 1000, 'k', i
         if i.isdecimal():
@@ -806,11 +806,22 @@ class Currency(commands.Cog):
         if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-            fish_coins = random.randint(1, 150)
+            fish_coins = random.randint(1, 167)
+            if fish_coins == 167:
+                fish_coins = random.randint(5000, 10000)
+                if fish_coins == 10000:
+                    fish_coins = 2500000
+                    fish_message = "# You literally found *The Catch*\nPS: this has a 0.0001197% chance of happening, go brag to your friends"
+                    await log_channel.send(f"**{ctx.author.mention}** JUST WON 2.5 MILLION IN {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
+                else:
+                    fish_message = '# You found a big treasure chest!!!'
+                    await log_channel.send(f"**{ctx.author.mention}** just fished out a treasure in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
+            else:
+                cast_command = ctx.message.content.split()[0].lower().lstrip('!')
+                fish_message = f"## {cast_command.capitalize()} successful!"
             server_settings[guild_id]['currency'][author_id] += fish_coins
             save_settings()
-            cast_command = ctx.message.content.split()[0].lower().lstrip('!')
-            await ctx.reply(f"## {cast_command.capitalize()} successful!\n**{ctx.author.display_name}:** +{fish_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can {cast_command} every 10 minutes")
+            await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can {cast_command} every 10 minutes")
 
     @fishinge.error
     async def fishinge_error(self, ctx, error):
@@ -1047,6 +1058,7 @@ class Currency(commands.Cog):
     async def dice(self, ctx):
         """
         Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet
+        There is a 2-second cooldown
         !1d number
         """
         dice_roll = random.choice(range(1, 7))
@@ -1081,6 +1093,7 @@ class Currency(commands.Cog):
     async def twodice(self, ctx):
         """
         Takes a bet, rolls 2d6, if it rolled 12 you win 35x the bet
+        There is a 2-second cooldown
         !2d number
         """
         dice_roll_1 = random.choice(range(1, 7))
@@ -1171,7 +1184,9 @@ class Currency(commands.Cog):
                     bot_challenged = True
                 elif number > 0:
                     bot_challenged = False
-                    react_to = await ctx.send(f'**{mentions[0].display_name}**, do you accept the PVP for {number} {coin}?')
+                    react_to = await ctx.send(f'## {mentions[0].display_name}, do you accept the PVP for {number} {coin}?\n' +
+                                              f"**{mentions[0].display_name}**'s balance: {server_settings.get(guild_id).get('currency').get(target_id)} {coin}\n" +
+                                              f"**{ctx.author.display_name}**'s balance: {server_settings.get(guild_id).get('currency').get(author_id)} {coin}\n")
                     await react_to.add_reaction('✅')
                     await react_to.add_reaction('❌')
 
@@ -1240,6 +1255,7 @@ class Currency(commands.Cog):
     async def slots(self, ctx):
         """
         Takes a bet, spins three wheels of 10 emojis, if all of them match you win 50x the bet, if they are :sunfire2: you win 500x the bet
+        There is a 2-second cooldown
         !slots number
         """
         guild_id = str(ctx.guild.id)
