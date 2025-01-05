@@ -953,7 +953,7 @@ class Currency(commands.Cog):
             save_settings()
             user_last_used[guild_id][author_id] = now
             save_last_used()
-            await ctx.reply(f"# Daily coins claimed! {streak_msg}\n**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{int(today_coins * (user_streak**0.5 - 1)):,} {coin} streak bonus = {int(today_coins * user_streak**0.5):,} {coin})\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
+            await ctx.reply(f"# Daily {coin} claimed! {streak_msg}\n**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{int(today_coins * (user_streak**0.5 - 1)):,} {coin} streak bonus = {int(today_coins * user_streak**0.5):,} {coin})\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
 
     @commands.command(aliases=['w'])
     async def weekly(self, ctx):
@@ -986,7 +986,7 @@ class Currency(commands.Cog):
 
             # Send confirmation message
             reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
-            await ctx.reply(f"## Weekly coins claimed!\n**{ctx.author.display_name}:** +{weekly_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
+            await ctx.reply(f"## Weekly {coin} claimed!\n**{ctx.author.display_name}:** +{weekly_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
 
     @commands.command(aliases=['pay'])
     async def give(self, ctx):
@@ -1001,7 +1001,7 @@ class Currency(commands.Cog):
             if mentions := ctx.message.mentions:
                 target_id = str(mentions[0].id)
                 if mentions[0].id == ctx.author.id:
-                    await ctx.reply("You can't send coins to yourself, silly")
+                    await ctx.reply(f"You can't send {coin} to yourself, silly")
                     return
                 contents = ctx.message.content.split()[1:]
                 # for i in contents:
@@ -1029,7 +1029,7 @@ class Currency(commands.Cog):
                     save_settings()
                     await ctx.reply(f"## Transaction successful!\n\n**{ctx.author.display_name}:** {num1:,} {coin}\n**{mentions[0].display_name}:** {num2:,} {coin}")
                 else:
-                    await ctx.reply("Transaction failed! That's more coins than you own")
+                    await ctx.reply(f"Transaction failed! That's more {coin} than you own")
             except:
                 await ctx.reply("Transaction failed!")
 
@@ -1073,17 +1073,27 @@ class Currency(commands.Cog):
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
             if not len(contents):
-                await ctx.reply(f"Result is `{result.capitalize()}`!")
+                await ctx.reply(f"## Result is `{result.capitalize()}`!")
                 return
             num_ok = False
             gamble_choice_ok = False
             for i in contents:
+                if '%' in i and i.rstrip('%').isdecimal():
+                    number = int(server_settings.get(guild_id).get('currency').get(author_id) * int(i.rstrip('%')) / 100)
+                    num_ok = True
+                if 'k' in i and i.rstrip('k').isdecimal():
+                    number = int(i.rstrip('k')) * 1000
+                    num_ok = True
                 if i.isdecimal() and not num_ok:
                     number = int(i)
                     num_ok = True
                 if i.lower() == 'all':
                     number = server_settings.get(guild_id).get('currency').get(author_id)
                     num_ok = True
+                if i.lower() == 'half':
+                    number = server_settings.get(guild_id).get('currency').get(author_id) // 2
+                    num_ok = True
+
                 if i.lower() in results + ['head', 'tail'] and not gamble_choice_ok:
                     gamble_choice = (i.lower() + 's') if ('s' not in i.lower()) else i.lower()
                     gamble_choice_ok = True
@@ -1102,7 +1112,7 @@ class Currency(commands.Cog):
                     messages_dict = {True: f"You win! The result was `{result.capitalize()}` {yay}", False: f"You lose! The result was `{result.capitalize()}` {o7}"}
                     await ctx.reply(f"## {messages_dict[did_you_win]}\n\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
                 else:
-                    await ctx.reply("Gambling failed! That's more coins than you own")
+                    await ctx.reply(f"Gambling failed! That's more {coin} than you own")
             except:
                 await ctx.reply("Gambling failed!")
         else:
@@ -1121,9 +1131,9 @@ class Currency(commands.Cog):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
-            if not len(contents):
-                await ctx.reply("Please include the amount you'd like to gamble")
-                return
+            # if not len(contents):
+            #     await ctx.reply("Please include the amount you'd like to gamble")
+            #     return
             # for i in contents:
             #     if i.isdecimal():
             #         number = int(i)
@@ -1133,8 +1143,7 @@ class Currency(commands.Cog):
             #         break
             number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
             if number == -1:
-                await ctx.reply("Please include the amount you'd like to gamble")
-                return
+                number = 0
             try:
                 if number <= server_settings.get(guild_id).get('currency').get(author_id):
                     delta = int(number * 2 * (result - 0.5))
@@ -1142,9 +1151,38 @@ class Currency(commands.Cog):
                     num = server_settings.get(guild_id).get('currency').get(author_id)
                     save_settings()
                     messages_dict = {1: f"You win! {yay}", 0: f"You lose! {o7}"}
-                    await ctx.reply(f"## {messages_dict[result]}\n\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
+                    await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
                 else:
-                    await ctx.reply("Gambling failed! That's more coins than you own")
+                    await ctx.reply(f"Gambling failed! That's more {coin} than you own")
+            except:
+                await ctx.reply("Gambling failed!")
+
+    @commands.command()
+    async def dice(self, ctx):
+        """
+        Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet
+        !dice number
+        """
+        dice_roll = random.choice(range(1, 7))
+        result = (dice_roll == 6)
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            contents = ctx.message.content.split()[1:]
+            number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
+            if number == -1:
+                number = 0
+            try:
+                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                    delta = number * 5 * result - number * (not result)
+                    server_settings[guild_id]['currency'][author_id] += delta
+                    num = server_settings.get(guild_id).get('currency').get(author_id)
+                    save_settings()
+                    messages_dict = {1: f"You win! The dice rolled `{dice_roll}` {yay}", 0: f"You lose! The dice rolled `{dice_roll}` {o7}"}
+                    await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
+                else:
+                    await ctx.reply(f"Gambling failed! That's more {coin} than you own")
             except:
                 await ctx.reply("Gambling failed!")
 
@@ -1326,7 +1364,7 @@ class Currency(commands.Cog):
                     if result:
                         await log_channel.send(f"**{ctx.author.mention}** actually won the slot wheel in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
                 else:
-                    await ctx.reply("Gambling failed! That's more coins than you own")
+                    await ctx.reply(f"Gambling failed! That's more {coin} than you own")
             except:
                 await ctx.reply("Gambling failed!")
 
