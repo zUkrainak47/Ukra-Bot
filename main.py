@@ -20,6 +20,7 @@ server_settings = {}
 user_last_used = {}
 user_last_used_w = {}
 allowed_users = [369809123925295104]
+bot_id = 1322197604297085020
 bot_name = 'Ukra Bot'
 allow_dict = {True:  "Enabled ",
               False: "Disabled"}
@@ -27,6 +28,7 @@ allow_dict = {True:  "Enabled ",
 intents = Intents.default()
 intents.members = True
 intents.message_content = True
+intents.reactions = True
 client = commands.Bot(command_prefix="!", intents=intents)
 
 # EMOJIS
@@ -640,7 +642,7 @@ async def segs(ctx):
                 return
 
             try:
-                if random.random() > 0.05 and (target.id != 1322197604297085020 or target.id == 1322197604297085020 and caller.id in allowed_users):
+                if random.random() > 0.05 and (target.id != bot_id or target.id == bot_id and caller.id in allowed_users):
                     distributed_segs.setdefault(str(ctx.guild.id), []).append(target.id)
                     save_distributed_segs()
                     await target.add_roles(role)
@@ -655,7 +657,7 @@ async def segs(ctx):
                     distributed_segs.setdefault(str(ctx.guild.id), []).append(caller.id)
                     save_distributed_segs()
                     await caller.add_roles(role)
-                    if target.id == 1322197604297085020:
+                    if target.id == bot_id:
                         await ctx.send(f'You thought you could segs me? **NAHHHH** get segsed yourself')
                     else:
                         await ctx.send(f'OOPS! Segs failed {teripoint}' + f' {HUH}' * (caller.mention == target.mention))
@@ -756,7 +758,7 @@ async def backshot(ctx):
                 return
 
             try:
-                if random.random() > 0.05 and (target.id != 1322197604297085020 or target.id == 1322197604297085020 and caller.id in allowed_users):
+                if random.random() > 0.05 and (target.id != bot_id or target.id == bot_id and caller.id in allowed_users):
                     distributed_backshots.setdefault(str(ctx.guild.id), []).append(target.id)
                     save_distributed_backshots()
                     await target.add_roles(role)
@@ -793,6 +795,7 @@ async def backshot(ctx):
 
 # CURRENCY
 coin = "<:fishingecoin:1324905329657643179>"
+active_pvp_requests = dict()
 
 
 class Currency(commands.Cog):
@@ -1091,6 +1094,123 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
 
+    @commands.command()
+    async def pvp(self, ctx):
+        """
+        Takes a user mention and a bet, one of the users wins
+        !pvp @user number
+        """
+        results = [1, -1]
+        result = random.choice(results)
+        guild_id = str(ctx.guild.id)
+        active_pvp_requests.setdefault(guild_id, set())
+        # print('pvp requests at the start of command', active_pvp_requests)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            if ctx.author.id in active_pvp_requests.get(guild_id):
+                # print('caller has pvp request pending', active_pvp_requests)
+                await ctx.reply(f"You already have a pvp request pending")
+                return
+            if mentions := ctx.message.mentions:
+                target_id = str(mentions[0].id)
+                if mentions[0].id == ctx.author.id:
+                    await ctx.reply("You can't pvp yourself, silly")
+                    return
+                if mentions[0].id in active_pvp_requests.get(guild_id):
+                    # print('target has pvp request pending', active_pvp_requests)
+                    await ctx.reply(f"**{mentions[0].display_name}** already has a pvp request pending")
+                    return
+
+                contents = ctx.message.content.split()[1:]
+                for i in contents:
+                    if i.isnumeric():
+                        number = int(i)
+                        break
+                    if i.lower() == 'all':
+                        number = min(server_settings.get(guild_id).get('currency').get(author_id), server_settings.get(guild_id).get('currency').get(target_id))
+                        break
+                else:
+                    if mentions[0].id in active_pvp_requests.get(guild_id):
+                        # print('target has pvp request pending', active_pvp_requests)
+                        await ctx.reply(f"**{mentions[0].display_name}** already has a pvp request pending")
+                        return
+                    await ctx.reply("Please include the amount you'd like to pvp with")
+                    return
+                if number == 0:
+                    await ctx.reply("You gotta bet something to pvp")
+                    return
+            else:
+                await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+                return
+
+            if number > server_settings.get(guild_id).get('currency').get(author_id):
+                await ctx.reply(f"PVP failed! That's more {coin} than you own")
+                return
+            if number > server_settings.get(guild_id).get('currency').get(target_id):
+                await ctx.reply(f"PVP failed! That's more {coin} than **{mentions[0].display_name}** owns")
+                return
+
+            active_pvp_requests.get(guild_id).add(mentions[0].id)
+            active_pvp_requests.get(guild_id).add(ctx.author.id)
+            # print('adding pvp users to active requests', active_pvp_requests)
+
+            make_sure_user_has_currency(guild_id, target_id)
+            winner = ctx.author if result == 1 else mentions[0]
+            loser = ctx.author if result == -1 else mentions[0]
+            try:
+                # print(number <= server_settings.get(guild_id).get('currency').get(author_id))
+                # print(number <= server_settings.get(guild_id).get('currency').get(target_id))
+                # if (number <= server_settings.get(guild_id).get('currency').get(author_id)) and (number <= server_settings.get(guild_id).get('currency').get(target_id)):
+                if mentions[0].id == bot_id:
+                    bot_challenged = True
+                else:
+                    bot_challenged = False
+                    react_to = await ctx.send(f'**{mentions[0].display_name}**, do you accept the PVP for {number} {coin}?')
+                    await react_to.add_reaction('✅')
+                    await react_to.add_reaction('❌')
+
+                    def check(reaction, user):
+                        return (
+                                user == mentions[0] and
+                                str(reaction.emoji) in ['✅', '❌'] and
+                                reaction.message.id == react_to.id
+                        )
+
+                try:
+                    if not bot_challenged:
+                        reaction, user = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
+                    if bot_challenged or str(reaction.emoji) == '✅':
+                        for_author = number * result
+                        for_target = -number * result
+                        server_settings[guild_id]['currency'][author_id] += for_author
+                        server_settings[guild_id]['currency'][target_id] += for_target
+                        num1 = server_settings.get(guild_id).get('currency').get(str(winner.id))
+                        num2 = server_settings.get(guild_id).get('currency').get(str(loser.id))
+                        save_settings()
+                        await ctx.reply(
+                            f"## PVP winner is **{winner.display_name}**!\n"
+                            f"**{winner.display_name}:** +{number:,} {coin}, balance: {num1:,} {coin}\n"
+                            f"**{loser.display_name}:** -{number:,} {coin}, balance: {num2:,} {coin}"
+                        )
+                        active_pvp_requests.get(guild_id).discard(mentions[0].id)
+                        active_pvp_requests.get(guild_id).discard(ctx.author.id)
+                        # print('removing pvp users from active requests', active_pvp_requests)
+
+                    else:
+                        await ctx.reply(f"{mentions[0].display_name} declined the PVP request")
+                        active_pvp_requests.get(guild_id).discard(mentions[0].id)
+                        active_pvp_requests.get(guild_id).discard(ctx.author.id)
+                        # print('removing pvp users from active requests', active_pvp_requests)
+
+                except asyncio.TimeoutError:
+                    await ctx.reply(f"{mentions[0].display_name} did not respond in time")
+                    active_pvp_requests.get(guild_id).discard(mentions[0].id)
+                    active_pvp_requests.get(guild_id).discard(ctx.author.id)
+                    # print('removing pvp users from active requests', active_pvp_requests)
+            except:
+                await ctx.reply("PVP failed!")
+
     @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
     @commands.command(aliases=['slot'])
     async def slots(self, ctx):
@@ -1125,7 +1245,7 @@ class Currency(commands.Cog):
                     num = server_settings.get(guild_id).get('currency').get(author_id)
                     save_settings()
                     messages_dict = {True: f"# {' | '.join(results)}\n## You win!", False: f"# {' | '.join(results)}\n## You lose!"}
-                    await ctx.reply(f"{messages_dict[result]}\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
+                    await ctx.reply(f"{messages_dict[result]}\n**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
                     if result:
                         await log_channel.send(f"**{ctx.author.mention}** actually won the slot wheel in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
                 else:
