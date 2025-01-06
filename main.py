@@ -986,12 +986,13 @@ class Currency(commands.Cog):
                     if int(member_id) != ctx.author.id:
                         top_users.append([member.display_name, coins])
                     else:
-                        top_users.append([f"__{member.display_name}__", coins])
+                        top_users.append([f"{member.mention}", coins])
 
                 except discord.NotFound:
                     pass
             top_users = top_users[:10]
-            await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{index} - {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
+            number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
+            await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{index if index not in number_dict else number_dict[index]} - {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
 
     @commands.command(aliases=['coin', 'c'])
     async def coinflip(self, ctx):
