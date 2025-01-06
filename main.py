@@ -42,6 +42,12 @@ wicked = '<:wicked:1323075389131587646>'
 deadge = '<:deadge:1323075561089929300>'
 teripoint = '<:teripoint:1322718769679827024>'
 pepela = '<:pepela:1322718719977197671>'
+shovel = '<:shovel:1325823488216268801>'
+gold_emoji = '<:gold:1325823946737713233>'
+okaygebusiness = '<:okaygebusiness:1325818583011426406>'
+fishinge = '<:Fishinge:1325810706393596035>'
+treasure_chest = '<:treasure_chest:1325811472680620122>'
+The_Catch = '<:TheCatch:1325812275172347915>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
 
 slot_options = [yay, o7, peeposcheme, sunfire2, stare, HUH, wicked, deadge, teripoint, pepela]
@@ -430,12 +436,12 @@ async def settings(ctx):
     if segs_role and ctx.guild.get_role(segs_role):
         segs_role_name = '@' + ctx.guild.get_role(segs_role).name
     else:
-        segs_role_name = "N/A" + ", run !setrole segs" * segs_allowed
+        segs_role_name = "N/A" + ", run `!setrole segs @role`" * segs_allowed
 
     if backshots_role and ctx.guild.get_role(backshots_role):
         backshots_role_name = '@' + ctx.guild.get_role(backshots_role).name
     else:
-        backshots_role_name = "N/A" + ", run !setrole backshot" * backshots_allowed
+        backshots_role_name = "N/A" + ", run `!setrole backshot @role`" * backshots_allowed
 
     await ctx.send(f"```Segs:             {allow_dict[segs_allowed]}\n" +
                    f"Segs Role:        {segs_role_name}\n" +
@@ -510,8 +516,8 @@ async def enable(ctx):
         server_settings.get(guild_id).get('allowed_commands').append(cmd)
         await log_channel.send(f'{wicked} {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
         success = f"{cmd} has been enabled"
-        success += '. **Please run !setrole segs**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('segs_role')))) * cmd == 'segs')
-        success += '. **Please run !setrole backshot**' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('backshots_role')))) * cmd == 'backshot')
+        success += '. **Please run** `!setrole segs @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('segs_role')))) * cmd == 'segs')
+        success += '. **Please run** `!setrole backshot @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('backshots_role')))) * cmd == 'backshot')
         await ctx.send(success)
         save_settings()
     elif cmd in toggleable_commands:
@@ -544,13 +550,13 @@ async def disable(ctx):
                        f"Available commands: {', '.join(toggleable_commands)}")
 
 
-# Create a shared cooldown
-shared_cooldown = commands.CooldownMapping.from_cooldown(1, 120, commands.BucketType.user)
+# Create a cooldown
+cooldown = commands.CooldownMapping.from_cooldown(1, 120, commands.BucketType.member)
 
 
 def check_cooldown(ctx):
     # Retrieve the cooldown bucket for the current user
-    bucket = shared_cooldown.get_bucket(ctx.message)
+    bucket = cooldown.get_bucket(ctx.message)
     if bucket is None:
         return None  # No cooldown bucket found
     return bucket.update_rate_limit()  # Returns the remaining cooldown time
@@ -571,7 +577,7 @@ async def segs(ctx):
         mentions = ctx.message.mentions
         role = ctx.guild.get_role(server_settings.get(guild_id).get('segs_role'))
         if not role:
-            await ctx.send(f"*Segs role does not exist!*\nRun !setsegsrole to use segs")
+            await ctx.send(f"*Segs role does not exist!*\nRun `!setrole segs @role` to use segs")
             await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id}) ')
             return
 
@@ -637,7 +643,7 @@ async def segs(ctx):
                 await log_channel.send(f"❓ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but I don't have the necessary permissions to execute segs ({ctx.guild.name} - {ctx.guild.id})")
 
     elif 'segs' in server_settings.get(guild_id).get('allowed_commands'):
-        await ctx.send(f"*Segs role does not exist!*\nRun !setsegsrole to use segs")
+        await ctx.send(f"*Segs role does not exist!*\nRun `!setrole segs @role` to use segs")
         await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
 
     else:
@@ -659,7 +665,7 @@ async def backshot(ctx):
         mentions = ctx.message.mentions
         role = ctx.guild.get_role(server_settings.get(guild_id).get('backshots_role'))
         if not role:
-            await ctx.send(f"*Backshots role does not exist!*\nRun !setbackshotsrole use backshots")
+            await ctx.send(f"*Backshots role does not exist!*\nRun `!setrole backshot @role` to use backshots")
             await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
             return
 
@@ -722,7 +728,7 @@ async def backshot(ctx):
                 await log_channel.send(f"❓ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but I don't have the necessary permissions to execute backshots ({ctx.guild.name} - {ctx.guild.id})")
 
     elif 'backshot' in server_settings.get(guild_id).get('allowed_commands'):
-        await ctx.send(f"*Backshots role does not exist!*\nRun !setbackshotsrole use backshots")
+        await ctx.send(f"*Backshots role does not exist!*\nRun `!setrole backshot @role` to use backshots")
         await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
 
     else:
@@ -761,7 +767,7 @@ class Currency(commands.Cog):
                 await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
 
     @commands.command()
-    @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
+    @commands.cooldown(rate=1, per=20, type=commands.BucketType.member)
     async def dig(self, ctx):
         """
         Dig and get a very small number of coins
@@ -773,15 +779,15 @@ class Currency(commands.Cog):
             dig_coins = int(random.randint(1, 400)**0.5)
             if dig_coins == 20:
                 dig_coins = 2500
-                dig_message = '# You found Gold!'
+                dig_message = f'# You found Gold! {gold_emoji}'
             else:
-                dig_message = '## Digging successful!'
+                dig_message = f'## Digging successful! {shovel}'
             server_settings[guild_id]['currency'][author_id] += dig_coins
             save_settings()
-            await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can dig again {get_timestamp(20)}")
+            await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can dig again {get_timestamp(20)}")
 
     @dig.error
-    async def work_error(self, ctx, error):
+    async def dig_error(self, ctx, error):
         """Handle errors for the command, including cooldowns."""
         if isinstance(error, commands.CommandOnCooldown):
             retry_after = round(error.retry_after, 1)
@@ -790,8 +796,8 @@ class Currency(commands.Cog):
         else:
             raise error  # Re-raise other errors to let the default handler deal with them
 
-    @commands.command()
-    @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
+    @commands.command(aliases=['w'])
+    @commands.cooldown(rate=1, per=300, type=commands.BucketType.member)
     async def work(self, ctx):
         """
         Work and get a small number of coins
@@ -803,7 +809,7 @@ class Currency(commands.Cog):
             work_coins = random.randint(45, 55)
             server_settings[guild_id]['currency'][author_id] += work_coins
             save_settings()
-            await ctx.reply(f"## Work successful!\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
+            await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
 
     @work.error
     async def work_error(self, ctx, error):
@@ -815,8 +821,8 @@ class Currency(commands.Cog):
         else:
             raise error  # Re-raise other errors to let the default handler deal with them
 
-    @commands.command(aliases=['fish'])
-    @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
+    @commands.command(aliases=['fish', 'f'])
+    @commands.cooldown(rate=1, per=600, type=commands.BucketType.member)
     async def fishinge(self, ctx):
         """
         Fish and get a random number of coins
@@ -830,25 +836,29 @@ class Currency(commands.Cog):
                 fish_coins = random.randint(5000, 10000)
                 if fish_coins == 10000:
                     fish_coins = 2500000
-                    fish_message = "# You literally found *The Catch*\nPS: this has a 0.0001197% chance of happening, go brag to your friends"
+                    fish_message = f"# You found *The Catch*{The_Catch}\n"
+                    ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag to your friends'
                     await log_channel.send(f"**{ctx.author.mention}** JUST WON 2.5 MILLION IN {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
                 else:
-                    fish_message = '# You found a big treasure chest!!!'
-                    await log_channel.send(f"**{ctx.author.mention}** just fished out a treasure in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
+                    fish_message = f'# You found a huge treasure chest!!! {treasure_chest}'
+                    ps_message = ''
+                    await log_channel.send(f"**{ctx.author.mention}** just found a treasure in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
             else:
                 cast_command = ctx.message.content.split()[0].lower().lstrip('!')
-                fish_message = f"## {cast_command.capitalize()} successful!"
+                if cast_command in ('fish', 'f'):
+                    cast_command = 'fishing'
+                fish_message = f"## {cast_command.capitalize()} successful! {'🎣' * (cast_command=='fishing') + fishinge * (cast_command=='fishinge')}\n"
+                ps_message = ''
             server_settings[guild_id]['currency'][author_id] += fish_coins
             save_settings()
-            await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can {cast_command} again {get_timestamp(10, 'minutes')}")
+            await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
 
     @fishinge.error
     async def fishinge_error(self, ctx, error):
         """Handle errors for the command, including cooldowns."""
         if isinstance(error, commands.CommandOnCooldown):
             retry_after = round(error.retry_after, 1)
-            cast_command = ctx.message.content.split()[0].lower().lstrip('!')
-            await print_reset_time(retry_after, ctx, f"Gotta wait until you can {cast_command} again buhh\n")
+            await print_reset_time(retry_after, ctx, f"Gotta wait until you can fish again buhh\n")
 
         else:
             raise error  # Re-raise other errors to let the default handler deal with them
