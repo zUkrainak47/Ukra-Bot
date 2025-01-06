@@ -163,9 +163,9 @@ def get_timestamp(amount, unit_length='seconds'):
     elif unit_length == 'weeks':
         end = now + timedelta(weeks=amount)
     else:
-        return int(now.timestamp())
+        return f"<t:{int(now.timestamp())}:R>"
     reset_time = datetime(end.year, end.month, end.day, end.hour, end.minute, end.second)
-    return int(reset_time.timestamp())
+    return f"<t:{int(reset_time.timestamp())}:R>"
 
 
 def convert_msg_to_number(message, guild, author):
@@ -193,7 +193,7 @@ async def print_reset_time(r, ctx, custom_message=''):
         time_ = 'minutes'
     else:
         time_ = 'seconds'
-    reply = custom_message + f"try again <t:{get_timestamp(r, time_)}:R>"
+    reply = custom_message + f"try again {get_timestamp(r, time_)}"
     await ctx.reply(reply)
 
 
@@ -778,7 +778,7 @@ class Currency(commands.Cog):
                 dig_message = '## Digging successful!'
             server_settings[guild_id]['currency'][author_id] += dig_coins
             save_settings()
-            await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can dig every 20 seconds")
+            await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can dig again {get_timestamp(20)}")
 
     @dig.error
     async def work_error(self, ctx, error):
@@ -803,7 +803,7 @@ class Currency(commands.Cog):
             work_coins = random.randint(45, 55)
             server_settings[guild_id]['currency'][author_id] += work_coins
             save_settings()
-            await ctx.reply(f"## Work successful!\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can work every 5 minutes")
+            await ctx.reply(f"## Work successful!\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
 
     @work.error
     async def work_error(self, ctx, error):
@@ -840,7 +840,7 @@ class Currency(commands.Cog):
                 fish_message = f"## {cast_command.capitalize()} successful!"
             server_settings[guild_id]['currency'][author_id] += fish_coins
             save_settings()
-            await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can {cast_command} every 10 minutes")
+            await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can {cast_command} again {get_timestamp(10, 'minutes')}")
 
     @fishinge.error
     async def fishinge_error(self, ctx, error):
@@ -1325,12 +1325,21 @@ class Currency(commands.Cog):
                 await ctx.reply("Ur like dumb asf")
                 return
 
+            if duration <= 15:
+                await ctx.reply("Pls make duration longer than 15s")
+                return
+
             # Announce the giveaway
             end_time = discord.utils.utcnow() + timedelta(seconds=duration)
             message = await ctx.send(
                 f"# React with 🎉 until <t:{int(end_time.timestamp())}:T> to join the giveaway for **{amount}** {coin}!"
             )
             await message.add_reaction("🎉")
+
+            # Calculate reminder intervals
+            reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000)
+            reminder_interval = duration // reminders_to_send - min(5, duration // 10)
+            reminders_sent = 0
 
             # Collect reactions
             participants = []
@@ -1340,16 +1349,31 @@ class Currency(commands.Cog):
                         str(reaction.emoji) == "🎉" and  # Ensure it's the correct emoji
                         not user.bot)  # Ignore bot reactions
 
+            # Loop for reminders and reaction collection
             while discord.utils.utcnow() < end_time:
+                time_remaining = (end_time - discord.utils.utcnow()).total_seconds()
+
+                # Send reminders at intervals
+                if reminders_sent < reminders_to_send:
+                    next_reminder_time = duration - (reminder_interval * (reminders_sent + 1))
+                    if time_remaining <= next_reminder_time:
+                        await message.reply(
+                            f"## There's a giveaway going! React with 🎉 to participate! (Reminder {reminders_sent + 1}/{reminders_to_send})")
+                        reminders_sent += 1
+
                 try:
-                    reaction, user = await self.bot.wait_for("reaction_add", timeout=(
-                                end_time - discord.utils.utcnow()).total_seconds(), check=check)
+                    # Wait for a reaction or until the next check
+                    wait_time = min(5, time_remaining)  # Check every 5 seconds or until the end
+                    reaction, user = await asyncio.wait_for(
+                        self.bot.wait_for("reaction_add", check=check),
+                        timeout=wait_time
+                    )
                     if user not in participants:
                         participants.append(user)
                         print(f"Collected participant: {user.display_name}")
-                except TimeoutError:
-                    print('Giveaway ended')
-                    break  # Exit the loop when the duration ends
+                except asyncio.TimeoutError:
+                    # No reaction in the current wait cycle; continue the loop
+                    pass
                 except Exception as e:
                     print(e)
 
