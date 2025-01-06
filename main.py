@@ -813,6 +813,10 @@ def dev_mode_check(guild_):
     return (not dev_mode) or (guild_ == '692070633177350235')
 
 
+def get_user_balance(guild_: str, user_: str):
+    return server_settings.get(guild_).get('currency').get(user_)
+
+
 class Currency(commands.Cog):
     """Commands related to the currency system"""
 
@@ -863,7 +867,7 @@ class Currency(commands.Cog):
                 dig_message = f'## Digging successful! {shovel}'
             server_settings[guild_id]['currency'][author_id] += dig_coins
             save_settings()
-            await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can dig again {get_timestamp(20)}")
+            await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can dig again {get_timestamp(20)}")
         elif not dev_check:
             await ctx.reply(f'Bot is in Development Mode, currency commands are disabled')
 
@@ -903,7 +907,7 @@ class Currency(commands.Cog):
                 mine_message = f"## Mining successful! ⛏️\n"
             server_settings[guild_id]['currency'][author_id] += mine_coins
             save_settings()
-            await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can mine again {get_timestamp(120)}")
+            await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can mine again {get_timestamp(120)}")
         elif not dev_check:
             await ctx.reply(f'Bot is in Development Mode, currency commands are disabled')
 
@@ -932,7 +936,7 @@ class Currency(commands.Cog):
             work_coins = random.randint(45, 55)
             server_settings[guild_id]['currency'][author_id] += work_coins
             save_settings()
-            await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
+            await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
         elif not dev_check:
             await ctx.reply(f'Bot is in Development Mode, currency commands are disabled')
 
@@ -980,7 +984,7 @@ class Currency(commands.Cog):
                 ps_message = ''
             server_settings[guild_id]['currency'][author_id] += fish_coins
             save_settings()
-            await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
+            await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
         elif not dev_check:
             await ctx.reply(f'Bot is in Development Mode, currency commands are disabled')
 
@@ -1024,7 +1028,7 @@ class Currency(commands.Cog):
             save_settings()
             user_last_used[guild_id][author_id] = now
             save_last_used()
-            await ctx.reply(f"# Daily {coin} claimed! {streak_msg}\n**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{int(today_coins * (user_streak**0.5 - 1)):,} {coin} streak bonus = {int(today_coins * user_streak**0.5):,} {coin})\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
+            await ctx.reply(f"# Daily {coin} claimed! {streak_msg}\n**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{int(today_coins * (user_streak**0.5 - 1)):,} {coin} streak bonus = {int(today_coins * user_streak**0.5):,} {coin})\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
         elif not dev_check:
             await ctx.reply(f'Bot is in Development Mode, currency commands are disabled')
 
@@ -1060,7 +1064,7 @@ class Currency(commands.Cog):
 
             # Send confirmation message
             reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
-            await ctx.reply(f"## Weekly {coin} claimed!\n**{ctx.author.display_name}:** +{weekly_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
+            await ctx.reply(f"## Weekly {coin} claimed!\n**{ctx.author.display_name}:** +{weekly_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
         elif not dev_check:
             await ctx.reply(f'Bot is in Development Mode, currency commands are disabled')
 
@@ -1094,11 +1098,11 @@ class Currency(commands.Cog):
 
             try:
                 make_sure_user_has_currency(guild_id, target_id)
-                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                if number <= get_user_balance(guild_id, author_id):
                     server_settings[guild_id]['currency'][target_id] += number
                     server_settings[guild_id]['currency'][author_id] -= number
-                    num1 = server_settings.get(guild_id).get('currency').get(author_id)
-                    num2 = server_settings.get(guild_id).get('currency').get(target_id)
+                    num1 = get_user_balance(guild_id, author_id)
+                    num2 = get_user_balance(guild_id, target_id)
                     save_settings()
                     await ctx.reply(f"## Transaction successful!\n\n**{ctx.author.display_name}:** {num1:,} {coin}\n**{mentions[0].display_name}:** {num2:,} {coin}")
                 else:
@@ -1159,7 +1163,7 @@ class Currency(commands.Cog):
             gamble_choice_ok = False
             for i in contents:
                 if '%' in i and i.rstrip('%').isdecimal():
-                    number = int(server_settings.get(guild_id).get('currency').get(author_id) * int(i.rstrip('%')) / 100)
+                    number = int(get_user_balance(guild_id, author_id) * int(i.rstrip('%')) / 100)
                     num_ok = True
                 if 'k' in i and i.rstrip('k').isdecimal():
                     number = int(i.rstrip('k')) * 1000
@@ -1168,10 +1172,10 @@ class Currency(commands.Cog):
                     number = int(i)
                     num_ok = True
                 if i.lower() == 'all':
-                    number = server_settings.get(guild_id).get('currency').get(author_id)
+                    number = get_user_balance(guild_id, author_id)
                     num_ok = True
                 if i.lower() == 'half':
-                    number = server_settings.get(guild_id).get('currency').get(author_id) // 2
+                    number = get_user_balance(guild_id, author_id) // 2
                     num_ok = True
 
                 if i.lower() in results + ['head', 'tail'] and not gamble_choice_ok:
@@ -1183,11 +1187,11 @@ class Currency(commands.Cog):
                 await ctx.reply(f"If you want to gamble with coins, include the __amount__ you're betting and __what you're betting on (heads/tails)__\nAnyway, the result is `{result.capitalize()}`!")
                 return
             try:
-                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                if number <= get_user_balance(guild_id, author_id):
                     did_you_win = result == gamble_choice
                     delta = int(number * 2 * (did_you_win - 0.5))
                     server_settings[guild_id]['currency'][author_id] += delta
-                    num = server_settings.get(guild_id).get('currency').get(author_id)
+                    num = get_user_balance(guild_id, author_id)
                     save_settings()
                     messages_dict = {True: f"You win! The result was `{result.capitalize()}` {yay}", False: f"You lose! The result was `{result.capitalize()}` {o7}"}
                     await ctx.reply(f"## {messages_dict[did_you_win]}\n\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
@@ -1218,10 +1222,10 @@ class Currency(commands.Cog):
             if number == -1:
                 number = 0
             try:
-                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                if number <= get_user_balance(guild_id, author_id):
                     delta = int(number * 2 * (result - 0.5))
                     server_settings[guild_id]['currency'][author_id] += delta
-                    num = server_settings.get(guild_id).get('currency').get(author_id)
+                    num = get_user_balance(guild_id, author_id)
                     save_settings()
                     messages_dict = {1: f"You win! {yay}", 0: f"You lose! {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
@@ -1252,10 +1256,10 @@ class Currency(commands.Cog):
             if number == -1:
                 number = 0
             try:
-                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                if number <= get_user_balance(guild_id, author_id):
                     delta = number * 5 * result - number * (not result)
                     server_settings[guild_id]['currency'][author_id] += delta
-                    num = server_settings.get(guild_id).get('currency').get(author_id)
+                    num = get_user_balance(guild_id, author_id)
                     save_settings()
                     messages_dict = {1: f"You win! The dice rolled `{dice_roll}` {yay}", 0: f"You lose! The dice rolled `{dice_roll}` {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
@@ -1291,10 +1295,10 @@ class Currency(commands.Cog):
             if number == -1:
                 number = 0
             try:
-                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                if number <= get_user_balance(guild_id, author_id):
                     delta = number * 35 * result - number * (not result)
                     server_settings[guild_id]['currency'][author_id] += delta
-                    num = server_settings.get(guild_id).get('currency').get(author_id)
+                    num = get_user_balance(guild_id, author_id)
                     save_settings()
                     messages_dict = {1: f"You win! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {yay}", 0: f"You lose! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
@@ -1338,24 +1342,24 @@ class Currency(commands.Cog):
                 contents = ctx.message.content.split()[1:]
                 number, source, msg = convert_msg_to_number(contents, guild_id, author_id)
                 if source == '%':
-                    number = int(min(server_settings.get(guild_id).get('currency').get(author_id),
-                                     server_settings.get(guild_id).get('currency').get(target_id)) * int(msg.rstrip('%')) / 100)
+                    number = int(min(get_user_balance(guild_id, author_id),
+                                     get_user_balance(guild_id, target_id)) * int(msg.rstrip('%')) / 100)
                 elif source == 'all':
-                    number = min(server_settings.get(guild_id).get('currency').get(author_id),
-                                 server_settings.get(guild_id).get('currency').get(target_id))
+                    number = min(get_user_balance(guild_id, author_id),
+                                 get_user_balance(guild_id, target_id))
                 elif source == 'half':
-                    number = min(server_settings.get(guild_id).get('currency').get(author_id),
-                                 server_settings.get(guild_id).get('currency').get(target_id)) // 2
+                    number = min(get_user_balance(guild_id, author_id),
+                                 get_user_balance(guild_id, target_id)) // 2
                 elif number == -1:
                     number = 0
             else:
                 await ctx.reply("Something went wrong, please make sure that the command has a user mention")
                 return
 
-            if number > server_settings.get(guild_id).get('currency').get(author_id):
+            if number > get_user_balance(guild_id, author_id):
                 await ctx.reply(f"PVP failed! That's more {coin} than you own")
                 return
-            if number > server_settings.get(guild_id).get('currency').get(target_id):
+            if number > get_user_balance(guild_id, target_id):
                 await ctx.reply(f"PVP failed! That's more {coin} than **{mentions[0].display_name}** owns")
                 return
 
@@ -1371,8 +1375,8 @@ class Currency(commands.Cog):
                 elif number > 0:
                     bot_challenged = False
                     react_to = await ctx.send(f'## {mentions[0].display_name}, do you accept the PVP for {number:,} {coin}?\n' +
-                                              f"**{mentions[0].display_name}**'s balance: {server_settings.get(guild_id).get('currency').get(target_id):,} {coin}\n" +
-                                              f"**{ctx.author.display_name}**'s balance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n")
+                                              f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
+                                              f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
                     await react_to.add_reaction('✅')
                     await react_to.add_reaction('❌')
 
@@ -1387,12 +1391,12 @@ class Currency(commands.Cog):
                     if not bot_challenged and (number > 0):
                         reaction, user = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
                     if bot_challenged or (number in (0, -1)) or str(reaction.emoji) == '✅':
-                        if number > server_settings.get(guild_id).get('currency').get(author_id):
+                        if number > get_user_balance(guild_id, author_id):
                             active_pvp_requests.get(guild_id).discard(mentions[0].id)
                             active_pvp_requests.get(guild_id).discard(ctx.author.id)
                             await ctx.reply(f"PVP failed! That's more {coin} than you own")
                             return
-                        if number > server_settings.get(guild_id).get('currency').get(target_id):
+                        if number > get_user_balance(guild_id, target_id):
                             active_pvp_requests.get(guild_id).discard(mentions[0].id)
                             active_pvp_requests.get(guild_id).discard(ctx.author.id)
                             await ctx.reply(f"PVP failed! That's more {coin} than **{mentions[0].display_name}** owns")
@@ -1401,8 +1405,8 @@ class Currency(commands.Cog):
                         for_target = -number * result
                         server_settings[guild_id]['currency'][author_id] += for_author
                         server_settings[guild_id]['currency'][target_id] += for_target
-                        num1 = server_settings.get(guild_id).get('currency').get(str(winner.id))
-                        num2 = server_settings.get(guild_id).get('currency').get(str(loser.id))
+                        num1 = get_user_balance(guild_id, str(winner.id))
+                        num2 = get_user_balance(guild_id, str(loser.id))
                         save_settings()
                         await ctx.reply(
                             f"## PVP winner is **{winner.display_name}**!\n" +
@@ -1460,10 +1464,10 @@ class Currency(commands.Cog):
             if result:
                 print(results[0] == results[1] == results[2])
             try:
-                if number <= server_settings.get(guild_id).get('currency').get(author_id):
+                if number <= get_user_balance(guild_id, author_id):
                     delta = 500 * number if ((results[0] == sunfire2) and result) else 50 * number if result else -number
                     server_settings[guild_id]['currency'][author_id] += delta
-                    num = server_settings.get(guild_id).get('currency').get(author_id)
+                    num = get_user_balance(guild_id, author_id)
                     save_settings()
                     messages_dict = {True: f"# {' | '.join(results)}\n## You win{' BIG' * (results[0] == sunfire2)}!", False: f"# {' | '.join(results)}\n## You lose!"}
                     await ctx.reply(f"{messages_dict[result]}\n" + f"**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number != 0))
@@ -1594,7 +1598,7 @@ class Currency(commands.Cog):
                 try:
                     make_sure_user_has_currency(guild_id, target_id)
                     server_settings[guild_id]['currency'][target_id] += number
-                    num = server_settings.get(guild_id).get('currency').get(target_id)
+                    num = get_user_balance(guild_id, target_id)
                     save_settings()
                     await ctx.reply(f"## Blessing successful!\n\n**{mentions[0].display_name}:** +{number:,} {coin}\nBalance: {num:,} {coin}")
                 except:
@@ -1634,7 +1638,7 @@ class Currency(commands.Cog):
                     current_balance = server_settings[guild_id]['currency'][target_id]
                     number = min(current_balance, number)
                     server_settings[guild_id]['currency'][target_id] -= number
-                    num = server_settings.get(guild_id).get('currency').get(target_id)
+                    num = get_user_balance(guild_id, target_id)
                     save_settings()
                     await ctx.reply(f"## Curse successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}")
                 except:
