@@ -149,6 +149,25 @@ def get_reset_timestamp():
     return int(reset_time.timestamp())
 
 
+def get_timestamp(amount, unit_length='seconds'):
+    """Get timestamp for given amount of time into the future."""
+    now = datetime.now()
+    if unit_length == 'seconds':
+        end = now + timedelta(seconds=amount)
+    elif unit_length == 'minutes':
+        end = now + timedelta(minutes=amount)
+    elif unit_length == 'hours':
+        end = now + timedelta(hours=amount)
+    elif unit_length == 'days':
+        end = now + timedelta(days=amount)
+    elif unit_length == 'weeks':
+        end = now + timedelta(weeks=amount)
+    else:
+        return int(now.timestamp())
+    reset_time = datetime(end.year, end.month, end.day, end.hour, end.minute, end.second)
+    return int(reset_time.timestamp())
+
+
 def convert_msg_to_number(message, guild, author):
     """
     Takes user command message's split(), returns the number user wants to gamble, the source, and the original number
@@ -174,7 +193,7 @@ async def print_reset_time(r, ctx, custom_message=''):
         time_ = 'minutes'
     else:
         time_ = 'seconds'
-    reply = custom_message + f"try again in {round(r, 1)} {time_}"
+    reply = custom_message + f"try again <t:{get_timestamp(r, time_)}:R>"
     await ctx.reply(reply)
 
 
@@ -834,7 +853,7 @@ class Currency(commands.Cog):
         else:
             raise error  # Re-raise other errors to let the default handler deal with them
 
-    @commands.command(aliases=['d'])
+    @commands.command()
     async def daily(self, ctx):
         """
         Claim daily coins
@@ -865,7 +884,7 @@ class Currency(commands.Cog):
             save_last_used()
             await ctx.reply(f"# Daily {coin} claimed! {streak_msg}\n**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{int(today_coins * (user_streak**0.5 - 1)):,} {coin} streak bonus = {int(today_coins * user_streak**0.5):,} {coin})\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can use this command again <t:{get_reset_timestamp()}:R>")
 
-    @commands.command(aliases=['w'])
+    @commands.command()
     async def weekly(self, ctx):
         """
         Claim weekly coins
@@ -964,7 +983,7 @@ class Currency(commands.Cog):
             top_users = top_users[:10]
             await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{index} - {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
 
-    @commands.command(aliases=['coin'])
+    @commands.command(aliases=['coin', 'c'])
     async def coinflip(self, ctx):
         """
         Flips a coin, takes an optional bet
@@ -1054,7 +1073,7 @@ class Currency(commands.Cog):
                 await ctx.reply("Gambling failed!")
 
     @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
-    @commands.command(aliases=['1d', 'onedice'])
+    @commands.command(aliases=['d', '1d', 'onedice'])
     async def dice(self, ctx):
         """
         Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet
@@ -1251,7 +1270,7 @@ class Currency(commands.Cog):
                 return
 
     @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
-    @commands.command(aliases=['slot'])
+    @commands.command(aliases=['slot', 's'])
     async def slots(self, ctx):
         """
         Takes a bet, spins three wheels of 10 emojis, if all of them match you win 50x the bet, if they are :sunfire2: you win 500x the bet
@@ -1288,6 +1307,61 @@ class Currency(commands.Cog):
     @slots.error
     async def slots_error(self, ctx, error):
         pass
+
+    @commands.command(aliases=['aga'])
+    async def admin_giveaway(self, ctx):
+        """
+        Starts a giveaway using coins out of thin air
+        Only usable by bot developer
+        !giveaway <amount> <seconds>
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            contents = ctx.message.content.split()[1:]
+            try:
+                amount = int(contents[0])
+                duration = int(contents[1])
+            except ValueError:
+                await ctx.reply("Ur like dumb asf")
+                return
+
+            # Announce the giveaway
+            end_time = discord.utils.utcnow() + timedelta(seconds=duration)
+            message = await ctx.send(
+                f"# React with 🎉 until <t:{int(end_time.timestamp())}:T> to join the giveaway for **{amount}** {coin}!"
+            )
+            await message.add_reaction("🎉")
+
+            # Collect reactions
+            participants = []
+
+            def check(reaction, user):
+                return (reaction.message.id == message.id and  # Ensure it's the correct message
+                        str(reaction.emoji) == "🎉" and  # Ensure it's the correct emoji
+                        not user.bot)  # Ignore bot reactions
+
+            while discord.utils.utcnow() < end_time:
+                try:
+                    reaction, user = await self.bot.wait_for("reaction_add", timeout=(
+                                end_time - discord.utils.utcnow()).total_seconds(), check=check)
+                    if user not in participants:
+                        participants.append(user)
+                        print(f"Collected participant: {user.display_name}")
+                except TimeoutError:
+                    print('Giveaway ended')
+                    break  # Exit the loop when the duration ends
+                except Exception as e:
+                    print(e)
+
+            # Announce the winner
+            if participants:
+                winner = random.choice(participants)
+                winner_id = str(winner.id)
+                make_sure_user_has_currency(guild_id, winner_id)
+                server_settings[guild_id]['currency'][winner_id] += amount
+                await message.reply(f"# 🎉 Congratulations {winner.mention}, you won **{amount}** {coin}!")
+            else:
+                await message.reply(f"No one participated in the giveaway {pepela}")
 
     @commands.command()
     async def bless(self, ctx):
