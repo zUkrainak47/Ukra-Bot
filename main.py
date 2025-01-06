@@ -174,12 +174,73 @@ def get_timestamp(amount, unit_length='seconds'):
     return f"<t:{int(reset_time.timestamp())}:R>"
 
 
+def convert_msg_to_time(message: list):
+    """
+    Get amount and unit length from user message
+    returns -1, -1 if unsuccessful
+    """
+    def check_for_timestamp(message_, search_in, unit_length_):
+        for s in search_in:
+            if s == message_[-len(s):]:
+                if message_[:-len(s)].isdecimal():
+                    return int(message_[:-len(s)]), unit_length_
+        return 0, 0
+
+    for i in message:
+        i = i.lower()
+        if (not 's' in i) and (not 'm' in i) and (not 'h' in i) and (not 'd' in i) and (not 'w' in i):
+            # print(f'nothing found in {i}')
+            continue
+        amount, unit_length = check_for_timestamp(i, ['s', 'sec', 'second', 'seconds'], 'seconds')
+        if not unit_length:
+            # print(f'seconds not found in {i}')
+            amount, unit_length = check_for_timestamp(i, ['m', 'min', 'minute', 'minutes'], 'minutes')
+        if not unit_length:
+            # print(f'minutes not found in {i}')
+            amount, unit_length = check_for_timestamp(i, ['h', 'hour', 'hours'], 'hours')
+        if not unit_length:
+            # print(f'hours not found in {i}')
+            amount, unit_length = check_for_timestamp(i, ['d', 'day', 'days'], 'days')
+        if not unit_length:
+            # print(f'days not found in {i}')
+            amount, unit_length = check_for_timestamp(i, ['w', 'week', 'weeks'], 'weeks')
+        if not unit_length:
+            # print(f'weeks not found in {i}')
+            continue
+
+        return amount, unit_length
+
+    return -1, -1
+
+
+def get_seconds(amount_unitlegth_list: tuple):
+    """
+    Converts a list of (amount of time, unit length) to seconds
+    returns -1 if unsuccessful
+    """
+    amount, unit_length = amount_unitlegth_list
+    if (amount != -1) and (unit_length != -1):
+        if unit_length == 'seconds':
+            return amount
+        if unit_length == 'minutes':
+            return amount * 60
+        if unit_length == 'hours':
+            return amount * 60 * 60
+        if unit_length == 'days':
+            return amount * 60 * 60 * 24
+        if unit_length == 'weeks':
+            return amount * 60 * 60 * 24 * 7
+    return -1
+
+
 def convert_msg_to_number(message, guild, author):
     """
     Takes user command message's split(), returns the number user wants to gamble, the source, and the original number
     returns -1, 0, 0 if unsuccessful
     """
     for i in message:
+        if ',' in i:
+            i = i.replace(',', '')
         if '%' in i and i.rstrip('%').isdecimal():
             return int(server_settings.get(guild).get('currency').get(author) * int(i.rstrip('%'))/100), '%', i
         if 'k' in i and i.rstrip('k').isdecimal():
@@ -330,8 +391,6 @@ async def dnd(ctx):
             await ctx.reply(f"Rolling **1d6**: `{random.choice(range(1, 7))}`")
         elif 'd' in contents and len(contents) == 2:  # !dnd 5d20
             if contents.split('d')[0]:
-                print(contents)
-                print(contents.split('d'))
                 number_of_dice, dice_size = contents.split('d')
                 if not number_of_dice.lstrip("-").isdecimal():
                     await ctx.reply(f"**{number_of_dice}** isn't a number")
@@ -349,8 +408,6 @@ async def dnd(ctx):
                     await ctx.reply(f"Rolling **{number_of_dice}d{dice_size}**: `{str(result)[1:-1]}`\nTotal: `{sum(result)}`")
 
             elif contents[1:].lstrip('-').isdecimal():  # !dnd d10  =  !dnd 1d10
-                print(contents)
-                print(contents.split('d'))
                 dice_size = int(contents[1:])
                 if int(dice_size) < 0:
                     await ctx.reply(f"**{dice_size}** isn't greater than 0 {stare}")
@@ -569,6 +626,7 @@ async def segs(ctx):
     Distributes Segs Role for 60 seconds with a small chance to backfire
     Cannot be used on users who have been shot or segsed
     !segs @victim, gives victim the Segs Role
+    Has a 2-minute cooldown
     """
     caller = ctx.author
     guild_id = str(ctx.guild.id)
@@ -657,6 +715,7 @@ async def backshot(ctx):
     Distributes Backshots Role for 60 seconds with a small chance to backfire
     Cannot be used on users who have been shot or backshot
     !backshot @victim, gives victim the Backshot Role
+    Has a 2-second cooldown
     """
     caller = ctx.author
     guild_id = str(ctx.guild.id)
@@ -766,11 +825,13 @@ class Currency(commands.Cog):
                 save_settings()
                 await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
 
-    @commands.command(aliases=['mine'])
+    @commands.command()
     @commands.cooldown(rate=1, per=20, type=commands.BucketType.member)
     async def dig(self, ctx):
         """
         Dig and get a very small number of coins
+        1/400 chance to win 2,500 coins
+        Has a 20-second cooldown
         """
         guild_id = str(ctx.guild.id)
         if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
@@ -780,14 +841,9 @@ class Currency(commands.Cog):
             if dig_coins == 20:
                 dig_coins = 2500
                 dig_message = f'# You found Gold! {gold_emoji}'
+                await log_channel.send(f"**{ctx.author.mention}** found gold in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
             else:
-                cast_command = ctx.message.content.split()[0].lower().lstrip('!')
-                if cast_command == 'dig':
-                    cast_command = 'Digging'
-                else:
-                    cast_command = 'Mining'
-                dig_message = f"## {cast_command} successful! {shovel * (cast_command == 'Digging') + '⛏️' * (cast_command == 'Mining')}\n"
-                # dig_message = f'## Digging successful! {shovel}'
+                dig_message = f'## Digging successful! {shovel}'
             server_settings[guild_id]['currency'][author_id] += dig_coins
             save_settings()
             await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can dig again {get_timestamp(20)}")
@@ -797,8 +853,44 @@ class Currency(commands.Cog):
         """Handle errors for the command, including cooldowns."""
         if isinstance(error, commands.CommandOnCooldown):
             retry_after = round(error.retry_after, 1)
-            cast_command = ctx.message.content.split()[0].lower().lstrip('!')
-            await print_reset_time(retry_after, ctx, f"Gotta wait until you can {cast_command} again buhh\n")
+            await print_reset_time(retry_after, ctx, f"Gotta wait until you can dig again buhh\n")
+
+        else:
+            raise error  # Re-raise other errors to let the default handler deal with them
+
+    @commands.command(aliases=['m'])
+    @commands.cooldown(rate=1, per=120, type=commands.BucketType.member)
+    async def mine(self, ctx):
+        """
+        Mine and get a small number of coins
+        1/625 chance to win 7,500 coins
+        Has a 2-minute cooldown
+        """
+        guild_id = str(ctx.guild.id)
+        if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            t = random.randint(1, 625)
+            mine_coins = int(t**0.5 * 2)
+            if mine_coins == 50:
+                mine_coins = 7500
+                mine_message = f'# You found Diamonds! 💎'
+                await log_channel.send(f"**{ctx.author.mention}** found diamonds in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
+            elif t == 1:
+                mine_coins = 1
+                mine_message = f"# You struck Fool's Gold! ✨"
+            else:
+                mine_message = f"## Mining successful! ⛏️\n"
+            server_settings[guild_id]['currency'][author_id] += mine_coins
+            save_settings()
+            await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can mine again {get_timestamp(120)}")
+
+    @mine.error
+    async def mine_error(self, ctx, error):
+        """Handle errors for the command, including cooldowns."""
+        if isinstance(error, commands.CommandOnCooldown):
+            retry_after = round(error.retry_after, 1)
+            await print_reset_time(retry_after, ctx, f"Gotta wait until you can mine again buhh\n")
 
         else:
             raise error  # Re-raise other errors to let the default handler deal with them
@@ -808,6 +900,7 @@ class Currency(commands.Cog):
     async def work(self, ctx):
         """
         Work and get a small number of coins
+        Has a 5-minute cooldown
         """
         guild_id = str(ctx.guild.id)
         if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
@@ -832,7 +925,10 @@ class Currency(commands.Cog):
     @commands.cooldown(rate=1, per=600, type=commands.BucketType.member)
     async def fishinge(self, ctx):
         """
-        Fish and get a random number of coins
+        Fish and get a random number of coins from 1 to 167
+        If the amount of coins chosen was 167, you get a random number of coins from 7,500 to 12,500
+        If the amount chosen was 12,500 you get 2,500,500 coins
+        Has a 10-minute cooldown
         """
         guild_id = str(ctx.guild.id)
         if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
@@ -840,8 +936,8 @@ class Currency(commands.Cog):
             make_sure_user_has_currency(guild_id, author_id)
             fish_coins = random.randint(1, 167)
             if fish_coins == 167:
-                fish_coins = random.randint(5000, 10000)
-                if fish_coins == 10000:
+                fish_coins = random.randint(7500, 12500)
+                if fish_coins == 12500:
                     fish_coins = 2500000
                     fish_message = f"# You found *The Catch*{The_Catch}\n"
                     ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag to your friends'
@@ -999,7 +1095,7 @@ class Currency(commands.Cog):
                     pass
             top_users = top_users[:10]
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-            await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{index if index not in number_dict else number_dict[index]} - {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
+            await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{str(index) + ' -' if index not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
 
     @commands.command(aliases=['coin', 'c'])
     async def coinflip(self, ctx):
@@ -1221,9 +1317,9 @@ class Currency(commands.Cog):
                     bot_challenged = True
                 elif number > 0:
                     bot_challenged = False
-                    react_to = await ctx.send(f'## {mentions[0].display_name}, do you accept the PVP for {number} {coin}?\n' +
-                                              f"**{mentions[0].display_name}**'s balance: {server_settings.get(guild_id).get('currency').get(target_id)} {coin}\n" +
-                                              f"**{ctx.author.display_name}**'s balance: {server_settings.get(guild_id).get('currency').get(author_id)} {coin}\n")
+                    react_to = await ctx.send(f'## {mentions[0].display_name}, do you accept the PVP for {number:,} {coin}?\n' +
+                                              f"**{mentions[0].display_name}**'s balance: {server_settings.get(guild_id).get('currency').get(target_id):,} {coin}\n" +
+                                              f"**{ctx.author.display_name}**'s balance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n")
                     await react_to.add_reaction('✅')
                     await react_to.add_reaction('❌')
 
@@ -1292,8 +1388,8 @@ class Currency(commands.Cog):
     async def slots(self, ctx):
         """
         Takes a bet, spins three wheels of 10 emojis, if all of them match you win 50x the bet, if they are :sunfire2: you win 500x the bet
-        There is a 2-second cooldown
         !slots number
+        Has a 2-second cooldown
         """
         guild_id = str(ctx.guild.id)
         if 'currency_system' in server_settings.get(guild_id).get('allowed_commands'):
@@ -1338,9 +1434,13 @@ class Currency(commands.Cog):
             contents = ctx.message.content.split()[1:]
             try:
                 amount = int(contents[0])
-                duration = int(contents[1])
+                duration = get_seconds(convert_msg_to_time(contents))
             except ValueError:
                 await ctx.reply("Ur like dumb asf")
+                return
+
+            if duration == -1:
+                await ctx.reply("Input duration properly")
                 return
 
             if duration <= 15:
@@ -1376,7 +1476,7 @@ class Currency(commands.Cog):
                     next_reminder_time = duration - (reminder_interval * (reminders_sent + 1))
                     if time_remaining <= next_reminder_time:
                         await message.reply(
-                            f"## There's a giveaway going! React with 🎉 to participate! (Reminder {reminders_sent + 1}/{reminders_to_send})")
+                            f"## There's a giveaway going! (Reminder {reminders_sent + 1}/{reminders_to_send})")
                         reminders_sent += 1
 
                 try:
