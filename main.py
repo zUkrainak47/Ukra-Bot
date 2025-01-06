@@ -766,7 +766,7 @@ class Currency(commands.Cog):
                 save_settings()
                 await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
 
-    @commands.command()
+    @commands.command(aliases=['mine'])
     @commands.cooldown(rate=1, per=20, type=commands.BucketType.member)
     async def dig(self, ctx):
         """
@@ -781,7 +781,13 @@ class Currency(commands.Cog):
                 dig_coins = 2500
                 dig_message = f'# You found Gold! {gold_emoji}'
             else:
-                dig_message = f'## Digging successful! {shovel}'
+                cast_command = ctx.message.content.split()[0].lower().lstrip('!')
+                if cast_command == 'dig':
+                    cast_command = 'Digging'
+                else:
+                    cast_command = 'Mining'
+                dig_message = f"## {cast_command} successful! {shovel * (cast_command == 'Digging') + '⛏️' * (cast_command == 'Mining')}\n"
+                # dig_message = f'## Digging successful! {shovel}'
             server_settings[guild_id]['currency'][author_id] += dig_coins
             save_settings()
             await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {server_settings.get(guild_id).get('currency').get(author_id):,} {coin}\n\nYou can dig again {get_timestamp(20)}")
@@ -791,7 +797,8 @@ class Currency(commands.Cog):
         """Handle errors for the command, including cooldowns."""
         if isinstance(error, commands.CommandOnCooldown):
             retry_after = round(error.retry_after, 1)
-            await print_reset_time(retry_after, ctx, f"Gotta wait until you can dig again buhh\n")
+            cast_command = ctx.message.content.split()[0].lower().lstrip('!')
+            await print_reset_time(retry_after, ctx, f"Gotta wait until you can {cast_command} again buhh\n")
 
         else:
             raise error  # Re-raise other errors to let the default handler deal with them
@@ -847,7 +854,7 @@ class Currency(commands.Cog):
                 cast_command = ctx.message.content.split()[0].lower().lstrip('!')
                 if cast_command in ('fish', 'f'):
                     cast_command = 'fishing'
-                fish_message = f"## {cast_command.capitalize()} successful! {'🎣' * (cast_command=='fishing') + fishinge * (cast_command=='fishinge')}\n"
+                fish_message = f"## {cast_command.capitalize()} successful! {'🎣' * (cast_command == 'fishing') + fishinge * (cast_command == 'fishinge')}\n"
                 ps_message = ''
             server_settings[guild_id]['currency'][author_id] += fish_coins
             save_settings()
