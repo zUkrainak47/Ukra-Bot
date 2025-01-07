@@ -817,6 +817,14 @@ def get_user_balance(guild_: str, user_: str):
     return server_settings.get(guild_).get('currency').get(user_)
 
 
+def add_coins_to_user(guild_: str, user_: str, coin_: int):
+    server_settings[guild_]['currency'][user_] += coin_
+
+
+def remove_coins_from_user(guild_: str, user_: str, coin_: int):
+    add_coins_to_user(guild_, user_, -coin_)
+
+
 class Currency(commands.Cog):
     """Commands related to the currency system"""
 
@@ -865,7 +873,8 @@ class Currency(commands.Cog):
                 await log_channel.send(f"**{ctx.author.mention}** found gold in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
             else:
                 dig_message = f'## Digging successful! {shovel}'
-            server_settings[guild_id]['currency'][author_id] += dig_coins
+            # server_settings[guild_id]['currency'][author_id] += dig_coins
+            add_coins_to_user(guild_id, author_id, dig_coins)
             save_settings()
             await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can dig again {get_timestamp(20)}")
         elif not dev_check:
@@ -905,7 +914,8 @@ class Currency(commands.Cog):
                 mine_message = f"# You struck Fool's Gold! ✨"
             else:
                 mine_message = f"## Mining successful! ⛏️\n"
-            server_settings[guild_id]['currency'][author_id] += mine_coins
+            # server_settings[guild_id]['currency'][author_id] += mine_coins
+            add_coins_to_user(guild_id, author_id, mine_coins)
             save_settings()
             await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can mine again {get_timestamp(120)}")
         elif not dev_check:
@@ -934,7 +944,8 @@ class Currency(commands.Cog):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             work_coins = random.randint(45, 55)
-            server_settings[guild_id]['currency'][author_id] += work_coins
+            # server_settings[guild_id]['currency'][author_id] += work_coins
+            add_coins_to_user(guild_id, author_id, work_coins)
             save_settings()
             await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
         elif not dev_check:
@@ -982,7 +993,8 @@ class Currency(commands.Cog):
                     cast_command = 'fishing'
                 fish_message = f"## {cast_command.capitalize()} successful! {'🎣' * (cast_command == 'fishing') + fishinge * (cast_command == 'fishinge')}\n"
                 ps_message = ''
-            server_settings[guild_id]['currency'][author_id] += fish_coins
+            # server_settings[guild_id]['currency'][author_id] += fish_coins
+            add_coins_to_user(guild_id, author_id, fish_coins)
             save_settings()
             await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
         elif not dev_check:
@@ -1024,7 +1036,8 @@ class Currency(commands.Cog):
             user_streak = server_settings.get(guild_id).get('daily_streak').get(author_id)
 
             today_coins = random.randint(140, 260)
-            server_settings[guild_id]['currency'][author_id] += int(today_coins * user_streak**0.5)
+            # server_settings[guild_id]['currency'][author_id] += int(today_coins * user_streak**0.5)
+            add_coins_to_user(guild_id, author_id, int(today_coins * user_streak**0.5))
             save_settings()
             user_last_used[guild_id][author_id] = now
             save_last_used()
@@ -1057,7 +1070,8 @@ class Currency(commands.Cog):
 
             # Award coins and update settings
             weekly_coins = random.randint(1500, 2500)  # Adjust reward range as desired
-            server_settings[guild_id]['currency'][author_id] += weekly_coins
+            # server_settings[guild_id]['currency'][author_id] += weekly_coins
+            add_coins_to_user(guild_id, author_id, weekly_coins)
             save_settings()
             user_last_used_w[guild_id][author_id] = now
             save_last_used_w()
@@ -1099,8 +1113,10 @@ class Currency(commands.Cog):
             try:
                 make_sure_user_has_currency(guild_id, target_id)
                 if number <= get_user_balance(guild_id, author_id):
-                    server_settings[guild_id]['currency'][target_id] += number
-                    server_settings[guild_id]['currency'][author_id] -= number
+                    # server_settings[guild_id]['currency'][target_id] += number
+                    # server_settings[guild_id]['currency'][author_id] -= number
+                    add_coins_to_user(guild_id, target_id, number)
+                    remove_coins_from_user(guild_id, author_id, number)
                     num1 = get_user_balance(guild_id, author_id)
                     num2 = get_user_balance(guild_id, target_id)
                     save_settings()
@@ -1190,7 +1206,8 @@ class Currency(commands.Cog):
                 if number <= get_user_balance(guild_id, author_id):
                     did_you_win = result == gamble_choice
                     delta = int(number * 2 * (did_you_win - 0.5))
-                    server_settings[guild_id]['currency'][author_id] += delta
+                    # server_settings[guild_id]['currency'][author_id] += delta
+                    add_coins_to_user(guild_id, author_id, delta)
                     num = get_user_balance(guild_id, author_id)
                     save_settings()
                     messages_dict = {True: f"You win! The result was `{result.capitalize()}` {yay}", False: f"You lose! The result was `{result.capitalize()}` {o7}"}
@@ -1224,7 +1241,8 @@ class Currency(commands.Cog):
             try:
                 if number <= get_user_balance(guild_id, author_id):
                     delta = int(number * 2 * (result - 0.5))
-                    server_settings[guild_id]['currency'][author_id] += delta
+                    # server_settings[guild_id]['currency'][author_id] += delta
+                    add_coins_to_user(guild_id, author_id, delta)
                     num = get_user_balance(guild_id, author_id)
                     save_settings()
                     messages_dict = {1: f"You win! {yay}", 0: f"You lose! {o7}"}
@@ -1258,7 +1276,8 @@ class Currency(commands.Cog):
             try:
                 if number <= get_user_balance(guild_id, author_id):
                     delta = number * 5 * result - number * (not result)
-                    server_settings[guild_id]['currency'][author_id] += delta
+                    # server_settings[guild_id]['currency'][author_id] += delta
+                    add_coins_to_user(guild_id, author_id, delta)
                     num = get_user_balance(guild_id, author_id)
                     save_settings()
                     messages_dict = {1: f"You win! The dice rolled `{dice_roll}` {yay}", 0: f"You lose! The dice rolled `{dice_roll}` {o7}"}
@@ -1297,7 +1316,8 @@ class Currency(commands.Cog):
             try:
                 if number <= get_user_balance(guild_id, author_id):
                     delta = number * 35 * result - number * (not result)
-                    server_settings[guild_id]['currency'][author_id] += delta
+                    # server_settings[guild_id]['currency'][author_id] += delta
+                    add_coins_to_user(guild_id, author_id, delta)
                     num = get_user_balance(guild_id, author_id)
                     save_settings()
                     messages_dict = {1: f"You win! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {yay}", 0: f"You lose! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {o7}"}
@@ -1403,8 +1423,10 @@ class Currency(commands.Cog):
                             return
                         for_author = number * result
                         for_target = -number * result
-                        server_settings[guild_id]['currency'][author_id] += for_author
-                        server_settings[guild_id]['currency'][target_id] += for_target
+                        # server_settings[guild_id]['currency'][author_id] += for_author
+                        # server_settings[guild_id]['currency'][target_id] += for_target
+                        add_coins_to_user(guild_id, author_id, for_author)
+                        add_coins_to_user(guild_id, target_id, for_target)
                         num1 = get_user_balance(guild_id, str(winner.id))
                         num2 = get_user_balance(guild_id, str(loser.id))
                         save_settings()
@@ -1466,7 +1488,8 @@ class Currency(commands.Cog):
             try:
                 if number <= get_user_balance(guild_id, author_id):
                     delta = 500 * number if ((results[0] == sunfire2) and result) else 50 * number if result else -number
-                    server_settings[guild_id]['currency'][author_id] += delta
+                    # server_settings[guild_id]['currency'][author_id] += delta
+                    add_coins_to_user(guild_id, author_id, delta)
                     num = get_user_balance(guild_id, author_id)
                     save_settings()
                     messages_dict = {True: f"# {' | '.join(results)}\n## You win{' BIG' * (results[0] == sunfire2)}!", False: f"# {' | '.join(results)}\n## You lose!"}
@@ -1563,7 +1586,8 @@ class Currency(commands.Cog):
                 winner = random.choice(participants)
                 winner_id = str(winner.id)
                 make_sure_user_has_currency(guild_id, winner_id)
-                server_settings[guild_id]['currency'][winner_id] += amount
+                # server_settings[guild_id]['currency'][winner_id] += amount
+                add_coins_to_user(guild_id, winner_id, amount)
                 await message.reply(f"# 🎉 Congratulations {winner.mention}, you won **{amount}** {coin}!")
             else:
                 await message.reply(f"No one participated in the giveaway {pepela}")
@@ -1597,7 +1621,8 @@ class Currency(commands.Cog):
 
                 try:
                     make_sure_user_has_currency(guild_id, target_id)
-                    server_settings[guild_id]['currency'][target_id] += number
+                    # server_settings[guild_id]['currency'][target_id] += number
+                    add_coins_to_user(guild_id, target_id, number)
                     num = get_user_balance(guild_id, target_id)
                     save_settings()
                     await ctx.reply(f"## Blessing successful!\n\n**{mentions[0].display_name}:** +{number:,} {coin}\nBalance: {num:,} {coin}")
@@ -1635,9 +1660,10 @@ class Currency(commands.Cog):
 
                 try:
                     make_sure_user_has_currency(guild_id, target_id)
-                    current_balance = server_settings[guild_id]['currency'][target_id]
+                    current_balance = get_user_balance(guild_id, target_id)
                     number = min(current_balance, number)
-                    server_settings[guild_id]['currency'][target_id] -= number
+                    # server_settings[guild_id]['currency'][target_id] -= number
+                    remove_coins_from_user(guild_id, target_id, number)
                     num = get_user_balance(guild_id, target_id)
                     save_settings()
                     await ctx.reply(f"## Curse successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}")
