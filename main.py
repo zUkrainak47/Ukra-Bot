@@ -1513,11 +1513,10 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             contents = ctx.message.content.split()[1:]
-            try:
-                amount = convert_msg_to_number(contents[0], guild_id, '', ['all', 'half', '%'])
-                duration = convert_msg_to_seconds(contents[1])
-            except ValueError:
-                await ctx.reply("Ur like dumb asf")
+            amount, _, _ = convert_msg_to_number(contents, guild_id, '', ['all', 'half', '%'])
+            duration = convert_msg_to_seconds(contents[1])
+            if amount == -1:
+                await ctx.reply("Input amount properly")
                 return
 
             if duration == -1:
@@ -1528,10 +1527,14 @@ class Currency(commands.Cog):
                 await ctx.reply("Pls make duration longer than 15s")
                 return
 
+            if duration > 604800:
+                await ctx.reply("Pls no longer than 7 days")
+                return
+
             # Announce the giveaway
             end_time = discord.utils.utcnow() + timedelta(seconds=duration)
             message = await ctx.send(
-                f"# React with 🎉 until <t:{int(end_time.timestamp())}:T> to join the giveaway for **{amount}** {coin}!"
+                f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T'*(duration<85000)}> to join the giveaway for **{amount:,}** {coin}!"
             )
             await message.add_reaction("🎉")
 
