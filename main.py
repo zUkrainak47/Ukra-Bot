@@ -100,6 +100,15 @@ else:
     distributed_backshots = {i: [] for i in server_settings}
 
 
+RUNNING_GIVEAWAYS = Path("dev", "running_giveaways.json")
+global running_giveaways
+if os.path.exists(RUNNING_GIVEAWAYS):
+    with open(RUNNING_GIVEAWAYS, "r") as file:
+        running_giveaways = json.load(file)
+else:
+    running_giveaways = {i: {} for i in server_settings}
+
+
 def save_settings():
     with open(SETTINGS_FILE, "w") as file:
         json.dump(server_settings, file, indent=4)
@@ -137,6 +146,11 @@ def save_distributed_segs():
 def save_distributed_backshots():
     with open(DISTRIBUTED_BACKSHOTS, "w") as file:
         json.dump(distributed_backshots, file, indent=4)
+
+
+def save_running_giveaways():
+    with open(RUNNING_GIVEAWAYS, "w") as file:
+        json.dump(running_giveaways, file, indent=4)
 
 
 def make_sure_server_settings_exist(guild_id, save=True):
@@ -260,7 +274,7 @@ async def on_ready():
             role = guild.get_role(server_settings.get(guild_id, {}).get(role_name))
             if not role:
                 role_dict[role_name][guild_id].clear()
-                await log_channel.send(f"✅❓ {guild.name} doesn't have a {role_name}")
+                # await log_channel.send(f"✅❓ {guild.name} doesn't have a {role_name}")
                 if role_name in server_settings[guild_id]:
                     server_settings[guild_id].pop(role_name)
                 save_settings()
@@ -291,9 +305,25 @@ async def on_ready():
             # message = await log_channel.fetch_message(react_to.id)
             # await message.add_reaction('✅')
 
+    async def refund_giveaways():
+        for guild_id in running_giveaways:
+            guild = await client.fetch_guild(int(guild_id))
+            if not guild:
+                continue
+            this_guild_giveaways = running_giveaways.get(guild_id)
+            for user_id, amount in this_guild_giveaways.items():
+                member = await guild.fetch_member(int(user_id))
+                add_coins_to_user(guild_id, user_id, amount)
+                running_giveaways[guild_id].pop(user_id)
+                save_running_giveaways()  # I don't like this, but it doesn't seem to work otherwise
+                await member.send(f'You have been refunded **{amount}** {coin} for giveaways you hosted in **{guild.name}**, they was canceled due to a bot reset')
+                await log_channel.send(f"💸 {member.mention} has been refunded **{amount}** {coin} for giveaways they hosted in **{guild.name}**")
     for role_ in role_dict:
         await remove_all_roles(role_)
         save_dict[role_]()
+
+    await refund_giveaways()
+
 
 
 @client.command(aliases=['pp', 'shoot'])
@@ -1534,10 +1564,6 @@ class Currency(commands.Cog):
                 await ctx.reply("Pls make duration longer than 15s")
                 return
 
-            if duration > 2700 and not admin:
-                await ctx.reply(f"Pls no longer than 45 minutes while the bot is constantly being restarted {prayge}")
-                return
-
             if duration > 604800:
                 await ctx.reply("Pls no longer than 7 days")
                 return
@@ -1546,6 +1572,9 @@ class Currency(commands.Cog):
             end_time = discord.utils.utcnow() + timedelta(seconds=duration)
             if not admin:
                 remove_coins_from_user(guild_id, author_id, amount)
+                running_giveaways.setdefault(guild_id, {}).setdefault(author_id, 0)
+                running_giveaways[guild_id][author_id] += amount
+                save_running_giveaways()
             message = await ctx.send(f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T'*(duration<85000)}> to join the giveaway for **{amount:,}** {coin}!")
             await message.add_reaction("🎉")
             await ctx.send(f"Btw {ctx.author.display_name}, your balance has been deducted {amount} {coin}, your new balance: {get_user_balance(guild_id, author_id):,} {coin}")
@@ -1597,7 +1626,13 @@ class Currency(commands.Cog):
                 add_coins_to_user(guild_id, winner_id, amount)  # save file
                 await message.reply(f"# 🎉 Congratulations {winner.mention}, you won **{amount}** {coin}!\nYour new balance: {get_user_balance(guild_id, winner_id):,} {coin}")
             else:
-                await message.reply(f"No one participated in the giveaway {pepela}")
+                add_coins_to_user(guild_id, author_id, amount)
+                await message.reply(f"No one participated in the giveaway{f', {ctx.author.mention} you have been refunded' * (not admin)} {pepela}")
+            if running_giveaways.get(guild_id).get(author_id) == amount:
+                running_giveaways[guild_id].pop(author_id)
+            else:
+                running_giveaways[guild_id][author_id] -= amount
+            save_running_giveaways()
         elif not dev_check:
             await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
 
