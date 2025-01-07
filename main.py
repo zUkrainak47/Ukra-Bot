@@ -1,6 +1,7 @@
 # from typing import Final
 import asyncio
 import datetime
+import re
 from datetime import datetime, timedelta
 import os
 import random
@@ -165,7 +166,9 @@ def get_daily_reset_timestamp():
 
 
 def get_timestamp(amount, unit_length='seconds'):
-    """Get timestamp for given amount of time into the future."""
+    """
+    Get timestamp for given amount of time into the future
+    """
     now = datetime.now()
     if unit_length == 'seconds':
         end = now + timedelta(seconds=amount)
@@ -183,63 +186,21 @@ def get_timestamp(amount, unit_length='seconds'):
     return f"<t:{int(reset_time.timestamp())}:R>"
 
 
-def convert_msg_to_time(message: list):
+def convert_msg_to_seconds(message: str):
     """
-    Get amount and unit length from user message
-    returns -1, -1 if unsuccessful
-    """
-    def check_for_timestamp(message_, search_in, unit_length_):
-        for s in search_in:
-            if s == message_[-len(s):]:
-                if message_[:-len(s)].isdecimal():
-                    return int(message_[:-len(s)]), unit_length_
-        return 0, 0
-
-    for i in message:
-        i = i.lower()
-        if (not 's' in i) and (not 'm' in i) and (not 'h' in i) and (not 'd' in i) and (not 'w' in i):
-            # print(f'nothing found in {i}')
-            continue
-        amount, unit_length = check_for_timestamp(i, ['s', 'sec', 'second', 'seconds'], 'seconds')
-        if not unit_length:
-            # print(f'seconds not found in {i}')
-            amount, unit_length = check_for_timestamp(i, ['m', 'min', 'minute', 'minutes'], 'minutes')
-        if not unit_length:
-            # print(f'minutes not found in {i}')
-            amount, unit_length = check_for_timestamp(i, ['h', 'hour', 'hours'], 'hours')
-        if not unit_length:
-            # print(f'hours not found in {i}')
-            amount, unit_length = check_for_timestamp(i, ['d', 'day', 'days'], 'days')
-        if not unit_length:
-            # print(f'days not found in {i}')
-            amount, unit_length = check_for_timestamp(i, ['w', 'week', 'weeks'], 'weeks')
-        if not unit_length:
-            # print(f'weeks not found in {i}')
-            continue
-
-        return amount, unit_length
-
-    return -1, -1
-
-
-def get_seconds(amount_unitlegth_list: tuple):
-    """
-    Converts a list of (amount of time, unit length) to seconds
+    Get amount of seconds from user message
+    Example: '1h30m' returns 5400
     returns -1 if unsuccessful
     """
-    amount, unit_length = amount_unitlegth_list
-    if (amount != -1) and (unit_length != -1):
-        if unit_length == 'seconds':
-            return amount
-        if unit_length == 'minutes':
-            return amount * 60
-        if unit_length == 'hours':
-            return amount * 60 * 60
-        if unit_length == 'days':
-            return amount * 60 * 60 * 24
-        if unit_length == 'weeks':
-            return amount * 60 * 60 * 24 * 7
-    return -1
+    time_pattern = re.compile(r"(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?")
+    match = time_pattern.fullmatch(message.strip())
+    if not match:
+        print(f"Invalid time format: '{message}'")
+        return -1
+
+    days, hours, minutes, seconds = match.groups(default="0")
+    total_seconds = int(days) * 86400 + int(hours) * 3600 + int(minutes) * 60 + int(seconds)
+    return total_seconds
 
 
 def convert_msg_to_number(message: list, guild: str, author: str):
@@ -1547,7 +1508,7 @@ class Currency(commands.Cog):
             contents = ctx.message.content.split()[1:]
             try:
                 amount = int(contents[0])
-                duration = get_seconds(convert_msg_to_time(contents))
+                duration = convert_msg_to_seconds(contents[1])
             except ValueError:
                 await ctx.reply("Ur like dumb asf")
                 return
