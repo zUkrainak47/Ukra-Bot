@@ -1178,8 +1178,8 @@ class Currency(commands.Cog):
             num_ok = False
             gamble_choice_ok = False
             for i in contents:
-                if '%' in i and i.rstrip('%').isdecimal():
-                    number = int(get_user_balance(guild_id, author_id) * int(i.rstrip('%')) / 100)
+                if '%' in i and i.rstrip('%').replace('.', '').isdecimal() and i.count('.') <= 1:
+                    number = int(get_user_balance(guild_id, author_id) * float(i.rstrip('%')) / 100)
                     num_ok = True
                 if 'k' in i and i.rstrip('k').isdecimal():
                     number = int(i.rstrip('k')) * 1000
@@ -1356,7 +1356,7 @@ class Currency(commands.Cog):
                 number, source, msg = convert_msg_to_number(contents, guild_id, author_id)
                 if source == '%':
                     number = int(min(get_user_balance(guild_id, author_id),
-                                     get_user_balance(guild_id, target_id)) * int(msg.rstrip('%')) / 100)
+                                     get_user_balance(guild_id, target_id)) * float(msg.rstrip('%')) / 100)
                 elif source == 'all':
                     number = min(get_user_balance(guild_id, author_id),
                                  get_user_balance(guild_id, target_id))
