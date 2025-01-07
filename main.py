@@ -211,8 +211,8 @@ def convert_msg_to_number(message: list, guild: str, author: str):
     for i in message:
         if ',' in i:
             i = i.replace(',', '')
-        if '%' in i and i.rstrip('%').isdecimal():
-            return int(server_settings.get(guild).get('currency').get(author) * int(i.rstrip('%'))/100), '%', i
+        if '%' in i and i.rstrip('%').replace('.', '').isdecimal() and i.count('.') <= 1:
+            return int(server_settings.get(guild).get('currency').get(author) * float(i.rstrip('%'))/100), '%', i
         if 'k' in i and i.rstrip('k').isdecimal():
             return int(i.rstrip('k')) * 1000, 'k', i
         if i.isdecimal():
