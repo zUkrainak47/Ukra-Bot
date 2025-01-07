@@ -853,6 +853,31 @@ class Currency(commands.Cog):
         elif not dev_check:
             await ctx.reply(f'Bot is in Development Mode, currency commands are disabled')
 
+    @commands.command(aliases=['cooldowns', 'cooldown'])
+    async def cd(self, ctx):
+        """
+        Displays cooldowns for farming commands
+        """
+        user = ctx.author
+        tracked_commands = ['fish', 'mine', 'dig', 'work']  # Commands to include in the cooldown list
+        cooldowns_status = []
+
+        for command_name in tracked_commands:
+            command = self.bot.get_command(command_name)
+            if command and command.cooldown:  # Ensure command exists and has a cooldown
+                bucket = command._buckets.get_bucket(ctx.message)
+                retry_after = bucket.get_retry_after()
+                if retry_after > 0:
+                    # Command is on cooldown
+                    cooldowns_status.append(f"`{command_name.capitalize()}:{' '*(command_name == 'dig')}` {get_timestamp(int(retry_after))}")
+                else:
+                    # Command is not on cooldown
+                    cooldowns_status.append(f"`{command_name.capitalize()}:{' '*(command_name == 'dig')}` no cooldown!")
+
+        # Format the response
+        cooldowns_message = "## Cooldowns:\n" + "\n".join(cooldowns_status)
+        await ctx.reply(cooldowns_message)
+
     @commands.command()
     @commands.cooldown(rate=1, per=20, type=commands.BucketType.member)
     async def dig(self, ctx):
