@@ -1552,6 +1552,10 @@ class Currency(commands.Cog):
                 await ctx.reply("Input amount properly\nThe format is `!giveaway <amount> <duration>`")
                 return
 
+            if not amount:
+                await ctx.reply(f"You gotta giveaway something {pepela}\nThe format is `!giveaway <amount> <duration>`")
+                return
+
             if not admin and amount > make_sure_user_has_currency(guild_id, author_id):
                 await ctx.reply(f"That's more {coin} than you own")
                 return
@@ -1577,7 +1581,8 @@ class Currency(commands.Cog):
                 save_running_giveaways()
             message = await ctx.send(f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T'*(duration<85000)}> to join the giveaway for **{amount:,}** {coin}!")
             await message.add_reaction("🎉")
-            await ctx.send(f"Btw {ctx.author.display_name}, your balance has been deducted {amount} {coin}, your new balance: {get_user_balance(guild_id, author_id):,} {coin}")
+            if not admin:
+                await ctx.send(f"Btw {ctx.author.display_name}, your balance has been deducted {amount} {coin}, your new balance: {get_user_balance(guild_id, author_id):,} {coin}")
             # Calculate reminder intervals
             reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000)
             reminder_interval = duration // reminders_to_send - min(5, duration // 10)
