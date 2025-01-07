@@ -203,24 +203,28 @@ def convert_msg_to_seconds(message: str):
     return total_seconds
 
 
-def convert_msg_to_number(message: list, guild: str, author: str):
+def convert_msg_to_number(message: list, guild: str, user: str, ignored_sources=None):
     """
     Takes user command message's split(), returns the number user wants to gamble, the source, and the original number
     returns -1, 0, 0 if unsuccessful
     """
+    if ignored_sources is None:
+        ignored_sources = []
     for i in message:
         if ',' in i:
             i = i.replace(',', '')
-        if '%' in i and i.rstrip('%').replace('.', '').isdecimal() and i.count('.') <= 1:
-            return int(server_settings.get(guild).get('currency').get(author) * float(i.rstrip('%'))/100), '%', i
-        if 'k' in i and i.rstrip('k').isdecimal():
-            return int(i.rstrip('k')) * 1000, 'k', i
-        if i.isdecimal():
+        if ('%' not in ignored_sources) and '%' in i and i.rstrip('%').replace('.', '').isdecimal() and i.count('.') <= 1:
+            return int(server_settings.get(guild).get('currency').get(user) * float(i.rstrip('%')) / 100), '%', i
+        if ('k' not in ignored_sources) and 'k' in i and i.rstrip('k').replace('.', '').isdecimal() and i.count('.') <= 1:
+            return int(float(i.rstrip('k')) * 1000), 'k', i
+        if ('m' not in ignored_sources) and 'm' in i and i.rstrip('m').replace('.', '').isdecimal() and i.count('.') <= 1:
+            return int(float(i.rstrip('m')) * 1000000), 'm', i
+        if ('n' not in ignored_sources) and i.isdecimal():
             return int(i), 'n', i
-        if i.lower() == 'all':
-            return server_settings.get(guild).get('currency').get(author), 'all', i
-        if i.lower() == 'half':
-            return server_settings.get(guild).get('currency').get(author) // 2, 'half', i
+        if ('all' not in ignored_sources) and i.lower() == 'all':
+            return server_settings.get(guild).get('currency').get(user), 'all', i
+        if ('half' not in ignored_sources) and i.lower() == 'half':
+            return server_settings.get(guild).get('currency').get(user) // 2, 'half', i
     return -1, 0, 0
 
 
@@ -240,7 +244,7 @@ async def on_ready():
     global log_channel
     log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
 
-    await log_channel.send(f'{yay}\n{bot_name} has connected to Discord!')
+    await log_channel.send(f'{yay} {bot_name} has connected to Discord!')
     role_dict = {'backshots_role': distributed_backshots,
                  'segs_role': distributed_segs}
     save_dict = {'backshots_role': save_distributed_backshots,
@@ -251,7 +255,7 @@ async def on_ready():
             guild = await client.fetch_guild(int(guild_id))
             if not guild:
                 continue
-            react_to = await log_channel.send(f"`===== {guild.name} - {guild_id} - {role_name} =====`")
+            # react_to = await log_channel.send(f"`===== {guild.name} - {guild_id} - {role_name} =====`")
             role = guild.get_role(server_settings.get(guild_id, {}).get(role_name))
             if not role:
                 role_dict[role_name][guild_id].clear()
@@ -283,8 +287,8 @@ async def on_ready():
                 except discord.HTTPException as e:
                     # Handle potential HTTP errors
                     await log_channel.send(f"❓ Failed to remove `@{role.name}` from {member.mention}: {e}")
-            message = await log_channel.fetch_message(react_to.id)
-            await message.add_reaction('✅')
+            # message = await log_channel.fetch_message(react_to.id)
+            # await message.add_reaction('✅')
 
     for role_ in role_dict:
         await remove_all_roles(role_)
@@ -1181,8 +1185,11 @@ class Currency(commands.Cog):
                 if '%' in i and i.rstrip('%').replace('.', '').isdecimal() and i.count('.') <= 1:
                     number = int(get_user_balance(guild_id, author_id) * float(i.rstrip('%')) / 100)
                     num_ok = True
-                if 'k' in i and i.rstrip('k').isdecimal():
-                    number = int(i.rstrip('k')) * 1000
+                if 'k' in i and i.rstrip('k').replace('.', '').isdecimal() and i.count('.') <= 1:
+                    number = int(float(i.rstrip('k')) * 1000)
+                    num_ok = True
+                if 'm' in i and i.rstrip('m').replace('.', '').isdecimal() and i.count('.') <= 1:
+                    number = int(float(i.rstrip('m')) * 1000000)
                     num_ok = True
                 if i.isdecimal() and not num_ok:
                     number = int(i)
@@ -1507,7 +1514,7 @@ class Currency(commands.Cog):
         if currency_allowed(guild_id) and dev_check:
             contents = ctx.message.content.split()[1:]
             try:
-                amount = int(contents[0])
+                amount = convert_msg_to_number(contents[0], guild_id, '', ['all', 'half', '%'])
                 duration = convert_msg_to_seconds(contents[1])
             except ValueError:
                 await ctx.reply("Ur like dumb asf")
