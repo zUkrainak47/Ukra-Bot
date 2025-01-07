@@ -49,6 +49,7 @@ shovel = '<:shovel:1325823488216268801>'
 gold_emoji = '<:gold:1325823946737713233>'
 okaygebusiness = '<:okaygebusiness:1325818583011426406>'
 fishinge = '<:Fishinge:1325810706393596035>'
+prayge = '<:prayge:1326268872990523492>'
 treasure_chest = '<:treasure_chest:1325811472680620122>'
 The_Catch = '<:TheCatch:1325812275172347915>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
@@ -1502,29 +1503,39 @@ class Currency(commands.Cog):
     async def slots_error(self, ctx, error):
         pass
 
-    @commands.command(aliases=['aga'])
-    async def admin_giveaway(self, ctx):
+    async def run_giveaway(self, ctx, admin=False):
         """
-        Starts a giveaway using coins out of thin air
-        Only usable by bot developer
-        !giveaway <amount> <seconds>
+        Starts a giveaway for some coins of some duration, taking admin as a parameter
         """
         guild_id = str(ctx.guild.id)
+        author_id = str(ctx.author.id)
+        if admin and ctx.author.id not in allowed_users:
+            await ctx.reply(f"You can't use this command due to lack of permissions :3")
+            return
+
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             contents = ctx.message.content.split()[1:]
             amount, _, _ = convert_msg_to_number(contents, guild_id, '', ['all', 'half', '%'])
             duration = convert_msg_to_seconds(contents[1])
             if amount == -1:
-                await ctx.reply("Input amount properly")
+                await ctx.reply("Input amount properly\nThe format is `!giveaway <amount> <duration>`")
+                return
+
+            if not admin and amount > make_sure_user_has_currency(guild_id, author_id):
+                await ctx.reply(f"That's more {coin} than you own")
                 return
 
             if duration == -1:
-                await ctx.reply("Input duration properly")
+                await ctx.reply("Input duration properly\nThe format is `!giveaway <amount> <duration>`\nExample of accepted duration: `5m30s`")
                 return
 
             if duration <= 15:
                 await ctx.reply("Pls make duration longer than 15s")
+                return
+
+            if duration > 2700 and not admin:
+                await ctx.reply(f"Pls no longer than 45 minutes while the bot is constantly being restarted {prayge}")
                 return
 
             if duration > 604800:
@@ -1533,11 +1544,11 @@ class Currency(commands.Cog):
 
             # Announce the giveaway
             end_time = discord.utils.utcnow() + timedelta(seconds=duration)
-            message = await ctx.send(
-                f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T'*(duration<85000)}> to join the giveaway for **{amount:,}** {coin}!"
-            )
+            if not admin:
+                remove_coins_from_user(guild_id, author_id, amount)
+            message = await ctx.send(f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T'*(duration<85000)}> to join the giveaway for **{amount:,}** {coin}!")
             await message.add_reaction("🎉")
-
+            await ctx.send(f"Btw {ctx.author.display_name}, your balance has been deducted {amount} {coin}, your new balance: {get_user_balance(guild_id, author_id):,} {coin}")
             # Calculate reminder intervals
             reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000)
             reminder_interval = duration // reminders_to_send - min(5, duration // 10)
@@ -1559,8 +1570,7 @@ class Currency(commands.Cog):
                 if reminders_sent < reminders_to_send:
                     next_reminder_time = duration - (reminder_interval * (reminders_sent + 1))
                     if time_remaining <= next_reminder_time:
-                        await message.reply(
-                            f"## There's a giveaway going! (Reminder {reminders_sent + 1}/{reminders_to_send})")
+                        await message.reply(f"## There's a giveaway going! (Reminder {reminders_sent + 1}/{reminders_to_send})")
                         reminders_sent += 1
 
                 try:
@@ -1585,11 +1595,28 @@ class Currency(commands.Cog):
                 winner_id = str(winner.id)
                 make_sure_user_has_currency(guild_id, winner_id, save=False)
                 add_coins_to_user(guild_id, winner_id, amount)  # save file
-                await message.reply(f"# 🎉 Congratulations {winner.mention}, you won **{amount}** {coin}!")
+                await message.reply(f"# 🎉 Congratulations {winner.mention}, you won **{amount}** {coin}!\nYour new balance: {get_user_balance(guild_id, winner_id):,} {coin}")
             else:
                 await message.reply(f"No one participated in the giveaway {pepela}")
         elif not dev_check:
             await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+
+    @commands.command(aliases=['ga'])
+    async def giveaway(self, ctx):
+        """
+        Starts a giveaway for some coins of some duration
+        !giveaway <amount> <time>
+        """
+        await self.run_giveaway(ctx, admin=False)
+
+    @commands.command(aliases=['aga'])
+    async def admin_giveaway(self, ctx):
+        """
+        Starts a giveaway using coins out of thin air
+        Only usable by bot developer
+        !giveaway <amount> <time>
+        """
+        await self.run_giveaway(ctx, admin=True)
 
     @commands.command()
     async def bless(self, ctx):
