@@ -363,7 +363,7 @@ async def dnd(ctx):
         contents = ''.join(ctx.message.content.split()[1:])
         if not len(contents):
             await ctx.reply(f"Rolling **1d6**: `{random.choice(range(1, 7))}`")
-        elif 'd' in contents and len(contents) == 2:  # !dnd 5d20
+        elif 'd' in contents and contents.split('d')[1]:  # !dnd 5d20
             if contents.split('d')[0]:
                 number_of_dice, dice_size = contents.split('d')
                 if not number_of_dice.lstrip("-").isdecimal():
@@ -378,7 +378,7 @@ async def dnd(ctx):
                 elif int(dice_size) > 1000:
                     await ctx.reply(f"Let's keep dice size under 1000 {sunfire2}")
                 else:
-                    result = random.choices(range(1, int(dice_size)+1), k=int(number_of_dice))
+                    result = random.choices(range(1, int(dice_size) + 1), k=int(number_of_dice))
                     await ctx.reply(f"Rolling **{number_of_dice}d{dice_size}**: `{str(result)[1:-1]}`\nTotal: `{sum(result)}`")
 
             elif contents[1:].lstrip('-').isdecimal():  # !dnd d10  =  !dnd 1d10
@@ -388,12 +388,12 @@ async def dnd(ctx):
                 elif int(dice_size) > 1000:
                     await ctx.reply(f"Let's keep dice size under 1000 {sunfire2}")
                 else:
-                    await ctx.reply(f"Rolling **1d{dice_size}**: `{random.choice(range(1, dice_size+1))}`")
+                    await ctx.reply(f"Rolling **1d{dice_size}**: `{random.choice(range(1, dice_size + 1))}`")
 
             else:
                 await ctx.reply("Example usage: `!roll 2d6`")
 
-        elif 'd' not in contents and len(contents) == 2 and contents.lstrip("-").isdecimal():  # !dnd 10  =  !dnd 10d6
+        elif 'd' not in contents and contents.lstrip("-").isdecimal():  # !dnd 10  =  !dnd 10d6
             if int(contents) < 0:
                 await ctx.reply(f"**{contents}** isn't greater than 0 {stare}")
             elif int(contents) > 100:
