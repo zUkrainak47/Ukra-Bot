@@ -48,6 +48,7 @@ pepela = '<:pepela:1322718719977197671>'
 shovel = '<:shovel:1325823488216268801>'
 gold_emoji = '<:gold:1325823946737713233>'
 okaygebusiness = '<:okaygebusiness:1325818583011426406>'
+sadgebusiness = '<:sadgebusiness:1326527481636978760>'
 fishinge = '<:Fishinge:1325810706393596035>'
 prayge = '<:prayge:1326268872990523492>'
 stopbeingmean = '<:stopbeingmean:1326525905199435837>'
@@ -1160,7 +1161,7 @@ class Currency(commands.Cog):
                     num2 = get_user_balance(guild_id, target_id)
                     await ctx.reply(f"## Transaction successful!\n\n**{ctx.author.display_name}:** {num1:,} {coin}\n**{mentions[0].display_name}:** {num2:,} {coin}")
                 else:
-                    await ctx.reply(f"Transaction failed! That's more {coin} than you own")
+                    await ctx.reply(f"Transaction failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
                 await ctx.reply("Transaction failed!")
         elif not dev_check:
@@ -1252,7 +1253,7 @@ class Currency(commands.Cog):
                     messages_dict = {True: f"You win! The result was `{result.capitalize()}` {yay}", False: f"You lose! The result was `{result.capitalize()}` {o7}"}
                     await ctx.reply(f"## {messages_dict[did_you_win]}\n\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
                 else:
-                    await ctx.reply(f"Gambling failed! That's more {coin} than you own")
+                    await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
                 await ctx.reply("Gambling failed!")
         elif not dev_check:
@@ -1285,7 +1286,7 @@ class Currency(commands.Cog):
                     messages_dict = {1: f"You win! {yay}", 0: f"You lose! {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
                 else:
-                    await ctx.reply(f"Gambling failed! That's more {coin} than you own")
+                    await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
                 await ctx.reply("Gambling failed!")
         elif not dev_check:
@@ -1318,7 +1319,7 @@ class Currency(commands.Cog):
                     messages_dict = {1: f"You win! The dice rolled `{dice_roll}` {yay}", 0: f"You lose! The dice rolled `{dice_roll}` {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
                 else:
-                    await ctx.reply(f"Gambling failed! That's more {coin} than you own")
+                    await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
                 await ctx.reply("Gambling failed!")
         elif not dev_check:
@@ -1356,7 +1357,7 @@ class Currency(commands.Cog):
                     messages_dict = {1: f"You win! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {yay}", 0: f"You lose! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
                 else:
-                    await ctx.reply(f"Gambling failed! That's more {coin} than you own")
+                    await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
                 await ctx.reply("Gambling failed!")
         elif not dev_check:
@@ -1411,10 +1412,10 @@ class Currency(commands.Cog):
                 return
 
             if number > get_user_balance(guild_id, author_id):
-                await ctx.reply(f"PVP failed! That's more {coin} than you own")
+                await ctx.reply(f"PVP failed! You don't own {number:,} {coin} {sadgebusiness}")
                 return
             if number > get_user_balance(guild_id, target_id):
-                await ctx.reply(f"PVP failed! That's more {coin} than **{mentions[0].display_name}** owns")
+                await ctx.reply(f"PVP failed! **{mentions[0].display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
                 return
 
             active_pvp_requests.get(guild_id).add(mentions[0].id)
@@ -1447,12 +1448,12 @@ class Currency(commands.Cog):
                         if number > get_user_balance(guild_id, author_id):
                             active_pvp_requests.get(guild_id).discard(mentions[0].id)
                             active_pvp_requests.get(guild_id).discard(ctx.author.id)
-                            await ctx.reply(f"PVP failed! That's more {coin} than you own")
+                            await ctx.reply(f"PVP failed! You don't own {number:,} {coin} {sadgebusiness}")
                             return
                         if number > get_user_balance(guild_id, target_id):
                             active_pvp_requests.get(guild_id).discard(mentions[0].id)
                             active_pvp_requests.get(guild_id).discard(ctx.author.id)
-                            await ctx.reply(f"PVP failed! That's more {coin} than **{mentions[0].display_name}** owns")
+                            await ctx.reply(f"PVP failed! **{mentions[0].display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
                             return
                         for_author = number * result
                         for_target = -number * result
@@ -1526,7 +1527,7 @@ class Currency(commands.Cog):
                     if result:
                         await log_channel.send(f"**{ctx.author.mention}** actually won the slot wheel in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
                 else:
-                    await ctx.reply(f"Gambling failed! That's more {coin} than you own")
+                    await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
                 await ctx.reply("Gambling failed!")
         elif not dev_check:
@@ -1564,7 +1565,7 @@ class Currency(commands.Cog):
                 return
 
             if not admin and amount > make_sure_user_has_currency(guild_id, author_id):
-                await ctx.reply(f"That's more {coin} than you own")
+                await ctx.reply(f"You don't own {amount:,} {coin} {sadgebusiness}")
                 return
 
             if duration == -1:
