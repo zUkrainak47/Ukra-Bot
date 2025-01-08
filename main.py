@@ -102,13 +102,13 @@ else:
     distributed_backshots = {i: [] for i in server_settings}
 
 
-RUNNING_GIVEAWAYS = Path("dev", "running_giveaways.json")
-global running_giveaways
-if os.path.exists(RUNNING_GIVEAWAYS):
-    with open(RUNNING_GIVEAWAYS, "r") as file:
-        running_giveaways = json.load(file)
+ACTIVE_GIVEAWAYS = Path("dev", "active_giveaways.json")
+global active_giveaways
+if os.path.exists(ACTIVE_GIVEAWAYS):
+    with open(ACTIVE_GIVEAWAYS, "r") as file:
+        active_giveaways = json.load(file)
 else:
-    running_giveaways = {i: {} for i in server_settings}
+    active_giveaways = {i: {} for i in server_settings}
 
 
 def save_settings():
@@ -150,9 +150,9 @@ def save_distributed_backshots():
         json.dump(distributed_backshots, file, indent=4)
 
 
-def save_running_giveaways():
-    with open(RUNNING_GIVEAWAYS, "w") as file:
-        json.dump(running_giveaways, file, indent=4)
+def save_active_giveaways():
+    with open(ACTIVE_GIVEAWAYS, "w") as file:
+        json.dump(active_giveaways, file, indent=4)
 
 
 def make_sure_server_settings_exist(guild_id, save=True):
@@ -311,16 +311,16 @@ async def on_ready():
             # await message.add_reaction('✅')
 
     async def refund_giveaways():
-        for guild_id in running_giveaways:
+        for guild_id in active_giveaways:
             guild = await client.fetch_guild(int(guild_id))
             if not guild:
                 continue
-            this_guild_giveaways = running_giveaways.get(guild_id)
+            this_guild_giveaways = active_giveaways.get(guild_id)
             for user_id, amount in this_guild_giveaways.items():
                 member = await guild.fetch_member(int(user_id))
                 add_coins_to_user(guild_id, user_id, amount)
-                running_giveaways[guild_id].pop(user_id)
-                save_running_giveaways()  # I don't like this, but it doesn't seem to work otherwise
+                active_giveaways[guild_id].pop(user_id)
+                save_active_giveaways()  # I don't like this, but it doesn't seem to work otherwise
                 await member.send(f'You have been refunded **{amount:,}** {coin} for giveaways you hosted in **{guild.name}**, they was canceled due to a bot reset')
                 await log_channel.send(f"💸 {member.mention} has been refunded **{amount:,}** {coin} for giveaways they hosted in **{guild.name}**")
     for role_ in role_dict:
@@ -1584,9 +1584,9 @@ class Currency(commands.Cog):
             end_time = discord.utils.utcnow() + timedelta(seconds=duration)
             if not admin:
                 remove_coins_from_user(guild_id, author_id, amount)
-                running_giveaways.setdefault(guild_id, {}).setdefault(author_id, 0)
-                running_giveaways[guild_id][author_id] += amount
-                save_running_giveaways()
+                active_giveaways.setdefault(guild_id, {}).setdefault(author_id, 0)
+                active_giveaways[guild_id][author_id] += amount
+                save_active_giveaways()
             message = await ctx.send(f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T'*(duration<85000)}> to join the giveaway for **{amount:,}** {coin}!")
             await message.add_reaction("🎉")
             if not admin:
@@ -1642,11 +1642,11 @@ class Currency(commands.Cog):
                 if not admin:
                     add_coins_to_user(guild_id, author_id, amount)
                 await message.reply(f"No one participated in the giveaway{f', {ctx.author.mention} you have been refunded' * (not admin)} {pepela}")
-            if running_giveaways.get(guild_id).get(author_id) == amount:
-                running_giveaways[guild_id].pop(author_id)
+            if active_giveaways.get(guild_id).get(author_id) == amount:
+                active_giveaways[guild_id].pop(author_id)
             else:
-                running_giveaways[guild_id][author_id] -= amount
-            save_running_giveaways()
+                active_giveaways[guild_id][author_id] -= amount
+            save_active_giveaways()
         elif not dev_check:
             await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
 
