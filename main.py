@@ -50,6 +50,7 @@ gold_emoji = '<:gold:1325823946737713233>'
 okaygebusiness = '<:okaygebusiness:1325818583011426406>'
 fishinge = '<:Fishinge:1325810706393596035>'
 prayge = '<:prayge:1326268872990523492>'
+stopbeingmean = '<:stopbeingmean:1326525905199435837>'
 treasure_chest = '<:treasure_chest:1325811472680620122>'
 The_Catch = '<:TheCatch:1325812275172347915>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
@@ -220,16 +221,19 @@ def convert_msg_to_seconds(message: str):
 
 def convert_msg_to_number(message: list, guild: str, user: str, ignored_sources=None):
     """
-    Takes user command message's split(), returns the number user wants to gamble, the source, and the original number
+    Takes user command message's split(), returns the (non-negative) number user input, the source, and the original string
     returns -1, 0, 0 if unsuccessful
     """
+    user_bal = server_settings.get(guild).get('currency').get(user)
     if ignored_sources is None:
         ignored_sources = []
     for i in message:
+        if '-' in i:
+            return -1, '-', 0
         if ',' in i:
             i = i.replace(',', '')
         if ('%' not in ignored_sources) and '%' in i and i.rstrip('%').replace('.', '').isdecimal() and i.count('.') <= 1:
-            return int(server_settings.get(guild).get('currency').get(user) * float(i.rstrip('%')) / 100), '%', i
+            return int(user_bal * float(i.rstrip('%')) / 100), '%', i
         if ('k' not in ignored_sources) and 'k' in i and i.rstrip('k').replace('.', '').isdecimal() and i.count('.') <= 1:
             return int(float(i.rstrip('k')) * 1000), 'k', i
         if ('m' not in ignored_sources) and 'm' in i and i.rstrip('m').replace('.', '').isdecimal() and i.count('.') <= 1:
@@ -237,9 +241,9 @@ def convert_msg_to_number(message: list, guild: str, user: str, ignored_sources=
         if ('n' not in ignored_sources) and i.isdecimal():
             return int(i), 'n', i
         if ('all' not in ignored_sources) and i.lower() == 'all':
-            return server_settings.get(guild).get('currency').get(user), 'all', i
+            return user_bal, 'all', i
         if ('half' not in ignored_sources) and i.lower() == 'half':
-            return server_settings.get(guild).get('currency').get(user) // 2, 'half', i
+            return user_bal // 2, 'half', i
     return -1, 0, 0
 
 
@@ -316,14 +320,13 @@ async def on_ready():
                 add_coins_to_user(guild_id, user_id, amount)
                 running_giveaways[guild_id].pop(user_id)
                 save_running_giveaways()  # I don't like this, but it doesn't seem to work otherwise
-                await member.send(f'You have been refunded **{amount}** {coin} for giveaways you hosted in **{guild.name}**, they was canceled due to a bot reset')
-                await log_channel.send(f"💸 {member.mention} has been refunded **{amount}** {coin} for giveaways they hosted in **{guild.name}**")
+                await member.send(f'You have been refunded **{amount:,}** {coin} for giveaways you hosted in **{guild.name}**, they was canceled due to a bot reset')
+                await log_channel.send(f"💸 {member.mention} has been refunded **{amount:,}** {coin} for giveaways they hosted in **{guild.name}**")
     for role_ in role_dict:
         await remove_all_roles(role_)
         save_dict[role_]()
 
     await refund_giveaways()
-
 
 
 @client.command(aliases=['pp', 'shoot'])
@@ -1546,7 +1549,11 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             contents = ctx.message.content.split()[1:]
-            amount, _, _ = convert_msg_to_number(contents, guild_id, '', ['all', 'half', '%'])
+            if len(contents) != 2:
+                await ctx.reply("The format is `!giveaway <amount> <duration>`\nExample: `!giveaway 2.5k 5m30s`")
+                return
+            sources_ignored = ['all', 'half', '%'] if admin else []
+            amount, _, _ = convert_msg_to_number(contents[0:1], guild_id, author_id, sources_ignored)
             duration = convert_msg_to_seconds(contents[1])
             if amount == -1:
                 await ctx.reply("Input amount properly\nThe format is `!giveaway <amount> <duration>`")
@@ -1582,7 +1589,7 @@ class Currency(commands.Cog):
             message = await ctx.send(f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T'*(duration<85000)}> to join the giveaway for **{amount:,}** {coin}!")
             await message.add_reaction("🎉")
             if not admin:
-                await ctx.send(f"Btw {ctx.author.display_name}, your balance has been deducted {amount} {coin}, your new balance: {get_user_balance(guild_id, author_id):,} {coin}")
+                await ctx.send(f"Btw {ctx.author.display_name}, your balance has been deducted {amount:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}")
             # Calculate reminder intervals
             reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000)
             reminder_interval = duration // reminders_to_send - min(5, duration // 10)
@@ -1629,9 +1636,10 @@ class Currency(commands.Cog):
                 winner_id = str(winner.id)
                 make_sure_user_has_currency(guild_id, winner_id, save=False)
                 add_coins_to_user(guild_id, winner_id, amount)  # save file
-                await message.reply(f"# 🎉 Congratulations {winner.mention}, you won **{amount}** {coin}!\nYour new balance: {get_user_balance(guild_id, winner_id):,} {coin}")
+                await message.reply(f"# 🎉 Congratulations {winner.mention}, you won **{amount:,}** {coin}!\nBalance: {get_user_balance(guild_id, winner_id):,} {coin}")
             else:
-                add_coins_to_user(guild_id, author_id, amount)
+                if not admin:
+                    add_coins_to_user(guild_id, author_id, amount)
                 await message.reply(f"No one participated in the giveaway{f', {ctx.author.mention} you have been refunded' * (not admin)} {pepela}")
             if running_giveaways.get(guild_id).get(author_id) == amount:
                 running_giveaways[guild_id].pop(author_id)
@@ -1668,30 +1676,34 @@ class Currency(commands.Cog):
         guild_id = str(ctx.guild.id)
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
-            if ctx.author.id in allowed_users:
-                if mentions := ctx.message.mentions:
-                    target_id = str(mentions[0].id)
-                    contents = ctx.message.content.split()[1:]
-                    for i in contents:
-                        if i.isdecimal():
-                            number = int(i)
-                            break
-                    else:
-                        await ctx.reply("Please include the amount you'd like to bless the user with")
-                        return
-                else:
-                    await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+            if ctx.author.id not in allowed_users:
+                await ctx.reply(f"You can't use this command due to lack of permissions :3")
+                return
+
+            if mentions := ctx.message.mentions:
+                target_id = str(mentions[0].id)
+                contents = ctx.message.content.split()[1:]
+                number, _, _ = convert_msg_to_number(contents, guild_id, target_id)
+                if number == -1:
+                    await ctx.reply("Please include the amount you'd like to bless the user with")
                     return
 
-                try:
-                    make_sure_user_has_currency(guild_id, target_id, save=False)
-                    add_coins_to_user(guild_id, target_id, number)  # save file
-                    num = get_user_balance(guild_id, target_id)
-                    await ctx.reply(f"## Blessing successful!\n\n**{mentions[0].display_name}:** +{number:,} {coin}\nBalance: {num:,} {coin}")
-                except:
-                    await ctx.reply("Blessing failed!")
+                if number == 0:
+                    number = random.randint(100, 200)
+                    await ctx.reply(f"That's so mean I will not allow this {stopbeingmean}\nIn fact I'm gonna bless {mentions[0].display_name} myself for {number} {coin}")
+
             else:
-                await ctx.reply(f"You can't use this command due to lack of permissions :3")
+                await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+                return
+
+            try:
+                make_sure_user_has_currency(guild_id, target_id, save=False)
+                add_coins_to_user(guild_id, target_id, number)  # save file
+                num = get_user_balance(guild_id, target_id)
+                await ctx.reply(f"## Blessing successful!\n\n**{mentions[0].display_name}:** +{number:,} {coin}\nBalance: {num:,} {coin}")
+            except:
+                await ctx.reply("Blessing failed!")
+
         elif not dev_check:
             await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
 
@@ -1705,32 +1717,29 @@ class Currency(commands.Cog):
         guild_id = str(ctx.guild.id)
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
-            if ctx.author.id in allowed_users:
-                if mentions := ctx.message.mentions:
-                    target_id = str(mentions[0].id)
-                    contents = ctx.message.content.split()[1:]
-                    for i in contents:
-                        if i.isdecimal():
-                            number = int(i)
-                            break
-                    else:
-                        await ctx.reply("Please include the amount you'd like to curse the user out of")
-                        return
-                else:
-                    await ctx.reply("Something went wrong, please make sure that the command has a user mention")
-                    return
-
-                try:
-                    make_sure_user_has_currency(guild_id, target_id, save=False)
-                    current_balance = get_user_balance(guild_id, target_id)
-                    number = min(current_balance, number)
-                    remove_coins_from_user(guild_id, target_id, number)  # save file
-                    num = get_user_balance(guild_id, target_id)
-                    await ctx.reply(f"## Curse successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}")
-                except:
-                    await ctx.reply("Curse failed!")
-            else:
+            if ctx.author.id not in allowed_users:
                 await ctx.reply(f"You can't use this command due to lack of permissions :3")
+                return
+            if mentions := ctx.message.mentions:
+                target_id = str(mentions[0].id)
+                contents = ctx.message.content.split()[1:]
+                number, _, _ = convert_msg_to_number(contents, guild_id, target_id)
+                if number == -1:
+                    await ctx.reply("Please include the amount you'd like to curse the user out of")
+                    return
+            else:
+                await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+                return
+
+            try:
+                make_sure_user_has_currency(guild_id, target_id, save=False)
+                current_balance = get_user_balance(guild_id, target_id)
+                number = min(current_balance, number)
+                remove_coins_from_user(guild_id, target_id, number)  # save file
+                num = get_user_balance(guild_id, target_id)
+                await ctx.reply(f"## Curse successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}")
+            except:
+                await ctx.reply("Curse failed!")
         elif not dev_check:
             await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
 
