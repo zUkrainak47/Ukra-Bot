@@ -710,15 +710,15 @@ async def segs(ctx):
 
         role_name = role.name
         shadow_realm = discord.utils.get(ctx.guild.roles, name="Shadow Realm")
-        condition = role not in caller.roles
+        # condition = role not in caller.roles
 
         if not mentions:
             await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
             await log_channel.send(f"❓ {caller.mention} tried to segs in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
 
-        elif not condition:
-            await ctx.send(f"Segsed people can't segs, dummy {pepela}")
-            await log_channel.send(f'❌ {caller.mention} tried to segs in {ctx.channel.mention} but they were segsed themselves ({ctx.guild.name} - {ctx.guild.id})')
+        # elif not condition:
+        #     await ctx.send(f"Segsed people can't segs, dummy {pepela}")
+        #     await log_channel.send(f'❌ {caller.mention} tried to segs in {ctx.channel.mention} but they were segsed themselves ({ctx.guild.name} - {ctx.guild.id})')
 
         else:
             target = mentions[0]
@@ -799,15 +799,15 @@ async def backshot(ctx):
 
         role_name = role.name
         shadow_realm = discord.utils.get(ctx.guild.roles, name="Shadow Realm")
-        condition = role not in caller.roles
+        # condition = role not in caller.roles
 
         if not mentions:
             await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
             await log_channel.send(f"❓ {caller.mention} tried to to give devious backshots in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
 
-        elif not condition:
-            await ctx.send(f"Backshotted people can't backshoot, dummy {pepela}")
-            await log_channel.send(f'❌ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but they were backshotted themselves ({ctx.guild.name} - {ctx.guild.id})')
+        # elif not condition:
+        #     await ctx.send(f"Backshotted people can't backshoot, dummy {pepela}")
+        #     await log_channel.send(f'❌ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but they were backshotted themselves ({ctx.guild.name} - {ctx.guild.id})')
 
         else:
             target = mentions[0]
