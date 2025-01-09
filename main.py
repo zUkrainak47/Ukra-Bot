@@ -20,6 +20,8 @@ dev_mode = False
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 server_settings = {}
+global_currency = {}
+daily_streaks = {}
 user_last_used = {}
 user_last_used_w = {}
 allowed_users = [369809123925295104]
@@ -66,11 +68,27 @@ else:
     server_settings = {}
 
 
+CURRENCY_FILE = Path("dev", "global_currency.json")
+if os.path.exists(CURRENCY_FILE):
+    with open(CURRENCY_FILE, "r") as file:
+        global_currency = json.load(file)
+else:
+    global_currency = {}
+
+
+DAILY_FILE = Path("dev", "daily_streaks.json")
+if os.path.exists(DAILY_FILE):
+    with open(DAILY_FILE, "r") as file:
+        daily_streaks = json.load(file)
+else:
+    daily_streaks = {}
+
+
 LAST_USED_FILE = Path("dev", "last_used.json")
 if os.path.exists(LAST_USED_FILE):
     with open(LAST_USED_FILE, "r") as file:
         data = json.load(file)
-        user_last_used = {guild_id: {user_id: datetime.fromisoformat(last_used) for user_id, last_used in data_.items()} for guild_id, data_ in data.items()}
+        user_last_used = {user_id: datetime.fromisoformat(last_used) for user_id, last_used in data.items()}
 else:
     user_last_used = {}
 
@@ -79,7 +97,7 @@ LAST_USED_W_FILE = Path("dev", "last_used_w.json")
 if os.path.exists(LAST_USED_W_FILE):
     with open(LAST_USED_W_FILE, "r") as file:
         data = json.load(file)
-        user_last_used_w = {guild_id: {user_id: datetime.fromisoformat(last_used_w) for user_id, last_used_w in data_.items()} for guild_id, data_ in data.items()}
+        user_last_used_w = {user_id: datetime.fromisoformat(last_used_w) for user_id, last_used_w in data.items()}
 else:
     user_last_used_w = {}
 
@@ -116,26 +134,30 @@ def save_settings():
         json.dump(server_settings, file, indent=4)
 
 
+def save_currency():
+    with open(CURRENCY_FILE, "w") as file:
+        json.dump(global_currency, file, indent=4)
+
+
+def save_daily():
+    with open(DAILY_FILE, "w") as file:
+        json.dump(daily_streaks, file, indent=4)
+
+
 def save_last_used():
     serializable_data = {
-        guild_id: {
             user_id: last_used.isoformat()
-            for user_id, last_used in user_data.items()
+            for user_id, last_used in user_last_used.items()
         }
-        for guild_id, user_data in user_last_used.items()
-    }
     with open(LAST_USED_FILE, "w") as file:
         json.dump(serializable_data, file, indent=4)
 
 
 def save_last_used_w():
     serializable_data = {
-        guild_id: {
             user_id: last_used_w.isoformat()
-            for user_id, last_used_w in user_data.items()
+            for user_id, last_used_w in user_last_used_w.items()
         }
-        for guild_id, user_data in user_last_used_w.items()
-    }
     with open(LAST_USED_W_FILE, "w") as file:
         json.dump(serializable_data, file, indent=4)
 
@@ -156,22 +178,34 @@ def save_active_giveaways():
 
 
 def make_sure_server_settings_exist(guild_id, save=True):
+    """
+    Makes sure the server settings exist, saves them to file by default, returns list of users in server
+    """
     server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands)
-    server_settings.get(guild_id).setdefault('currency', {})
-    server_settings.get(guild_id).setdefault('daily_streak', {})
+    server_settings.get(guild_id).setdefault('members', [])
     if save:
         save_settings()
+    return server_settings.get(guild_id).get('members')
 
 
-def make_sure_user_has_currency(guild_: str, user_: str, save=True):
+def make_sure_user_has_currency(guild_: str, user_: str):
     """
+    Makes sure server settings exists
+    Makes sure user exists in guild
+    Makes sure user has a daily streak
     Makes sure user has coins, returns their coins
+    Returns user's balance
     """
-    make_sure_server_settings_exist(guild_, False)
-    server_settings.get(guild_).get('currency').setdefault(user_, 750)
-    if save:
+    if user_ not in make_sure_server_settings_exist(guild_, save=False):
+        server_settings[guild_]['members'].append(user_)
         save_settings()
-    return server_settings.get(guild_).get('currency').get(user_)
+    if global_currency.setdefault(user_, 750) == 750:
+        save_currency()
+    if daily_streaks.setdefault(user_, 0) == 0:
+        save_daily()
+    # if save:
+    #     save_currency()
+    return global_currency.get(user_)
 
 
 def get_daily_reset_timestamp():
@@ -225,7 +259,7 @@ def convert_msg_to_number(message: list, guild: str, user: str, ignored_sources=
     Takes user command message's split(), returns the (non-negative) number user input, the source, and the original string
     returns -1, 0, 0 if unsuccessful
     """
-    user_bal = server_settings.get(guild).get('currency').get(user)
+    user_bal = global_currency.get(user)
     if ignored_sources is None:
         ignored_sources = []
     for i in message:
@@ -317,8 +351,8 @@ async def on_ready():
                 continue
             this_guild_giveaways = active_giveaways.get(guild_id)
             for user_id, amount in this_guild_giveaways.items():
-                member = await guild.fetch_member(int(user_id))
-                add_coins_to_user(guild_id, user_id, amount)
+                member = guild.get_member(int(user_id))
+                add_coins_to_user(guild_id, user_id, amount)  # save file
                 active_giveaways[guild_id].pop(user_id)
                 save_active_giveaways()  # I don't like this, but it doesn't seem to work otherwise
                 await member.send(f'You have been refunded **{amount:,}** {coin} for giveaways you hosted in **{guild.name}**, they was canceled due to a bot reset')
@@ -821,14 +855,14 @@ def dev_mode_check(guild_):
 
 
 def get_user_balance(guild_: str, user_: str):
-    return server_settings.get(guild_).get('currency').get(user_)
+    return global_currency.get(user_)
 
 
 def add_coins_to_user(guild_: str, user_: str, coin_: int, save=True):
-    make_sure_user_has_currency(guild_, user_, save=save)
-    server_settings[guild_]['currency'][user_] += coin_
+    make_sure_user_has_currency(guild_, user_)
+    global_currency[user_] += coin_
     if save:
-        save_settings()
+        save_currency()
 
 
 def remove_coins_from_user(guild_: str, user_: str, coin_: int, save=True):
@@ -851,12 +885,12 @@ class Currency(commands.Cog):
         if currency_allowed(guild_id) and dev_check:
             if mentions := ctx.message.mentions:
                 member_id = str(mentions[0].id)
-                num = make_sure_user_has_currency(guild_id, member_id)  # save file
+                num = make_sure_user_has_currency(guild_id, member_id)
                 await ctx.reply(f"**{mentions[0].display_name}'s balance:** {num:,} {coin}")
 
             else:
                 author_id = str(ctx.author.id)
-                num = make_sure_user_has_currency(guild_id, author_id)  # save file
+                num = make_sure_user_has_currency(guild_id, author_id)
                 await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
         elif not dev_check:
             await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
@@ -885,15 +919,18 @@ class Currency(commands.Cog):
             cooldowns_status.append('')
             now = datetime.now()
 
-            last_used = user_last_used.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(days=2))
-            user_streak = server_settings.get(guild_id).get('daily_streak').setdefault(author_id, 0)
+            last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=2))
+            # user_streak = server_settings.get(guild_id).get('daily_streak').setdefault(author_id, 0)
+            user_streak = daily_streaks.setdefault(author_id, 0)
+            if user_streak == 0:
+                save_daily()
             if last_used.date() == now.date():
                 daily_reset = get_daily_reset_timestamp()
                 cooldowns_status.append(f"`Daily: ` <t:{daily_reset}:R>, your current streak is **{user_streak}**")
             else:
                 cooldowns_status.append(f"`Daily: ` no cooldown!, your current streak is **{user_streak}**")
 
-            last_used_w = user_last_used_w.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(weeks=1))
+            last_used_w = user_last_used_w.setdefault(author_id, datetime.today() - timedelta(weeks=1))
             start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
             if last_used_w >= start_of_week:
                 reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
@@ -907,7 +944,7 @@ class Currency(commands.Cog):
             await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
 
     @commands.command()
-    @commands.cooldown(rate=1, per=20, type=commands.BucketType.member)
+    @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
     async def dig(self, ctx):
         """
         Dig and get a very small number of coins
@@ -918,7 +955,7 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id, save=False)
+            make_sure_user_has_currency(guild_id, author_id)
             dig_coins = int(random.randint(1, 400)**0.5)
             if dig_coins == 20:
                 dig_coins = 2500
@@ -942,7 +979,7 @@ class Currency(commands.Cog):
             raise error  # Re-raise other errors to let the default handler deal with them
 
     @commands.command(aliases=['m'])
-    @commands.cooldown(rate=1, per=120, type=commands.BucketType.member)
+    @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
     async def mine(self, ctx):
         """
         Mine and get a small number of coins
@@ -953,7 +990,7 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id, save=False)
+            make_sure_user_has_currency(guild_id, author_id)
             t = random.randint(1, 625)
             mine_coins = int(t**0.5 * 2)
             if mine_coins == 50:
@@ -981,7 +1018,7 @@ class Currency(commands.Cog):
             raise error  # Re-raise other errors to let the default handler deal with them
 
     @commands.command(aliases=['w'])
-    @commands.cooldown(rate=1, per=300, type=commands.BucketType.member)
+    @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
     async def work(self, ctx):
         """
         Work and get a small number of coins
@@ -991,7 +1028,7 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id, save=False)
+            make_sure_user_has_currency(guild_id, author_id)
             work_coins = random.randint(45, 55)
             add_coins_to_user(guild_id, author_id, work_coins)  # save file
             await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
@@ -1009,19 +1046,19 @@ class Currency(commands.Cog):
             raise error  # Re-raise other errors to let the default handler deal with them
 
     @commands.command(aliases=['fish', 'f'])
-    @commands.cooldown(rate=1, per=600, type=commands.BucketType.member)
+    @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
     async def fishinge(self, ctx):
         """
         Fish and get a random number of coins from 1 to 167
         If the amount of coins chosen was 167, you get a random number of coins from 7,500 to 12,500
-        If the amount chosen was 12,500 you get 2,500,500 coins
+        If the amount chosen was 12,500 you win 25,000,000 coins
         Has a 10-minute cooldown
         """
         guild_id = str(ctx.guild.id)
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id, save=False)
+            make_sure_user_has_currency(guild_id, author_id)
             fish_coins = random.randint(1, 167)
             if fish_coins == 167:
                 fish_coins = random.randint(7500, 12500)
@@ -1064,25 +1101,25 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id, save=False)
-            user_streak = server_settings.get(guild_id).get('daily_streak').setdefault(author_id, 0)
+            make_sure_user_has_currency(guild_id, author_id)
+            user_streak = daily_streaks.setdefault(author_id, 0)
             now = datetime.now()
-            last_used = user_last_used.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(days=2))
+            last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=2))
             # print((now - timedelta(days=1)).date())
             if last_used.date() == now.date():
                 await ctx.reply(f"You can use `daily` again <t:{get_daily_reset_timestamp()}:R>\nYour current streak is **{user_streak:,}**")
                 return
             if last_used.date() == (now - timedelta(days=1)).date():
-                server_settings[guild_id]['daily_streak'][author_id] += 1
+                daily_streaks[author_id] += 1
                 streak_msg = f"Streak extended to `{user_streak+1}`"
             else:
-                server_settings[guild_id]['daily_streak'][author_id] = 1
+                daily_streaks[author_id] = 1
                 streak_msg = "Streak set to `1`"
-            user_streak = server_settings.get(guild_id).get('daily_streak').get(author_id)
+            user_streak = daily_streaks.get(author_id)
 
             today_coins = random.randint(140, 260)
             add_coins_to_user(guild_id, author_id, int(today_coins * user_streak**0.5))  # save file
-            user_last_used[guild_id][author_id] = now
+            user_last_used[author_id] = now
             save_last_used()
             await ctx.reply(f"# Daily {coin} claimed! {streak_msg}\n**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{int(today_coins * (user_streak**0.5 - 1)):,} {coin} streak bonus = {int(today_coins * user_streak**0.5):,} {coin})\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can use this command again <t:{get_daily_reset_timestamp()}:R>")
         elif not dev_check:
@@ -1097,11 +1134,11 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id, save=False)
+            make_sure_user_has_currency(guild_id, author_id)
 
             now = datetime.now()
             # Get the last reset time
-            last_used_w = user_last_used_w.setdefault(guild_id, {}).setdefault(author_id, datetime.today() - timedelta(weeks=1))
+            last_used_w = user_last_used_w.setdefault(author_id, datetime.today() - timedelta(weeks=1))
 
             # Calculate the start of the current week (Monday 12 AM)
             start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
@@ -1114,7 +1151,7 @@ class Currency(commands.Cog):
             # Award coins and update settings
             weekly_coins = random.randint(1500, 2500)  # Adjust reward range as desired
             add_coins_to_user(guild_id, author_id, weekly_coins)  # save file
-            user_last_used_w[guild_id][author_id] = now
+            user_last_used_w[author_id] = now
             save_last_used_w()
 
             # Send confirmation message
@@ -1133,7 +1170,7 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)  # save file
+            make_sure_user_has_currency(guild_id, author_id)
             if mentions := ctx.message.mentions:
                 target_id = str(mentions[0].id)
                 if mentions[0].id == ctx.author.id:
@@ -1146,7 +1183,7 @@ class Currency(commands.Cog):
 
                 number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
                 if number == -1:
-                    await ctx.reply("Please include the amount you'd like to give")
+                    await ctx.reply("Please include the amount you'd like the give")
                     return
                 if not number:
                     await ctx.reply("You gotta send something at least")
@@ -1156,11 +1193,11 @@ class Currency(commands.Cog):
                 return
 
             try:
-                make_sure_user_has_currency(guild_id, target_id)  # save file
+                make_sure_user_has_currency(guild_id, target_id)
                 if number <= get_user_balance(guild_id, author_id):
                     add_coins_to_user(guild_id, target_id, number, save=False)
                     remove_coins_from_user(guild_id, author_id, number, save=False)
-                    save_settings()  # save file
+                    save_currency()  # save file
                     num1 = get_user_balance(guild_id, author_id)
                     num2 = get_user_balance(guild_id, target_id)
                     await ctx.reply(f"## Transaction successful!\n\n**{ctx.author.display_name}:** {num1:,} {coin}\n**{mentions[0].display_name}:** {num2:,} {coin}")
@@ -1174,31 +1211,68 @@ class Currency(commands.Cog):
     @commands.command(aliases=['lb'])
     async def leaderboard(self, ctx):
         """
-        View the top 10 richest user of the server
+        View the top 10 richest users of the server
         """
         guild_id = str(ctx.guild.id)
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)  # save file
-            members = server_settings.get(guild_id).get('currency')
-            sorted_members = sorted(list(members.items()), key=lambda x: x[1], reverse=True)[:50]
+            make_sure_user_has_currency(guild_id, author_id)
+            members = server_settings.get(guild_id).get('members')
+            sorted_members = sorted(members, key=lambda x: global_currency[x], reverse=True)[:25]
+            #  FIXME probably not the best approach
             top_users = []
-            for member_id, coins in sorted_members:
+            c = 0
+            for member_id in sorted_members:
+                coins = get_user_balance(guild_id, member_id)
+                if c == 10:
+                    break
                 try:
                     member = ctx.guild.get_member(int(member_id))
                     if int(member_id) != ctx.author.id:
                         top_users.append([member.display_name, coins])
                     else:
                         top_users.append([f"{member.mention}", coins])
-
+                    c += 1
                 except discord.NotFound:
-                    pass
-            top_users = top_users[:10]
+                    server_settings[guild_id]['members'].remove(member_id)
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
             await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{str(index) + ' -' if index not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
         elif not dev_check:
             await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+
+    @commands.cooldown(rate=1, per=15, type=commands.BucketType.guild)
+    @commands.command(aliases=['glb'])
+    async def global_leaderboard(self, ctx):
+        """
+        View the top 10 richest users of the bot globally
+        """
+        guild_id = str(ctx.guild.id)
+        dev_check = dev_mode_check(guild_id)
+        if currency_allowed(guild_id) and dev_check:
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            sorted_members = sorted(global_currency.items(), key=lambda x: x[1], reverse=True)[:10]
+            #  FIXME probably not the best approach
+            top_users = []
+            for user_id, coins in sorted_members:
+                try:
+                    user = await self.bot.fetch_user(int(user_id))
+                    if int(user_id) != ctx.author.id:
+                        name_ = user.global_name or user.name
+                        top_users.append([name_, coins])
+                    else:
+                        top_users.append([f"{user.mention}", coins])
+                except discord.NotFound:
+                    pass
+            number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
+            await ctx.send(f"## Top {len(top_users)} Richest Users (Globally):\n{'\n'.join([f"**{str(index) + ' -' if index not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
+        elif not dev_check:
+            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+
+    @global_leaderboard.error
+    async def global_leaderboard_error(self, ctx, error):
+        await ctx.reply("Please don't spam this command. It has already been used within the last 15 seconds")
 
     @commands.command(aliases=['coin', 'c'])
     async def coinflip(self, ctx):
@@ -1213,7 +1287,7 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)  # save file
+            make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
             if len(contents) > 2:
                 await ctx.reply(f"!coinflip takes at most 2 arguments - a prediction and a bet\n({len(contents)} arguments were passed)")
@@ -1281,7 +1355,7 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)  # save file
+            make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
             if len(contents) > 1:
                 await ctx.reply(f"!gamble takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
@@ -1317,7 +1391,7 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)  # save file
+            make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
             if len(contents) > 1:
                 await ctx.reply(f"!dice takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
@@ -1359,7 +1433,7 @@ class Currency(commands.Cog):
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)  # save file
+            make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
             if len(contents) > 1:
                 await ctx.reply(f"!twodice takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
@@ -1399,7 +1473,7 @@ class Currency(commands.Cog):
         if currency_allowed(guild_id) and dev_check:
             active_pvp_requests.setdefault(guild_id, set())
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)  # save file
+            make_sure_user_has_currency(guild_id, author_id)
             if ctx.author.id in active_pvp_requests.get(guild_id):
                 await ctx.reply(f"You already have a pvp request pending")
                 return
@@ -1417,7 +1491,7 @@ class Currency(commands.Cog):
                     await ctx.reply(f"!pvp takes at most 2 arguments - a user mention and a bet\n({len(contents)} arguments were passed)")
                     return
 
-                make_sure_user_has_currency(guild_id, target_id)  # save file
+                make_sure_user_has_currency(guild_id, target_id)
                 number, source, msg = convert_msg_to_number(contents, guild_id, author_id)
                 if source == '%':
                     number = int(min(get_user_balance(guild_id, author_id),
@@ -1482,7 +1556,7 @@ class Currency(commands.Cog):
                         for_target = -number * result
                         add_coins_to_user(guild_id, author_id, for_author, save=False)
                         add_coins_to_user(guild_id, target_id, for_target, save=False)
-                        save_settings()  # save file
+                        save_currency()  # save file
                         num1 = get_user_balance(guild_id, str(winner.id))
                         num2 = get_user_balance(guild_id, str(loser.id))
                         await ctx.reply(
@@ -1662,7 +1736,7 @@ class Currency(commands.Cog):
             if participants:
                 winner = random.choice(participants)
                 winner_id = str(winner.id)
-                make_sure_user_has_currency(guild_id, winner_id, save=False)
+                make_sure_user_has_currency(guild_id, winner_id)
                 add_coins_to_user(guild_id, winner_id, amount)  # save file
                 await message.reply(f"# 🎉 Congratulations {winner.mention}, you won **{amount:,}** {coin}!\nBalance: {get_user_balance(guild_id, winner_id):,} {coin}")
             else:
@@ -1729,7 +1803,7 @@ class Currency(commands.Cog):
                 return
 
             try:
-                make_sure_user_has_currency(guild_id, target_id, save=False)
+                make_sure_user_has_currency(guild_id, target_id)
                 add_coins_to_user(guild_id, target_id, number)  # save file
                 num = get_user_balance(guild_id, target_id)
                 await ctx.reply(f"## Blessing successful!\n\n**{mentions[0].display_name}:** +{number:,} {coin}\nBalance: {num:,} {coin}")
@@ -1768,8 +1842,7 @@ class Currency(commands.Cog):
                 return
 
             try:
-                make_sure_user_has_currency(guild_id, target_id, save=False)
-                current_balance = get_user_balance(guild_id, target_id)
+                current_balance = make_sure_user_has_currency(guild_id, target_id)
                 number = min(current_balance, number)
                 remove_coins_from_user(guild_id, target_id, number)  # save file
                 num = get_user_balance(guild_id, target_id)
