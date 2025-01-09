@@ -1140,9 +1140,13 @@ class Currency(commands.Cog):
                     await ctx.reply(f"You can't send {coin} to yourself, silly")
                     return
                 contents = ctx.message.content.split()[1:]
+                if len(contents) != 2:
+                    await ctx.reply(f"!give takes exactly 2 arguments - a user mention and the amount\n({len(contents)} arguments were passed)")
+                    return
+
                 number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
                 if number == -1:
-                    await ctx.reply("Please include the amount you'd like the give")
+                    await ctx.reply("Please include the amount you'd like to give")
                     return
                 if not number:
                     await ctx.reply("You gotta send something at least")
@@ -1211,6 +1215,10 @@ class Currency(commands.Cog):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)  # save file
             contents = ctx.message.content.split()[1:]
+            if len(contents) > 2:
+                await ctx.reply(f"!coinflip takes at most 2 arguments - a prediction and a bet\n({len(contents)} arguments were passed)")
+                return
+
             if not len(contents):
                 await ctx.reply(f"## Result is `{result.capitalize()}`!")
                 return
@@ -1275,6 +1283,9 @@ class Currency(commands.Cog):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)  # save file
             contents = ctx.message.content.split()[1:]
+            if len(contents) > 1:
+                await ctx.reply(f"!gamble takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
+                return
             number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
             if number == -1:
                 number = 0
@@ -1308,6 +1319,10 @@ class Currency(commands.Cog):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)  # save file
             contents = ctx.message.content.split()[1:]
+            if len(contents) > 1:
+                await ctx.reply(f"!dice takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
+                return
+
             number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
             if number == -1:
                 number = 0
@@ -1346,6 +1361,10 @@ class Currency(commands.Cog):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)  # save file
             contents = ctx.message.content.split()[1:]
+            if len(contents) > 1:
+                await ctx.reply(f"!twodice takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
+                return
+
             number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
             if number == -1:
                 number = 0
@@ -1394,6 +1413,10 @@ class Currency(commands.Cog):
                     return
 
                 contents = ctx.message.content.split()[1:]
+                if len(contents) > 2:
+                    await ctx.reply(f"!pvp takes at most 2 arguments - a user mention and a bet\n({len(contents)} arguments were passed)")
+                    return
+
                 make_sure_user_has_currency(guild_id, target_id)  # save file
                 number, source, msg = convert_msg_to_number(contents, guild_id, author_id)
                 if source == '%':
@@ -1510,6 +1533,10 @@ class Currency(commands.Cog):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
+            if len(contents) > 1:
+                await ctx.reply(f"!slots takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
+                return
+
             number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
             if number == -1:
                 number = 0
@@ -1684,6 +1711,10 @@ class Currency(commands.Cog):
             if mentions := ctx.message.mentions:
                 target_id = str(mentions[0].id)
                 contents = ctx.message.content.split()[1:]
+                if len(contents) != 2:
+                    await ctx.reply(f"!bless takes exactly 2 arguments - a user mention and an amount of coins\n({len(contents)} arguments were passed)")
+                    return
+
                 number, _, _ = convert_msg_to_number(contents, guild_id, target_id)
                 if number == -1:
                     await ctx.reply("Please include the amount you'd like to bless the user with")
@@ -1724,6 +1755,10 @@ class Currency(commands.Cog):
             if mentions := ctx.message.mentions:
                 target_id = str(mentions[0].id)
                 contents = ctx.message.content.split()[1:]
+                if len(contents) != 2:
+                    await ctx.reply("!curse takes exactly 2 arguments - a user mention and an amount of coins\n({len(contents)} arguments were passed)")
+                    return
+
                 number, _, _ = convert_msg_to_number(contents, guild_id, target_id)
                 if number == -1:
                     await ctx.reply("Please include the amount you'd like to curse the user out of")
