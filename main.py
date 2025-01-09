@@ -1467,7 +1467,6 @@ class Currency(commands.Cog):
         !pvp @user number
         """
         results = [1, -1]
-        result = random.choice(results)
         guild_id = str(ctx.guild.id)
         dev_check = dev_mode_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
@@ -1518,8 +1517,6 @@ class Currency(commands.Cog):
             active_pvp_requests.get(guild_id).add(mentions[0].id)
             active_pvp_requests.get(guild_id).add(ctx.author.id)
 
-            winner = ctx.author if result == 1 else mentions[0]
-            loser = ctx.author if result == -1 else mentions[0]
             try:
                 if mentions[0].id == bot_id:
                     bot_challenged = True
@@ -1532,8 +1529,8 @@ class Currency(commands.Cog):
                     await react_to.add_reaction('❌')
 
                     def check(reaction, user):
-                        return (user == mentions[0] and
-                                str(reaction.emoji) in ['✅', '❌'] and
+                        return ((user == mentions[0] and str(reaction.emoji) in ['✅', '❌']) or
+                                (user == ctx.author and str(reaction.emoji) == '❌') and
                                 reaction.message.id == react_to.id)
                 else:
                     bot_challenged = False
@@ -1541,7 +1538,7 @@ class Currency(commands.Cog):
                 try:
                     if not bot_challenged and (number > 0):
                         reaction, user = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
-                    if bot_challenged or (number in (0, -1)) or str(reaction.emoji) == '✅':
+                    if bot_challenged or (number in (0, -1)) or (str(reaction.emoji) == '✅' and user == mentions[0]):
                         if number > get_user_balance(guild_id, author_id):
                             active_pvp_requests.get(guild_id).discard(mentions[0].id)
                             active_pvp_requests.get(guild_id).discard(ctx.author.id)
@@ -1552,6 +1549,9 @@ class Currency(commands.Cog):
                             active_pvp_requests.get(guild_id).discard(ctx.author.id)
                             await ctx.reply(f"PVP failed! **{mentions[0].display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
                             return
+                        result = random.choice(results)
+                        winner = ctx.author if result == 1 else mentions[0]
+                        loser = ctx.author if result == -1 else mentions[0]
                         for_author = number * result
                         for_target = -number * result
                         add_coins_to_user(guild_id, author_id, for_author, save=False)
@@ -1567,8 +1567,13 @@ class Currency(commands.Cog):
                         active_pvp_requests.get(guild_id).discard(mentions[0].id)
                         active_pvp_requests.get(guild_id).discard(ctx.author.id)
 
-                    else:
+                    elif str(reaction.emoji) == '❌' and user == mentions[0]:
                         await ctx.reply(f"{mentions[0].display_name} declined the PVP request")
+                        active_pvp_requests.get(guild_id).discard(mentions[0].id)
+                        active_pvp_requests.get(guild_id).discard(ctx.author.id)
+
+                    elif str(reaction.emoji) == '❌' and user == ctx.author:
+                        await ctx.reply(f"{ctx.author.display_name} canceled the PVP request")
                         active_pvp_requests.get(guild_id).discard(mentions[0].id)
                         active_pvp_requests.get(guild_id).discard(ctx.author.id)
 
@@ -1587,6 +1592,7 @@ class Currency(commands.Cog):
                 if mentions[0].id == ctx.author.id:
                     await ctx.reply("You can't pvp yourself, silly")
                     return
+                result = random.choice(results)
                 winner = ctx.author if result == 1 else mentions[0]
                 await ctx.reply(f"## PVP winner is **{winner.display_name}**!")
             else:
