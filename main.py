@@ -15,7 +15,9 @@ import atexit
 from pathlib import Path
 start = time.perf_counter()
 
-dev_mode = False
+bot_name = 'Ukra Bot'
+bot_down = False
+reason = f'{bot_name} is in Development Mode'
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -26,7 +28,6 @@ user_last_used = {}
 user_last_used_w = {}
 allowed_users = [369809123925295104]
 bot_id = 1322197604297085020
-bot_name = 'Ukra Bot'
 allow_dict = {True:  "Enabled ",
               False: "Disabled"}
 
@@ -486,7 +487,7 @@ async def botpp(ctx):
 
 
 @client.command()
-async def botafk(ctx):
+async def botdown(ctx):
     """
     Sends message announcing the bot is shutting down
     Only usable by bot developer
@@ -495,6 +496,11 @@ async def botafk(ctx):
         await ctx.send("You can't use this command, silly")
     else:
         await ctx.send(f"Ukra Bot is going down {o7}")
+        global bot_down, reason
+        bot_down = True
+        reason = f"{bot_name} is shutting down"
+        save_currency()
+        save_settings()
 
 
 @client.command()
@@ -847,11 +853,11 @@ def currency_allowed(guild_):
     return 'currency_system' in server_settings.get(guild_).get('allowed_commands')
 
 
-def dev_mode_check(guild_):
+def bot_down_check(guild_):
     """
     Returns True if (dev_mode is off) or (dev_mode on and guild_id is allowed)
     """
-    return (not dev_mode) or (guild_ == '692070633177350235')
+    return (not bot_down) or (guild_ == '692070633177350235')
 
 
 def get_user_balance(guild_: str, user_: str):
@@ -881,7 +887,7 @@ class Currency(commands.Cog):
         Check your or someone else's balance
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             if mentions := ctx.message.mentions:
                 member_id = str(mentions[0].id)
@@ -893,7 +899,7 @@ class Currency(commands.Cog):
                 num = make_sure_user_has_currency(guild_id, author_id)
                 await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.command(aliases=['cooldowns', 'cooldown'])
     async def cd(self, ctx):
@@ -901,7 +907,7 @@ class Currency(commands.Cog):
         Displays cooldowns for farming commands
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             tracked_commands = ['dig', 'mine', 'work', 'fish']  # Commands to include in the cooldown list
@@ -941,7 +947,7 @@ class Currency(commands.Cog):
             cooldowns_message = "## Cooldowns:\n" + "\n".join(cooldowns_status)
             await ctx.reply(cooldowns_message)
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.command()
     @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
@@ -952,7 +958,7 @@ class Currency(commands.Cog):
         Has a 20-second cooldown
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -966,7 +972,7 @@ class Currency(commands.Cog):
             add_coins_to_user(guild_id, author_id, dig_coins)  # save file
             await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can dig again {get_timestamp(20)}")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @dig.error
     async def dig_error(self, ctx, error):
@@ -987,7 +993,7 @@ class Currency(commands.Cog):
         Has a 2-minute cooldown
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1005,7 +1011,7 @@ class Currency(commands.Cog):
             add_coins_to_user(guild_id, author_id, mine_coins)  # save file
             await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can mine again {get_timestamp(120)}")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @mine.error
     async def mine_error(self, ctx, error):
@@ -1025,7 +1031,7 @@ class Currency(commands.Cog):
         Has a 5-minute cooldown
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1033,7 +1039,7 @@ class Currency(commands.Cog):
             add_coins_to_user(guild_id, author_id, work_coins)  # save file
             await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @work.error
     async def work_error(self, ctx, error):
@@ -1055,7 +1061,7 @@ class Currency(commands.Cog):
         Has a 10-minute cooldown
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1080,7 +1086,7 @@ class Currency(commands.Cog):
             add_coins_to_user(guild_id, author_id, fish_coins)  # save file
             await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @fishinge.error
     async def fishinge_error(self, ctx, error):
@@ -1098,7 +1104,7 @@ class Currency(commands.Cog):
         Claim daily coins
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1123,7 +1129,7 @@ class Currency(commands.Cog):
             save_last_used()
             await ctx.reply(f"# Daily {coin} claimed! {streak_msg}\n**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{int(today_coins * (user_streak**0.5 - 1)):,} {coin} streak bonus = {int(today_coins * user_streak**0.5):,} {coin})\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can use this command again <t:{get_daily_reset_timestamp()}:R>")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.command()
     async def weekly(self, ctx):
@@ -1131,7 +1137,7 @@ class Currency(commands.Cog):
         Claim weekly coins
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1158,7 +1164,7 @@ class Currency(commands.Cog):
             reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
             await ctx.reply(f"## Weekly {coin} claimed!\n**{ctx.author.display_name}:** +{weekly_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.command(aliases=['pay'])
     async def give(self, ctx):
@@ -1167,7 +1173,7 @@ class Currency(commands.Cog):
         !give @user <number>
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1206,7 +1212,7 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Transaction failed!")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.command(aliases=['lb'])
     async def leaderboard(self, ctx):
@@ -1214,7 +1220,7 @@ class Currency(commands.Cog):
         View the top 10 richest users of the server
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1239,7 +1245,7 @@ class Currency(commands.Cog):
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
             await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{str(index) + ' -' if index not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.cooldown(rate=1, per=15, type=commands.BucketType.guild)
     @commands.command(aliases=['glb'])
@@ -1248,7 +1254,7 @@ class Currency(commands.Cog):
         View the top 10 richest users of the bot globally
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1268,7 +1274,7 @@ class Currency(commands.Cog):
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
             await ctx.send(f"## Top {len(top_users)} Richest Users (Globally):\n{'\n'.join([f"**{str(index) + ' -' if index not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @global_leaderboard.error
     async def global_leaderboard_error(self, ctx, error):
@@ -1284,7 +1290,7 @@ class Currency(commands.Cog):
         results = ['heads', 'tails']
         result = random.choice(results)
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1339,7 +1345,7 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
         else:
             await ctx.reply(f"Result is `{random.choice(results)}`!")
 
@@ -1352,7 +1358,7 @@ class Currency(commands.Cog):
         results = [1, 0]
         result = random.choice(results)
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1375,7 +1381,7 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
     @commands.command(aliases=['d', '1d', 'onedice'])
@@ -1388,7 +1394,7 @@ class Currency(commands.Cog):
         dice_roll = random.choice(range(1, 7))
         result = (dice_roll == 6)
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1412,7 +1418,7 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @dice.error
     async def dice_error(self, ctx, error):
@@ -1430,7 +1436,7 @@ class Currency(commands.Cog):
         dice_roll_2 = random.choice(range(1, 7))
         result = (dice_roll_1 == dice_roll_2 == 6)
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1454,7 +1460,7 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @twodice.error
     async def twodice_error(self, ctx, error):
@@ -1468,7 +1474,7 @@ class Currency(commands.Cog):
         """
         results = [1, -1]
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             active_pvp_requests.setdefault(guild_id, set())
             author_id = str(ctx.author.id)
@@ -1586,7 +1592,7 @@ class Currency(commands.Cog):
                 print(e)
                 await ctx.reply("PVP failed!")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
         else:
             if mentions := ctx.message.mentions:
                 if mentions[0].id == ctx.author.id:
@@ -1608,7 +1614,7 @@ class Currency(commands.Cog):
         Has a 2-second cooldown
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1638,7 +1644,7 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Gambling failed!")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @slots.error
     async def slots_error(self, ctx, error):
@@ -1654,7 +1660,7 @@ class Currency(commands.Cog):
             await ctx.reply(f"You can't use this command due to lack of permissions :3")
             return
 
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             contents = ctx.message.content.split()[1:]
             if len(contents) != 2:
@@ -1755,7 +1761,7 @@ class Currency(commands.Cog):
                 active_giveaways[guild_id][author_id] -= amount
             save_active_giveaways()
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.command(aliases=['ga'])
     async def giveaway(self, ctx):
@@ -1782,7 +1788,7 @@ class Currency(commands.Cog):
         !bless @user <number>
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             if ctx.author.id not in allowed_users:
                 await ctx.reply(f"You can't use this command due to lack of permissions :3")
@@ -1817,7 +1823,7 @@ class Currency(commands.Cog):
                 await ctx.reply("Blessing failed!")
 
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.command()
     async def curse(self, ctx):
@@ -1827,7 +1833,7 @@ class Currency(commands.Cog):
         !curse @user <number>
         """
         guild_id = str(ctx.guild.id)
-        dev_check = dev_mode_check(guild_id)
+        dev_check = bot_down_check(guild_id)
         if currency_allowed(guild_id) and dev_check:
             if ctx.author.id not in allowed_users:
                 await ctx.reply(f"You can't use this command due to lack of permissions :3")
@@ -1856,7 +1862,7 @@ class Currency(commands.Cog):
             except:
                 await ctx.reply("Curse failed!")
         elif not dev_check:
-            await ctx.reply(f'{bot_name} is in Development Mode, currency commands are disabled')
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
 
 async def setup():
