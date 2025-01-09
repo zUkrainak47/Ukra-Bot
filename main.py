@@ -178,6 +178,17 @@ def save_active_giveaways():
         json.dump(active_giveaways, file, indent=4)
 
 
+def save_everything():
+    save_settings()
+    save_currency()
+    save_daily()
+    save_last_used()
+    save_last_used_w()
+    save_distributed_segs()
+    save_distributed_backshots()
+    save_active_giveaways()
+
+
 def make_sure_server_settings_exist(guild_id, save=True):
     """
     Makes sure the server settings exist, saves them to file by default, returns list of users in server
@@ -486,7 +497,7 @@ async def botpp(ctx):
         await ctx.send("Jarv Bot is not in the server")
 
 
-@client.command()
+@client.command(aliases=['botafk'])
 async def botdown(ctx):
     """
     Sends message announcing the bot is shutting down
@@ -499,9 +510,7 @@ async def botdown(ctx):
         global bot_down, reason
         bot_down = True
         reason = f"{bot_name} is shutting down"
-        save_currency()
-        save_settings()
-
+        save_everything()
 
 @client.command()
 async def compliment(ctx):
