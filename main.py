@@ -1026,7 +1026,7 @@ class Currency(commands.Cog):
             if fish_coins == 167:
                 fish_coins = random.randint(7500, 12500)
                 if fish_coins == 12500:
-                    fish_coins = 2500000
+                    fish_coins = 25000000
                     fish_message = f"# You found *The Catch*{The_Catch}\n"
                     ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag to your friends'
                     await log_channel.send(f"**{ctx.author.mention}** JUST WON 2.5 MILLION IN {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
@@ -1572,8 +1572,8 @@ class Currency(commands.Cog):
                 await ctx.reply("Input duration properly\nThe format is `!giveaway <amount> <duration>`\nExample of accepted duration: `5m30s`")
                 return
 
-            if duration <= 15:
-                await ctx.reply("Pls make duration longer than 15s")
+            if duration < 10:
+                await ctx.reply("Pls make duration at least 10 seconds")
                 return
 
             if duration > 604800:
@@ -1592,7 +1592,7 @@ class Currency(commands.Cog):
             if not admin:
                 await ctx.send(f"Btw {ctx.author.display_name}, your balance has been deducted {amount:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}")
             # Calculate reminder intervals
-            reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000)
+            reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
             reminder_interval = duration // reminders_to_send - min(5, duration // 10)
             reminders_sent = 0
 
@@ -1612,7 +1612,7 @@ class Currency(commands.Cog):
                 if reminders_sent < reminders_to_send:
                     next_reminder_time = duration - (reminder_interval * (reminders_sent + 1))
                     if time_remaining <= next_reminder_time:
-                        await message.reply(f"## There's a giveaway going! (Reminder {reminders_sent + 1}/{reminders_to_send})")
+                        await message.reply(f"## There's a giveaway for {amount:,} {coin} going! (Reminder {reminders_sent + 1}/{reminders_to_send})")
                         reminders_sent += 1
 
                 try:
