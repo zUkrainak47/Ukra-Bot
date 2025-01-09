@@ -2,7 +2,7 @@
 import asyncio
 import datetime
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import os
 import random
 from dotenv import load_dotenv
@@ -128,7 +128,7 @@ if os.path.exists(ACTIVE_GIVEAWAYS):
     with open(ACTIVE_GIVEAWAYS, "r") as file:
         active_giveaways = json.load(file)
 else:
-    active_giveaways = {i: {} for i in server_settings}
+    active_giveaways = {}
 
 
 def save_settings():
@@ -308,9 +308,9 @@ async def print_reset_time(r, ctx, custom_message=''):
 @client.event
 async def on_ready():
     print('Bot is up!')
-    global log_channel
+    global log_channel, rare_channel
     log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
-
+    rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
     await log_channel.send(f'{yay} {bot_name} has connected to Discord!')
     role_dict = {'backshots_role': distributed_backshots,
                  'segs_role': distributed_segs}
@@ -357,24 +357,77 @@ async def on_ready():
             # message = await log_channel.fetch_message(react_to.id)
             # await message.add_reaction('✅')
 
-    async def refund_giveaways():
-        for guild_id in active_giveaways:
-            guild = await client.fetch_guild(int(guild_id))
+    async def resume_giveaway(message_id):
+        try:
+            channel_id, guild_id, author_id, amount, end_time, remind, admin = active_giveaways[message_id]
+            guild = await client.fetch_guild(guild_id)
+            print('guild fetched - resume', guild.id, guild.name)
             if not guild:
-                continue
-            this_guild_giveaways = active_giveaways.get(guild_id)
-            for user_id, amount in this_guild_giveaways.items():
-                member = guild.get_member(int(user_id))
-                add_coins_to_user(guild_id, user_id, amount)  # save file
-                active_giveaways[guild_id].pop(user_id)
-                save_active_giveaways()  # I don't like this, but it doesn't seem to work otherwise
-                await member.send(f'You have been refunded **{amount:,}** {coin} for giveaways you hosted in **{guild.name}**, they was canceled due to a bot reset')
-                await log_channel.send(f"💸 {member.mention} has been refunded **{amount:,}** {coin} for giveaways they hosted in **{guild.name}**")
+                print(f"Error finalizing giveaway {message_id}: guild not found")
+                return
+            now = datetime.now(UTC)
+            duration = end_time - int(now.timestamp())
+            print(end_time)
+            print(int(now.timestamp()))
+            print('duration', duration)
+            if duration <= 0:
+                print('duration is negative, finalizing')
+                await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin, too_late=True)
+                return
+
+            channel = await guild.fetch_channel(channel_id)
+            if not channel:
+                print(f"Error finalizing giveaway {message_id}: channel not found")
+                return
+            print('channel fetched - resume', channel.id, channel.name)
+
+            message = await channel.fetch_message(int(message_id))
+            if not message:
+                print(f"Error finalizing giveaway {message_id}: message not found")
+                return
+            print('message fetched - resume', message.id)
+            reaction = discord.utils.get(message.reactions, emoji="🎉")
+
+            participants = [user async for user in reaction.users(limit=None) if not user.bot] if reaction else []
+            print('participants - resuming', [p.name for p in participants])
+            if remind:
+                reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
+                reminder_interval = duration // reminders_to_send
+                remind_intervals = [reminder_interval for _ in range(1, reminders_to_send + 1)]
+                print('have reminders - will not sleep - creating reminder task')
+                await asyncio.create_task(schedule_reminders(message, amount, duration, remind_intervals))
+            else:
+                print('have no reminders - getting ready to sleep', duration)
+                await asyncio.sleep(duration)
+            print('finalizing giveaway', message.id)
+            await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin)
+        except Exception as e:
+            print(f"Error resuming giveaway {message_id}: {e}")
+
+    async def resume_giveaways():
+        tasks = []
+        for message_id in active_giveaways:
+            tasks.append(asyncio.create_task(resume_giveaway(message_id)))
+        await asyncio.gather(*tasks)
+
+    # async def refund_giveaways():
+    #     for guild_id in active_giveaways:
+    #         guild = await client.fetch_guild(int(guild_id))
+    #         if not guild:
+    #             continue
+    #         this_guild_giveaways = active_giveaways.get(guild_id)
+    #         for user_id, amount in this_guild_giveaways.items():
+    #             member = guild.get_member(int(user_id))
+    #             add_coins_to_user(guild_id, user_id, amount)  # save file
+    #             active_giveaways[guild_id].pop(user_id)
+    #             save_active_giveaways()  # I don't like this, but it doesn't seem to work otherwise
+    #             await member.send(f'You have been refunded **{amount:,}** {coin} for giveaways you hosted in **{guild.name}**, they was canceled due to a bot reset')
+    #             await log_channel.send(f"💸 {member.mention} has been refunded **{amount:,}** {coin} for giveaways they hosted in **{guild.name}**")
     for role_ in role_dict:
         await remove_all_roles(role_)
         save_dict[role_]()
-
-    await refund_giveaways()
+    await resume_giveaways()
+    # await refund_giveaways()
 
 
 @client.command(aliases=['pp', 'shoot'])
@@ -417,6 +470,7 @@ async def rng(ctx):
 @client.command()
 async def server(ctx):
     """
+    You should write this command for exclusive giveaways :3
     DM's the sender a link to Ukra Bot Server
     """
     await ctx.reply(f"Check your DMs {sunfire2stonks}")
@@ -896,6 +950,76 @@ def remove_coins_from_user(guild_: str, user_: str, coin_: int, save=True):
     add_coins_to_user(guild_, user_, -coin_, save)
 
 
+async def schedule_reminders(message, amount, duration, remind_intervals):
+    reminders_sent = 0
+    for remind_time in remind_intervals:
+        await asyncio.sleep(remind_time)
+        time_remaining = duration - sum(remind_intervals[:remind_intervals.index(remind_time) + 1])
+        if time_remaining > 0:
+            reminders_sent += 1
+            await message.reply(f"## There's a giveaway for {amount:,} {coin} going! (Reminder {reminders_sent}/{len(remind_intervals)})")
+    time_remaining = duration - sum(remind_intervals)
+    await asyncio.sleep(time_remaining)
+
+
+async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, author_id: str, amount: int, admin: bool, too_late=False):
+    # Collect reactions
+    try:
+        guild = await client.fetch_guild(int(guild_id))
+        if not guild:
+            print(f"Error finalizing giveaway {message_id}: guild not found")
+            return
+        print('guild fetched - finalize', guild.name)
+
+        author = await client.fetch_user(int(author_id))
+        if not author:
+            print(f"Error finalizing giveaway {message_id}: author not found")
+            return
+
+        channel = await guild.fetch_channel(channel_id)
+        if not channel:
+            print(f"Error finalizing giveaway {message_id}: channel not found")
+            return
+        print('channel fetched - finalize', channel.id, channel.name)
+
+        message = await channel.fetch_message(int(message_id))
+        if not message:
+            print(f"Error finalizing giveaway {message_id}: giveaway message not found")
+            return
+
+        reaction = discord.utils.get(message.reactions, emoji="🎉")
+
+        participants = [user async for user in reaction.users(limit=None) if not user.bot] if reaction else []
+
+        # Announce the winner or refund
+        if participants:
+            winner = random.choice(participants)
+            winner_id = str(winner.id)
+            print('winner chosen', winner_id, 'paying out', amount, 'coins')
+            make_sure_user_has_currency(guild_id, winner_id)
+            add_coins_to_user(guild_id, winner_id, amount)  # save file
+            await message.reply(
+                f"# 🎉 Congratulations {winner.mention}, you won **{amount:,}** {coin}!\n"
+                f"Balance: {get_user_balance(guild_id, winner_id):,} {coin}" +
+                f"\nSorry for the delay btw the bot was down {sunfire2}" * too_late)
+        else:
+            print('no participants, going to refund')
+            if not admin:
+                add_coins_to_user(guild_id, author_id, amount)
+            print('refunded', author, 'from', guild.name, amount, 'coins')
+            await message.reply(
+                f"No one participated in the giveaway{f', {author.mention} you have been refunded' * (not admin)} {pepela}")
+
+        if message_id in active_giveaways:
+            active_giveaways.pop(message_id)
+            print('removing giveaway', message_id)
+            save_active_giveaways()
+        else:
+            print(message_id, 'not in active_giveaways', type(message_id), active_giveaways)
+    except Exception as e:
+        print(f"Error finalizing giveaway {message_id}: {e}")
+
+
 class Currency(commands.Cog):
     """Commands related to the currency system"""
 
@@ -987,7 +1111,7 @@ class Currency(commands.Cog):
             if dig_coins == 20:
                 dig_coins = 2500
                 dig_message = f'# You found Gold! {gold_emoji}'
-                await log_channel.send(f"**{ctx.author.mention}** found gold in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
+                await rare_channel.send(f"**{ctx.author.mention}** found Gold - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             else:
                 dig_message = f'## Digging successful! {shovel}'
             add_coins_to_user(guild_id, author_id, dig_coins)  # save file
@@ -1023,10 +1147,11 @@ class Currency(commands.Cog):
             if mine_coins == 50:
                 mine_coins = 7500
                 mine_message = f'# You found Diamonds! 💎'
-                await log_channel.send(f"**{ctx.author.mention}** found diamonds in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
+                await rare_channel.send(f"**{ctx.author.mention}** found Diamonds - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             elif t == 1:
                 mine_coins = 1
                 mine_message = f"# You struck Fool's Gold! ✨"
+                await rare_channel.send(f"**{ctx.author.mention}** struck Fool's Gold - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             else:
                 mine_message = f"## Mining successful! ⛏️\n"
             add_coins_to_user(guild_id, author_id, mine_coins)  # save file
@@ -1093,11 +1218,11 @@ class Currency(commands.Cog):
                     fish_coins = 25000000
                     fish_message = f"# You found *The Catch*{The_Catch}\n"
                     ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag to your friends'
-                    await log_channel.send(f"**{ctx.author.mention}** JUST WON 2.5 MILLION IN {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
+                    await rare_channel.send(f"@everyone **{ctx.author.mention}** JUST WON 2.5 MILLION - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
                 else:
-                    fish_message = f'# You found a huge treasure chest!!! {treasure_chest}'
+                    fish_message = f'# You found a huge Treasure Chest!!! {treasure_chest}'
                     ps_message = ''
-                    await log_channel.send(f"**{ctx.author.mention}** just found a treasure in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
+                    await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             else:
                 cast_command = ctx.message.content.split()[0].lower().lstrip('!')
                 if cast_command in ('fish', 'f'):
@@ -1138,9 +1263,11 @@ class Currency(commands.Cog):
                 return
             if last_used.date() == (now - timedelta(days=1)).date():
                 daily_streaks[author_id] += 1
+                save_daily()
                 streak_msg = f"Streak extended to `{user_streak+1}`"
             else:
                 daily_streaks[author_id] = 1
+                save_daily()
                 streak_msg = "Streak set to `1`"
             user_streak = daily_streaks.get(author_id)
 
@@ -1656,10 +1783,10 @@ class Currency(commands.Cog):
                     delta = 500 * number if ((results[0] == sunfire2) and result) else 50 * number if result else -number
                     add_coins_to_user(guild_id, author_id, delta)  # save file
                     num = get_user_balance(guild_id, author_id)
-                    messages_dict = {True: f"# {' | '.join(results)}\n## You win{' BIG' * (results[0] == sunfire2)}!", False: f"# {' | '.join(results)}\n## You lose!"}
+                    messages_dict = {True: f"# {' | '.join(results)}\n## You win{' **BIG**' * (results[0] == sunfire2)}!", False: f"# {' | '.join(results)}\n## You lose!"}
                     await ctx.reply(f"{messages_dict[result]}\n" + f"**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number != 0))
                     if result:
-                        await log_channel.send(f"**{ctx.author.mention}** actually won the slot wheel in {ctx.channel.mention} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name} - {ctx.guild.id})")
+                        await rare_channel.send(f"**{ctx.author.mention}** won{' **BIG**' * (results[0] == sunfire2)} in Slots - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
                 else:
                     await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
@@ -1726,76 +1853,30 @@ class Currency(commands.Cog):
 
             # Announce the giveaway
             end_time = discord.utils.utcnow() + timedelta(seconds=duration)
+            message = await ctx.send(f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T'*(duration<85000)}> to join the giveaway for **{amount:,}** {coin}!")
             if not admin:
                 remove_coins_from_user(guild_id, author_id, amount)
-                active_giveaways.setdefault(guild_id, {}).setdefault(author_id, 0)
-                active_giveaways[guild_id][author_id] += amount
-                save_active_giveaways()
-            message = await ctx.send(f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T'*(duration<85000)}> to join the giveaway for **{amount:,}** {coin}!")
+            active_giveaways[str(message.id)] = [ctx.channel.id, ctx.guild.id, ctx.author.id, amount, int(end_time.timestamp()), remind, admin]
+            save_active_giveaways()
             await message.add_reaction("🎉")
             if not admin:
                 await ctx.send(f"Btw {ctx.author.display_name}, your balance has been deducted {amount:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}")
             if not remind:
-                await ctx.author.send(f'No reminders will be send for [this giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id})')
+                await ctx.author.send(f'No reminders will be sent for [this giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id})')
             else:
                 await ctx.author.send(f'Thanks for hosting a [giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id}) {yay}')
 
-            # Calculate reminder intervals
-            reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
-            reminder_interval = duration // reminders_to_send - min(5, duration // 10)
-            reminders_sent = 0
-
-            # Collect reactions
-            participants = []
-
-            def check(reaction, user):
-                return (reaction.message.id == message.id and  # Ensure it's the correct message
-                        str(reaction.emoji) == "🎉" and  # Ensure it's the correct emoji
-                        not user.bot)  # Ignore bot reactions
-
-            # Loop for reminders and reaction collection
-            while discord.utils.utcnow() < end_time:
-                time_remaining = (end_time - discord.utils.utcnow()).total_seconds()
-
-                # Send reminders at intervals
-                if remind and reminders_sent < reminders_to_send:
-                    next_reminder_time = duration - (reminder_interval * (reminders_sent + 1))
-                    if time_remaining <= next_reminder_time:
-                        await message.reply(f"## There's a giveaway for {amount:,} {coin} going! (Reminder {reminders_sent + 1}/{reminders_to_send})")
-                        reminders_sent += 1
-
-                try:
-                    # Wait for a reaction or until the next check
-                    wait_time = min(5, time_remaining)  # Check every 5 seconds or until the end
-                    reaction, user = await asyncio.wait_for(
-                        self.bot.wait_for("reaction_add", check=check),
-                        timeout=wait_time
-                    )
-                    if user not in participants:
-                        participants.append(user)
-                        print(f"Collected participant: {user.display_name}")
-                except asyncio.TimeoutError:
-                    # No reaction in the current wait cycle; continue the loop
-                    pass
-                except Exception as e:
-                    print(e)
-
-            # Announce the winner
-            if participants:
-                winner = random.choice(participants)
-                winner_id = str(winner.id)
-                make_sure_user_has_currency(guild_id, winner_id)
-                add_coins_to_user(guild_id, winner_id, amount)  # save file
-                await message.reply(f"# 🎉 Congratulations {winner.mention}, you won **{amount:,}** {coin}!\nBalance: {get_user_balance(guild_id, winner_id):,} {coin}")
+            if remind:
+                # Calculate reminder intervals
+                reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
+                reminder_interval = duration // reminders_to_send - min(5, duration // 10)
+                remind_intervals = [reminder_interval for _ in range(1, reminders_to_send+1)]
+                await asyncio.create_task(schedule_reminders(message, amount, duration, remind_intervals))
             else:
-                if not admin:
-                    add_coins_to_user(guild_id, author_id, amount)
-                await message.reply(f"No one participated in the giveaway{f', {ctx.author.mention} you have been refunded' * (not admin)} {pepela}")
-            if active_giveaways.get(guild_id).get(author_id) == amount:
-                active_giveaways[guild_id].pop(author_id)
-            else:
-                active_giveaways[guild_id][author_id] -= amount
-            save_active_giveaways()
+                await asyncio.sleep(duration)
+
+            await finalize_giveaway(str(message.id), ctx.channel.id, guild_id, author_id, amount, admin)
+
         elif not down_check:
             await ctx.reply(f'{reason}, currency commands are disabled')
 
