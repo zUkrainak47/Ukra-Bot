@@ -105,7 +105,6 @@ else:
 
 
 DISTRIBUTED_SEGS = Path("dev", "distributed_segs.json")
-global distributed_segs
 if os.path.exists(DISTRIBUTED_SEGS):
     with open(DISTRIBUTED_SEGS, "r") as file:
         distributed_segs = json.load(file)
@@ -114,7 +113,6 @@ else:
 
 
 DISTRIBUTED_BACKSHOTS = Path("dev", "distributed_backshots.json")
-global distributed_backshots
 if os.path.exists(DISTRIBUTED_BACKSHOTS):
     with open(DISTRIBUTED_BACKSHOTS, "r") as file:
         distributed_backshots = json.load(file)
@@ -123,12 +121,19 @@ else:
 
 
 ACTIVE_GIVEAWAYS = Path("dev", "active_giveaways.json")
-global active_giveaways
 if os.path.exists(ACTIVE_GIVEAWAYS):
     with open(ACTIVE_GIVEAWAYS, "r") as file:
         active_giveaways = json.load(file)
 else:
     active_giveaways = {}
+
+
+IGNORED_CHANNELS = Path("dev", "ignored_channels.json")
+if os.path.exists(IGNORED_CHANNELS):
+    with open(IGNORED_CHANNELS, "r") as file:
+        ignored_channels = json.load(file)
+else:
+    ignored_channels = []
 
 
 def save_settings():
@@ -179,6 +184,11 @@ def save_active_giveaways():
         json.dump(active_giveaways, file, indent=4)
 
 
+def save_ignored_channels():
+    with open(IGNORED_CHANNELS, "w") as file:
+        json.dump(ignored_channels, file, indent=4)
+
+
 def save_everything():
     save_settings()
     save_currency()
@@ -188,6 +198,7 @@ def save_everything():
     save_distributed_segs()
     save_distributed_backshots()
     save_active_giveaways()
+    save_ignored_channels()
 
 
 def make_sure_server_settings_exist(guild_id, save=True):
@@ -682,6 +693,29 @@ toggleable_commands = ['segs', 'backshot', 'compliment', 'dnd', 'currency_system
 default_allowed_commands = ['compliment', 'dnd', 'currency_system']
 
 
+@client.command(aliases=['togglechannelcurrency', 'tcc'])
+@commands.has_permissions(administrator=True)
+async def toggle_channel_currency(ctx):
+    """
+    If currency system is enabled in a server, starts ignoring the channel this command was sent in
+    If channel is already ignored, will stop ignoring it
+    If currency system is disabled, will have no effect
+    Can only be used by administrators
+    """
+    guild_id = str(ctx.guild.id)
+    make_sure_server_settings_exist(guild_id)
+    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands') and ctx.channel.id in ignored_channels:
+        ignored_channels.remove(ctx.channel.id)
+        save_ignored_channels()
+        await ctx.send(f"{bot_name} will no longer ignore currency system commands in this channel")
+    elif currency_allowed(ctx):
+        ignored_channels.append(ctx.channel.id)
+        save_ignored_channels()
+        await ctx.send(f"{bot_name} will now ignore currency system commands in this channel")
+    else:
+        await ctx.send("Currency system is disabled in your server already. This command won't do anything")
+
+
 @client.command(aliases=['allow'])
 @commands.has_permissions(administrator=True)
 async def enable(ctx):
@@ -800,7 +834,7 @@ async def segs(ctx):
                     await target.add_roles(role)
                     await ctx.send(f'{caller.mention} has segsed {target.mention} ' + f'{HUH} ' * (caller.mention == target.mention) + peeposcheme * (caller.mention != target.mention))
                     await log_channel.send(f'✅ {caller.mention} has segsed {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
-                    await asyncio.sleep(60)
+                    await asyncio.sleep(120)
                     await target.remove_roles(role)
                     distributed_segs[str(ctx.guild.id)].remove(target.id)
                     save_distributed_segs()
@@ -814,7 +848,7 @@ async def segs(ctx):
                     else:
                         await ctx.send(f'OOPS! Segs failed {teripoint}' + f' {HUH}' * (caller.mention == target.mention))
                     await log_channel.send(f'❌ {caller.mention} failed to segs {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
-                    await asyncio.sleep(60)
+                    await asyncio.sleep(150)
                     await caller.remove_roles(role)
                     distributed_segs[str(ctx.guild.id)].remove(caller.id)
                     save_distributed_segs()
@@ -889,7 +923,7 @@ async def backshot(ctx):
                     await target.add_roles(role)
                     await ctx.send(f'{caller.mention} has given {target.mention} devious backshots ' + f'{HUH} ' * (caller.mention == target.mention) + peeposcheme * (caller.mention != target.mention))
                     await log_channel.send(f'✅ {caller.mention} has given {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
-                    await asyncio.sleep(60)
+                    await asyncio.sleep(90)
                     await target.remove_roles(role)
                     distributed_backshots[str(ctx.guild.id)].remove(target.id)
                     save_distributed_backshots()
@@ -900,7 +934,7 @@ async def backshot(ctx):
                     await caller.add_roles(role)
                     await ctx.send(f'OOPS! You missed the backshot {teripoint}' + f' {HUH}' * (caller.mention == target.mention))
                     await log_channel.send(f'❌ {caller.mention} failed to give {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
-                    await asyncio.sleep(60)
+                    await asyncio.sleep(120)
                     await caller.remove_roles(role)
                     distributed_backshots[str(ctx.guild.id)].remove(caller.id)
                     save_distributed_backshots()
@@ -923,8 +957,10 @@ coin = "<:fishingecoin:1324905329657643179>"
 active_pvp_requests = dict()
 
 
-def currency_allowed(guild_):
-    return 'currency_system' in server_settings.get(guild_).get('allowed_commands')
+def currency_allowed(context):
+    guild_ = str(context.guild.id)
+    channel_ = context.channel.id
+    return 'currency_system' in server_settings.get(guild_).get('allowed_commands') and channel_ not in ignored_channels
 
 
 def bot_down_check(guild_):
@@ -1033,7 +1069,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             if mentions := ctx.message.mentions:
                 member_id = str(mentions[0].id)
                 num = make_sure_user_has_currency(guild_id, member_id)
@@ -1053,7 +1089,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             tracked_commands = ['dig', 'mine', 'work', 'fish']  # Commands to include in the cooldown list
             cooldowns_status = []
@@ -1094,7 +1130,7 @@ class Currency(commands.Cog):
         elif not down_check:
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command()
+    @commands.command(aliases=['d'])
     @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
     async def dig(self, ctx):
         """
@@ -1105,14 +1141,14 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             dig_coins = int(random.randint(1, 400)**0.5)
             if dig_coins == 20:
                 dig_coins = 2500
                 dig_message = f'# You found Gold! {gold_emoji}'
-                await rare_channel.send(f"**{ctx.author.mention}** found Gold - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                await rare_channel.send(f"**{ctx.author.mention}** found Gold {gold_emoji} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             else:
                 dig_message = f'## Digging successful! {shovel}'
             add_coins_to_user(guild_id, author_id, dig_coins)  # save file
@@ -1141,7 +1177,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             t = random.randint(1, 625)
@@ -1149,11 +1185,11 @@ class Currency(commands.Cog):
             if mine_coins == 50:
                 mine_coins = 7500
                 mine_message = f'# You found Diamonds! 💎'
-                await rare_channel.send(f"**{ctx.author.mention}** found Diamonds - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                await rare_channel.send(f"**{ctx.author.mention}** found Diamonds 💎 - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             elif t == 1:
                 mine_coins = 1
                 mine_message = f"# You struck Fool's Gold! ✨"
-                await rare_channel.send(f"**{ctx.author.mention}** struck Fool's Gold - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                await rare_channel.send(f"**{ctx.author.mention}** struck Fool's Gold ✨ - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             else:
                 mine_message = f"## Mining successful! ⛏️\n"
             add_coins_to_user(guild_id, author_id, mine_coins)  # save file
@@ -1181,7 +1217,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             work_coins = random.randint(45, 55)
@@ -1211,7 +1247,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             fish_coins = random.randint(1, 167)
@@ -1221,11 +1257,11 @@ class Currency(commands.Cog):
                     fish_coins = 25000000
                     fish_message = f"# You found *The Catch*{The_Catch}\n"
                     ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag to your friends'
-                    await rare_channel.send(f"@everyone **{ctx.author.mention}** JUST WON 2.5 MILLION - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                    await rare_channel.send(f"<@&1326967584821612614> **{ctx.author.mention}** JUST FOUND *THE CATCH* {The_Catch} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
                 else:
                     fish_message = f'# You found a huge Treasure Chest!!! {treasure_chest}'
                     ps_message = ''
-                    await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                    await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest {treasure_chest} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             else:
                 cast_command = ctx.message.content.split()[0].lower().lstrip('!')
                 if cast_command in ('fish', 'f'):
@@ -1254,7 +1290,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             user_streak = daily_streaks.setdefault(author_id, 0)
@@ -1289,7 +1325,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
 
@@ -1325,7 +1361,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             if mentions := ctx.message.mentions:
@@ -1372,7 +1408,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             members = server_settings.get(guild_id).get('members')
@@ -1406,7 +1442,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             sorted_members = sorted(global_currency.items(), key=lambda x: x[1], reverse=True)[:10]
@@ -1442,7 +1478,7 @@ class Currency(commands.Cog):
         result = random.choice(results)
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
@@ -1510,7 +1546,7 @@ class Currency(commands.Cog):
         result = random.choice(results)
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
@@ -1535,7 +1571,7 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
-    @commands.command(aliases=['d', '1d', 'onedice'])
+    @commands.command(aliases=['1d', 'onedice'])
     async def dice(self, ctx):
         """
         Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet
@@ -1546,7 +1582,7 @@ class Currency(commands.Cog):
         result = (dice_roll == 6)
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
@@ -1588,7 +1624,7 @@ class Currency(commands.Cog):
         result = (dice_roll_1 == dice_roll_2 == 6)
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
@@ -1626,7 +1662,7 @@ class Currency(commands.Cog):
         results = [1, -1]
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             active_pvp_requests.setdefault(guild_id, set())
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1766,7 +1802,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             contents = ctx.message.content.split()[1:]
@@ -1787,7 +1823,7 @@ class Currency(commands.Cog):
                     messages_dict = {True: f"# {' | '.join(results)}\n## You win{' **BIG**' * (results[0] == sunfire2)}!", False: f"# {' | '.join(results)}\n## You lose!"}
                     await ctx.reply(f"{messages_dict[result]}\n" + f"**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number != 0))
                     if result:
-                        await rare_channel.send(f"**{ctx.author.mention}** won{' **BIG**' * (results[0] == sunfire2)} in Slots - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                        await rare_channel.send(f"**{ctx.author.mention}** won{' **BIG**' * (results[0] == sunfire2)} in Slots 🎰 - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
                 else:
                     await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
@@ -1810,7 +1846,7 @@ class Currency(commands.Cog):
             return
 
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             contents = ctx.message.content.split()[1:]
             remind = True
             if admin and len(contents) == 3:
@@ -1907,7 +1943,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             if ctx.author.id not in allowed_users:
                 await ctx.reply(f"You can't use this command due to lack of permissions :3")
                 return
@@ -1952,7 +1988,7 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         down_check = bot_down_check(guild_id)
-        if currency_allowed(guild_id) and down_check:
+        if currency_allowed(ctx) and down_check:
             if ctx.author.id not in allowed_users:
                 await ctx.reply(f"You can't use this command due to lack of permissions :3")
                 return
@@ -1994,6 +2030,7 @@ async def on_command_error(ctx, error):
 
 
 def log_shutdown():
+    save_everything()
     end = time.perf_counter()
     run_time = end - start
     to_hours = time.strftime("%T", time.gmtime(run_time))
@@ -2005,8 +2042,6 @@ def log_shutdown():
     with open(Path('dev', 'shutdowns.txt'), 'w') as f:
         f.write(msg + '\n' + save)
         f.close()
-
-    save_settings()
 
 
 atexit.register(log_shutdown)
