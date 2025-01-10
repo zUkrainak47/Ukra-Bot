@@ -1099,7 +1099,8 @@ class Currency(commands.Cog):
     async def dig(self, ctx):
         """
         Dig and get a very small number of coins
-        1/400 chance to win 2,500 coins
+        Choose random number from 1-400, sqrt(number) is the payout
+        If number is 400 you win 2,500 coins
         Has a 20-second cooldown
         """
         guild_id = str(ctx.guild.id)
@@ -1134,7 +1135,8 @@ class Currency(commands.Cog):
     async def mine(self, ctx):
         """
         Mine and get a small number of coins
-        1/625 chance to win 7,500 coins
+        Choose random number from 1-625, 2*sqrt(number) is the payout
+        If number is 625 you to win 7,500 coins
         Has a 2-minute cooldown
         """
         guild_id = str(ctx.guild.id)
@@ -1173,7 +1175,8 @@ class Currency(commands.Cog):
     @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
     async def work(self, ctx):
         """
-        Work and get a small number of coins
+        Work and get a moderate number of coins
+        Choose random number from 45-55, that's the payout
         Has a 5-minute cooldown
         """
         guild_id = str(ctx.guild.id)
@@ -1775,9 +1778,7 @@ class Currency(commands.Cog):
             if number == -1:
                 number = 0
             results = [random.choice(slot_options) for _ in range(3)]
-            result = ((results[0] == results[1]) and (results[1] == results[2]))
-            if result:
-                print(results[0] == results[1] == results[2])
+            result = (results[0] == results[1] == results[2])
             try:
                 if number <= get_user_balance(guild_id, author_id):
                     delta = 500 * number if ((results[0] == sunfire2) and result) else 50 * number if result else -number
