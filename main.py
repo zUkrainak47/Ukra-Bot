@@ -1406,7 +1406,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['pay'])
+    @commands.command(aliases=['pay', 'gift'])
     async def give(self, ctx):
         """
         Give someone an amount of coins
@@ -1952,15 +1952,15 @@ class Currency(commands.Cog):
                 if make_sure_user_has_currency(guild_id, author_id) < 2500:
                     await ctx.reply(f"You don't own 2,500 {coin} {sadgebusiness}")
                     return
-                remove_coins_from_user(guild_id, author_id, 2500)
                 join_server_msg = f'\n*Results will be announced in <#1326949510336872458>*' \
                     if ctx.guild.id == official_server_id \
                     else "\n*Join the official Ukra Bot Server for the results!* (`!server`)"
                 if ctx.author.id not in active_lottery[today_date]:
+                    remove_coins_from_user(guild_id, author_id, 2500)
                     active_lottery[today_date].append(ctx.author.id)
                     save_active_lottery()
                     add_coins_to_user(guild_id, str(bot_id), 500)
-                    await ctx.reply(f"**Successfully entered lottery** {yay}\nYour balance: {get_user_balance(guild_id, author_id)} {coin}" + join_server_msg)
+                    await ctx.reply(f"**Successfully entered lottery** {yay}\nYour balance: {get_user_balance(guild_id, author_id):,} {coin}" + join_server_msg)
                 else:
                     await ctx.reply(f"You've already joined today's lottery {peepositbusiness}" + join_server_msg)
             else:
