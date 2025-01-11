@@ -28,6 +28,7 @@ user_last_used = {}
 user_last_used_w = {}
 allowed_users = [369809123925295104]
 bot_id = 1322197604297085020
+fetched_users = {}
 allow_dict = {True:  "Enabled ",
               False: "Disabled"}
 
@@ -1464,6 +1465,7 @@ class Currency(commands.Cog):
         """
         View the top 10 richest users of the bot globally
         """
+        global fetched_users
         guild_id = str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
@@ -1473,7 +1475,12 @@ class Currency(commands.Cog):
             top_users = []
             for user_id, coins in sorted_members:
                 try:
-                    user = await self.bot.fetch_user(int(user_id))
+                    if user_id in fetched_users:
+                        user = fetched_users.get(user_id)
+                    else:
+                        user = await self.bot.fetch_user(int(user_id))
+                        fetched_users[user_id] = user
+
                     if int(user_id) != ctx.author.id:
                         name_ = user.global_name or user.name
                         top_users.append([name_, coins])
