@@ -13,6 +13,7 @@ import json
 import time
 import atexit
 from pathlib import Path
+import math
 start = time.perf_counter()
 
 bot_name = 'Ukra Bot'
@@ -1430,8 +1431,8 @@ class Currency(commands.Cog):
     @commands.command(aliases=['lb'])
     async def leaderboard(self, ctx):
         """
-        View the top 10 richest users of the server
-        Also view your rank
+        View the top 10 richest users of the server (optionally accepts a page)
+        Also shows your rank
         """
         guild_id = str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
@@ -1443,26 +1444,41 @@ class Currency(commands.Cog):
             top_users = []
             c = 0
             found_author = False
-            for member_id in sorted_members:
+            contents = ctx.message.content.split()[1:]
+            if len(contents) == 1 and contents[0].isdigit() and contents[0] != '0':
+                page = min(int(contents[0]), math.ceil(len(sorted_members)/10))
+                page_msg = f' - page #{page}'
+            else:
+                page = 1
+                page_msg = ''
+            page -= 1
+            for member_id in sorted_members[page*10:]:
+                # print('member id', member_id)
                 coins = get_user_balance(guild_id, member_id)
-                if c == 10:
+                if c == 10 or page*10 + c == len(sorted_members):
                     break
                 try:
                     member = ctx.guild.get_member(int(member_id))
-                    if int(member_id) != ctx.author.id:
-                        top_users.append([member.display_name, coins])
+                    if member:
+                        if int(member_id) != ctx.author.id:
+                            top_users.append([member.display_name, coins])
+                        else:
+                            top_users.append([f"{member.mention}", coins])
+                            found_author = True
+                        c += 1
                     else:
-                        top_users.append([f"{member.mention}", coins])
-                        found_author = True
-                    c += 1
+                        server_settings[guild_id]['members'].remove(member_id)
+                        # print('removing', member_id)
                 except discord.NotFound:
                     server_settings[guild_id]['members'].remove(member_id)
+                    # print('removing', member_id)
             if not found_author:
                 you = f"\n\nYou're at **#{sorted_members.index(str(ctx.author.id))+1}**"
             else:
                 you = ''
+            print('you message -', you)
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-            await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{str(index) + ' -' if index not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
+            await ctx.send(f"## Leaderboard{page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -1470,8 +1486,8 @@ class Currency(commands.Cog):
     @commands.command(aliases=['glb'])
     async def global_leaderboard(self, ctx):
         """
-        View the top 10 richest users of the bot globally
-        Also view your global rank
+        View the top 10 richest users of the bot globally (optionally accepts a page)
+        Also shows your global rank
         """
         global fetched_users
         guild_id = str(ctx.guild.id)
@@ -1482,7 +1498,15 @@ class Currency(commands.Cog):
             #  FIXME probably not the best approach
             top_users = []
             found_author = False
-            for user_id, coins in sorted_members[:10]:
+            contents = ctx.message.content.split()[1:]
+            if len(contents) == 1 and contents[0].isdigit() and contents[0] != '0':
+                page = min(int(contents[0]), math.ceil(len(sorted_members)/10))
+                page_msg = f' - page #{page}'
+            else:
+                page = 1
+                page_msg = ''
+            page -= 1
+            for user_id, coins in sorted_members[page*10:page*10+10]:
                 try:
                     if user_id in fetched_users:
                         user = fetched_users.get(user_id)
@@ -1503,7 +1527,7 @@ class Currency(commands.Cog):
             else:
                 you = ''
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-            await ctx.send(f"## Top {len(top_users)} Richest Users (Globally):\n{'\n'.join([f"**{str(index) + ' -' if index not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
+            await ctx.send(f"## Global Leaderboard{page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
