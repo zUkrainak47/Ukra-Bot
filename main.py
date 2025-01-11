@@ -29,6 +29,7 @@ user_last_used = {}
 user_last_used_w = {}
 allowed_users = [369809123925295104]
 bot_id = 1322197604297085020
+official_server_id = 696311992973131796
 fetched_users = {}
 allow_dict = {True:  "Enabled ",
               False: "Disabled"}
@@ -51,13 +52,15 @@ wicked = '<:wicked:1323075389131587646>'
 deadge = '<:deadge:1323075561089929300>'
 teripoint = '<:teripoint:1322718769679827024>'
 pepela = '<:pepela:1322718719977197671>'
-shovel = '<:shovel:1325823488216268801>'
-gold_emoji = '<:gold:1325823946737713233>'
 okaygebusiness = '<:okaygebusiness:1325818583011426406>'
 sadgebusiness = '<:sadgebusiness:1326527481636978760>'
 fishinge = '<:Fishinge:1325810706393596035>'
 prayge = '<:prayge:1326268872990523492>'
 stopbeingmean = '<:stopbeingmean:1326525905199435837>'
+peepositbusiness = '<:peepositbusiness:1327594898844684288>'
+puppy = '<:puppy:1327588192282480670>'
+shovel = '<:shovel:1325823488216268801>'
+gold_emoji = '<:gold:1325823946737713233>'
 treasure_chest = '<:treasure_chest:1325811472680620122>'
 The_Catch = '<:TheCatch:1325812275172347915>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
@@ -138,6 +141,14 @@ else:
     ignored_channels = []
 
 
+LOTTERY_FILE = Path("dev", "active_lottery.json")
+if os.path.exists(LOTTERY_FILE):
+    with open(LOTTERY_FILE, "r") as file:
+        active_lottery = json.load(file)
+else:
+    active_lottery = {datetime.now().date().isoformat(): []}
+
+
 def save_settings():
     with open(SETTINGS_FILE, "w") as file:
         json.dump(server_settings, file, indent=4)
@@ -191,6 +202,11 @@ def save_ignored_channels():
         json.dump(ignored_channels, file, indent=4)
 
 
+def save_active_lottery():
+    with open(LOTTERY_FILE, "w") as file:
+        json.dump(active_lottery, file, indent=4)
+
+
 def save_everything():
     save_settings()
     save_currency()
@@ -201,6 +217,7 @@ def save_everything():
     save_distributed_backshots()
     save_active_giveaways()
     save_ignored_channels()
+    save_active_lottery()
 
 
 def make_sure_server_settings_exist(guild_id, save=True):
@@ -490,6 +507,14 @@ async def rng(ctx):
         await ctx.reply(f"{random.randint(int(contents[1]), int(contents[2]))}")
     else:
         await ctx.reply("Usage: `!rng n1 n2` where n1 and n2 are numbers, n1 < n2")
+
+
+@client.command()
+async def source(ctx):
+    """
+    Sends the GitHub link to this bot's repo
+    """
+    await ctx.reply("https://github.com/zUkrainak47/Ukra-Bot")
 
 
 @client.command()
@@ -1453,7 +1478,6 @@ class Currency(commands.Cog):
                 page_msg = ''
             page -= 1
             for member_id in sorted_members[page*10:]:
-                # print('member id', member_id)
                 coins = get_user_balance(guild_id, member_id)
                 if c == 10 or page*10 + c == len(sorted_members):
                     break
@@ -1468,17 +1492,16 @@ class Currency(commands.Cog):
                         c += 1
                     else:
                         server_settings[guild_id]['members'].remove(member_id)
-                        # print('removing', member_id)
                 except discord.NotFound:
                     server_settings[guild_id]['members'].remove(member_id)
-                    # print('removing', member_id)
+                    global_currency.remove(member_id)
+                    save_currency()
             if not found_author:
                 you = f"\n\nYou're at **#{sorted_members.index(str(ctx.author.id))+1}**"
             else:
                 you = ''
-            print('you message -', you)
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-            await ctx.send(f"## Leaderboard{page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
+            await ctx.send(f"# Leaderboard{page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -1521,13 +1544,14 @@ class Currency(commands.Cog):
                         top_users.append([f"{user.mention}", coins])
                         found_author = True
                 except discord.NotFound:
-                    pass
+                    global_currency.remove(user_id)
+                    save_currency()
             if not found_author:
                 you = f"\n\nYou're at **#{sorted_members.index((str(ctx.author.id), global_currency[str(ctx.author.id)]))+1}**"
             else:
                 you = ''
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-            await ctx.send(f"## Global Leaderboard{page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
+            await ctx.send(f"# Global Leaderboard{page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -1896,6 +1920,57 @@ class Currency(commands.Cog):
     @slots.error
     async def slots_error(self, ctx, error):
         pass
+
+    @commands.command(aliases=['lotto'])
+    async def lottery(self, ctx):
+        """
+        Lottery!
+        """
+        guild_id = str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
+            today_date = datetime.now().date().isoformat()
+            global active_lottery
+            if today_date not in active_lottery:
+                announce_msg = '' if ctx.guild.id == official_server_id \
+                    else "\nJoin the official Ukra Bot Server for the results! (`!server`)"
+                await ctx.send(f"Thanks for triggering the lottery payout {puppy}" + announce_msg)
+                lottery_channel = ctx.guild.get_channel(1326949510336872458)
+                last_lottery_date = next(iter(active_lottery))
+                lottery_participants = active_lottery[last_lottery_date]
+                active_lottery = {today_date: []}
+                save_active_lottery()
+                winner = await self.bot.fetch_user(random.choice(lottery_participants))
+                winnings = len(lottery_participants) * 2000
+                add_coins_to_user(guild_id, str(winner.id), winnings)
+                lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
+                                   f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
+                                   f"Participants: {len(lottery_participants)}")
+                lottery_channel.send(lottery_message)
+            contents = ctx.message.content.split()[1:]
+            if len(contents) == 1 and contents[0] == 'enter':
+                author_id = str(ctx.author.id)
+                if make_sure_user_has_currency(guild_id, author_id) < 2500:
+                    await ctx.reply(f"You don't own 2,500 {coin} {sadgebusiness}")
+                    return
+                remove_coins_from_user(guild_id, author_id, 2500)
+                join_server_msg = f'\n*Results will be announced in <#1326949510336872458>*' \
+                    if ctx.guild.id == official_server_id \
+                    else "\n*Join the official Ukra Bot Server for the results!* (`!server`)"
+                if ctx.author.id not in active_lottery[today_date]:
+                    active_lottery[today_date].append(ctx.author.id)
+                    save_active_lottery()
+                    add_coins_to_user(guild_id, str(bot_id), 500)
+                    await ctx.reply(f"**Successfully entered lottery** {yay}\nYour balance: {get_user_balance(guild_id, author_id)} {coin}" + join_server_msg)
+                else:
+                    await ctx.reply(f"You've already joined today's lottery {peepositbusiness}" + join_server_msg)
+            else:
+                await ctx.send(f'# {peepositbusiness} Lottery\n'
+                               '### Current lottery:\n'
+                               f'- **{len(active_lottery[today_date])}** participant{'s' if len(active_lottery[today_date]) != 1 else ''}\n'
+                               f'- **{len(active_lottery[today_date]) * 2000:,}** {coin} in pool\n'
+                               f'- Participation fee: 2,500 {coin}\n'
+                               f'- Ends <t:{get_daily_reset_timestamp()}:R>\n'
+                               f'If you want to participate, run `!lottery enter`')
 
     async def run_giveaway(self, ctx, admin=False):
         """
