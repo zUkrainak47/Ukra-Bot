@@ -1431,16 +1431,18 @@ class Currency(commands.Cog):
     async def leaderboard(self, ctx):
         """
         View the top 10 richest users of the server
+        Also view your rank
         """
         guild_id = str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             members = server_settings.get(guild_id).get('members')
-            sorted_members = sorted(members, key=lambda x: global_currency[x], reverse=True)[:25]
+            sorted_members = sorted(members, key=lambda x: global_currency[x], reverse=True)
             #  FIXME probably not the best approach
             top_users = []
             c = 0
+            found_author = False
             for member_id in sorted_members:
                 coins = get_user_balance(guild_id, member_id)
                 if c == 10:
@@ -1451,29 +1453,36 @@ class Currency(commands.Cog):
                         top_users.append([member.display_name, coins])
                     else:
                         top_users.append([f"{member.mention}", coins])
+                        found_author = True
                     c += 1
                 except discord.NotFound:
                     server_settings[guild_id]['members'].remove(member_id)
+            if not found_author:
+                you = f"\n\nYou're at **#{sorted_members.index(str(ctx.author.id))+1}**"
+            else:
+                you = ''
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-            await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{str(index) + ' -' if index not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
+            await ctx.send(f"## Top {len(top_users)} Richest Users:\n{'\n'.join([f"**{str(index) + ' -' if index not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.cooldown(rate=1, per=15, type=commands.BucketType.guild)
+    @commands.cooldown(rate=1, per=5, type=commands.BucketType.guild)
     @commands.command(aliases=['glb'])
     async def global_leaderboard(self, ctx):
         """
         View the top 10 richest users of the bot globally
+        Also view your global rank
         """
         global fetched_users
         guild_id = str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-            sorted_members = sorted(global_currency.items(), key=lambda x: x[1], reverse=True)[:10]
+            sorted_members = sorted(global_currency.items(), key=lambda x: x[1], reverse=True)
             #  FIXME probably not the best approach
             top_users = []
-            for user_id, coins in sorted_members:
+            found_author = False
+            for user_id, coins in sorted_members[:10]:
                 try:
                     if user_id in fetched_users:
                         user = fetched_users.get(user_id)
@@ -1486,16 +1495,21 @@ class Currency(commands.Cog):
                         top_users.append([name_, coins])
                     else:
                         top_users.append([f"{user.mention}", coins])
+                        found_author = True
                 except discord.NotFound:
                     pass
+            if not found_author:
+                you = f"\n\nYou're at **#{sorted_members.index((str(ctx.author.id), global_currency[str(ctx.author.id)]))+1}**"
+            else:
+                you = ''
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-            await ctx.send(f"## Top {len(top_users)} Richest Users (Globally):\n{'\n'.join([f"**{str(index) + ' -' if index not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}")
+            await ctx.send(f"## Top {len(top_users)} Richest Users (Globally):\n{'\n'.join([f"**{str(index) + ' -' if index not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
     @global_leaderboard.error
     async def global_leaderboard_error(self, ctx, error):
-        await ctx.reply("Please don't spam this command. It has already been used within the last 15 seconds")
+        await ctx.reply("Please don't spam this command. It has already been used within the last 5 seconds")
 
     @commands.command(aliases=['coin', 'c'])
     async def coinflip(self, ctx):
