@@ -306,6 +306,18 @@ def convert_msg_to_number(message: list, guild: str, user: str, ignored_sources=
     return -1, 0, 0
 
 
+def convert_msg_to_user_id(message: list) -> int:
+    """
+    Takes user command message's split(), returns the first user ID it found, otherwise returns -1
+    """
+    for i in message:
+        if i[:2] == '<@' and i[-1] == '>' and i[2:-1].isdecimal() and len(i[2:-1]) in (18, 19):
+            return int(i[2:-1])
+        if i.isdecimal() and len(i) in (18, 19):
+            return int(i)
+    return -1
+
+
 async def print_reset_time(r, ctx, custom_message=''):
     if r > 60:
         r /= 60
@@ -963,7 +975,7 @@ def currency_allowed(context):
     return 'currency_system' in server_settings.get(guild_).get('allowed_commands') and channel_ not in ignored_channels
 
 
-def bot_down_check(guild_):
+def bot_down_check(guild_: str):
     """
     Returns True if (bot_down is False) or (bot_down is True and guild_id is allowed)
     """
@@ -1070,14 +1082,25 @@ class Currency(commands.Cog):
         guild_id = str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             if mentions := ctx.message.mentions:
-                member_id = str(mentions[0].id)
-                num = make_sure_user_has_currency(guild_id, member_id)
+                num = make_sure_user_has_currency(guild_id, str(mentions[0].id))
                 await ctx.reply(f"**{mentions[0].display_name}'s balance:** {num:,} {coin}")
 
             else:
-                author_id = str(ctx.author.id)
-                num = make_sure_user_has_currency(guild_id, author_id)
-                await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
+                contents = ctx.message.content.split()[1:]
+                target_id = convert_msg_to_user_id(contents)
+                if target_id == -1:
+                    num = make_sure_user_has_currency(guild_id, str(ctx.author.id))
+                    await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
+                    return
+                try:
+                    user = await self.bot.fetch_user(target_id)
+                    if global_currency.setdefault(str(target_id), 750) == 750:
+                        save_currency()
+                    num = get_user_balance('', str(target_id))
+                    await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}")
+                except discord.errors.NotFound:
+                    await ctx.reply(f'User with ID "{target_id}" does not exist')
+
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
