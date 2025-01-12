@@ -83,6 +83,14 @@ else:
     global_currency = {}
 
 
+PROFILES_FILE = Path("dev", "global_profiles.json")
+if os.path.exists(PROFILES_FILE):
+    with open(PROFILES_FILE, "r") as file:
+        global_profiles = json.load(file)
+else:
+    global_profiles = {}
+
+
 DAILY_FILE = Path("dev", "daily_streaks.json")
 if os.path.exists(DAILY_FILE):
     with open(DAILY_FILE, "r") as file:
@@ -159,6 +167,11 @@ def save_currency():
         json.dump(global_currency, file, indent=4)
 
 
+def save_profiles():
+    with open(PROFILES_FILE, "w") as file:
+        json.dump(global_profiles, file, indent=4)
+
+
 def save_daily():
     with open(DAILY_FILE, "w") as file:
         json.dump(daily_streaks, file, indent=4)
@@ -210,6 +223,7 @@ def save_active_lottery():
 def save_everything():
     save_settings()
     save_currency()
+    save_profiles()
     save_daily()
     save_last_used()
     save_last_used_w()
@@ -236,7 +250,7 @@ def make_sure_user_has_currency(guild_: str, user_: str):
     Makes sure server settings exists
     Makes sure user exists in guild
     Makes sure user has a daily streak
-    Makes sure user has coins, returns their coins
+    Makes sure user has coins
     Returns user's balance
     """
     if user_ not in make_sure_server_settings_exist(guild_, save=False):
@@ -249,6 +263,24 @@ def make_sure_user_has_currency(guild_: str, user_: str):
     # if save:
     #     save_currency()
     return global_currency.get(user_)
+
+
+def get_default_profile(user_balance: int) -> dict:
+    return {'highest_balance': max(750, user_balance), 'highest_single_win': 0, 'highest_single_loss': 0,
+            'highest_global_rank': -1, 'gamble_win_ratio': [0, 0], "total_won": 0, "total_lost": 0,
+            'items': {}, 'achievements': [], 'title': '', 'rare_items_found': {}, 'commands': {}, "prestige": 0,
+            "upgrades": {}, "idle": {},
+
+            'dict_1': {}, 'dict_2': {}, 'dict_3': {}, 'dict_4': {}, 'dict_5': {},
+            'list_1': [], 'list_2': [], 'list_3': [], 'list_4': [], 'list_5': [],
+            'num_1': 0, 'num_2': 0, 'num_3': 0, 'num_4': 0, 'num_5': 0,
+            'str_1': '', 'str_2': '', 'str_3': '', 'str_4': '', 'str_5': ''}
+
+
+def make_sure_user_profile_exists(guild_: str, user_: str):
+    bal = make_sure_user_has_currency(guild_, user_)
+    if global_profiles.setdefault(user_, get_default_profile(bal)) == get_default_profile(bal):
+        save_profiles()
 
 
 def get_daily_reset_timestamp():
@@ -325,15 +357,15 @@ def convert_msg_to_number(message: list, guild: str, user: str, ignored_sources=
     return -1, 0, 0
 
 
-def convert_msg_to_user_id(message: list) -> int:
+def convert_msg_to_user_id(message: list, check_mentions=False) -> int:
     """
     Takes user command message's split(), returns the first user ID it found, otherwise returns -1
     """
     for i in message:
-        if i[:2] == '<@' and i[-1] == '>' and i[2:-1].isdecimal() and len(i[2:-1]) in (18, 19):
-            return int(i[2:-1])
         if i.isdecimal() and len(i) in (18, 19):
             return int(i)
+        if check_mentions and i[:2] == '<@' and i[-1] == '>' and i[2:-1].isdecimal() and len(i[2:-1]) in (18, 19):
+            return int(i[2:-1])
     return -1
 
 
@@ -350,9 +382,10 @@ async def print_reset_time(r, ctx, custom_message=''):
 @client.event
 async def on_ready():
     print('Bot is up!')
-    global log_channel, rare_channel
+    global log_channel, rare_channel, lottery_channel
     log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
     rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
+    lottery_channel = client.get_guild(696311992973131796).get_channel(1326949510336872458)
     await log_channel.send(f'{yay} {bot_name} has connected to Discord!')
     role_dict = {'backshots_role': distributed_backshots,
                  'segs_role': distributed_segs}
@@ -1014,6 +1047,10 @@ def get_user_balance(guild_: str, user_: str):
     return global_currency.get(user_)
 
 
+def get_profile(user_: str) -> dict:
+    return global_profiles.get(user_)
+
+
 def add_coins_to_user(guild_: str, user_: str, coin_: int, save=True):
     make_sure_user_has_currency(guild_, user_)
     global_currency[user_] += coin_
@@ -1101,6 +1138,64 @@ class Currency(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command(aliases=['p'])
+    async def profile(self, ctx):
+        """
+        Check your or someone else's profile
+        """
+        global fetched_users
+        guild_id = str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
+            contents = ctx.message.content.split()[1:]
+            target_id = convert_msg_to_user_id(contents, True)
+
+            if target_id == -1:  # if no id or mention was passed
+                target = ctx.author
+                target_id = ctx.author.id
+            else:
+                try:  # if ID or mention was found
+                    if target_id in fetched_users:
+                        target = fetched_users.get(target_id)
+                    else:
+                        target = await self.bot.fetch_user(target_id)
+                        fetched_users[target_id] = target
+
+                except discord.errors.NotFound:
+                    await ctx.reply(f'User with ID "{target_id}" does not exist')
+                    return
+
+            if ctx.guild.get_member(target_id):
+                target = ctx.guild.get_member(target_id)
+
+            def get_profile_embed():
+                make_sure_user_profile_exists(guild_id, str(target_id))
+                num = get_user_balance(guild_id, str(target_id))
+                target_profile = get_profile(str(target_id))
+                if target_profile['title']:
+                    profile_embed = discord.Embed(title=f"{target.display_name}'s profile", description=target_profile['title'], color=target.color)
+                else:
+                    profile_embed = discord.Embed(title=f"{target.display_name}'s profile", color=target.color)
+                profile_embed.set_thumbnail(url=target.avatar.url)
+                profile_embed.add_field(name="Balance", value=f"{num:,} {coin}", inline=True)
+                profile_embed.add_field(name="Max Balance", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
+                if target_profile['highest_global_rank'] != -1:
+                    profile_embed.add_field(name="Highest Global Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
+                else:
+                    profile_embed.add_field(name="", value='', inline=True)
+                profile_embed.add_field(name="Highest Single Win", value='WIP', inline=True)
+                profile_embed.add_field(name="Highest Single Loss", value='WIP', inline=True)
+                profile_embed.add_field(name="", value='', inline=True)
+                profile_embed.add_field(name="!gamble uses", value='WIP', inline=True)
+                profile_embed.add_field(name="!gamble Win Ratio", value='WIP', inline=True)
+                profile_embed.add_field(name="", value='', inline=True)
+                profile_embed.add_field(name="Commands used", value='WIP', inline=False)
+                return profile_embed
+
+            await ctx.send(embed=get_profile_embed())
+
+        elif currency_allowed(ctx):
+            await ctx.reply(f'{reason}, currency commands are disabled')
+
     @commands.command(aliases=['b', 'bal'])
     async def balance(self, ctx):
         """
@@ -1120,7 +1215,11 @@ class Currency(commands.Cog):
                     await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
                     return
                 try:
-                    user = await self.bot.fetch_user(target_id)
+                    if target_id in fetched_users:
+                        user = fetched_users.get(target_id)
+                    else:
+                        user = await self.bot.fetch_user(target_id)
+                        fetched_users[target_id] = user
                     if global_currency.setdefault(str(target_id), 750) == 750:
                         save_currency()
                     num = get_user_balance('', str(target_id))
@@ -1505,7 +1604,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.cooldown(rate=1, per=5, type=commands.BucketType.guild)
+    @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.command(aliases=['glb'])
     async def global_leaderboard(self, ctx):
         """
@@ -1529,25 +1628,38 @@ class Currency(commands.Cog):
                 page = 1
                 page_msg = ''
             page -= 1
+            c = 0
             for user_id, coins in sorted_members[page*10:page*10+10]:
                 try:
-                    if user_id in fetched_users:
-                        user = fetched_users.get(user_id)
+                    if int(user_id) in fetched_users:
+                        user = fetched_users.get(int(user_id))
                     else:
                         user = await self.bot.fetch_user(int(user_id))
-                        fetched_users[user_id] = user
+                        fetched_users[int(user_id)] = user
 
                     if int(user_id) != ctx.author.id:
                         name_ = user.global_name or user.name
                         top_users.append([name_, coins])
+                        c += 1
                     else:
                         top_users.append([f"{user.mention}", coins])
                         found_author = True
+                        c += 1
+                        rank = page*10 + c
+                        highest_rank = global_profiles[str(ctx.author.id)]['highest_global_rank']
+                        if rank < highest_rank or highest_rank == -1:
+                            global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
+                            save_profiles()
                 except discord.NotFound:
                     global_currency.remove(user_id)
                     save_currency()
             if not found_author:
-                you = f"\n\nYou're at **#{sorted_members.index((str(ctx.author.id), global_currency[str(ctx.author.id)]))+1}**"
+                rank = sorted_members.index((str(ctx.author.id), global_currency[str(ctx.author.id)]))+1
+                highest_rank = global_profiles[str(ctx.author.id)]['highest_global_rank']
+                if rank < highest_rank or highest_rank == -1:
+                    global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
+                    save_profiles()
+                you = f"\n\nYou're at **#{rank}**"
             else:
                 you = ''
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
@@ -1557,7 +1669,7 @@ class Currency(commands.Cog):
 
     @global_leaderboard.error
     async def global_leaderboard_error(self, ctx, error):
-        await ctx.reply("Please don't spam this command. It has already been used within the last 5 seconds")
+        await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
 
     @commands.command(aliases=['coin', 'c'])
     async def coinflip(self, ctx):
@@ -1925,7 +2037,11 @@ class Currency(commands.Cog):
     async def lottery(self, ctx):
         """
         Lottery!
+        Feeds Ukra Bot an entrance fee, the rest is added to the pool which is paid out to the winner of the lottery
         """
+        entrance_price = 500
+        ukra_bot_fee = 0
+        payout = 500
         guild_id = str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             today_date = datetime.now().date().isoformat()
@@ -1934,32 +2050,31 @@ class Currency(commands.Cog):
                 announce_msg = '' if ctx.guild.id == official_server_id \
                     else "\nJoin the official Ukra Bot Server for the results! (`!server`)"
                 await ctx.send(f"Thanks for triggering the lottery payout {puppy}" + announce_msg)
-                lottery_channel = ctx.guild.get_channel(1326949510336872458)
                 last_lottery_date = next(iter(active_lottery))
                 lottery_participants = active_lottery[last_lottery_date]
                 active_lottery = {today_date: []}
                 save_active_lottery()
                 winner = await self.bot.fetch_user(random.choice(lottery_participants))
-                winnings = len(lottery_participants) * 2000
+                winnings = len(lottery_participants) * payout
                 add_coins_to_user(guild_id, str(winner.id), winnings)
                 lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
                                    f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
                                    f"Participants: {len(lottery_participants)}")
-                lottery_channel.send(lottery_message)
+                await lottery_channel.send(lottery_message)
             contents = ctx.message.content.split()[1:]
             if len(contents) == 1 and contents[0] == 'enter':
                 author_id = str(ctx.author.id)
-                if make_sure_user_has_currency(guild_id, author_id) < 2500:
-                    await ctx.reply(f"You don't own 2,500 {coin} {sadgebusiness}")
+                if make_sure_user_has_currency(guild_id, author_id) < entrance_price:
+                    await ctx.reply(f"You don't own {entrance_price} {coin} {sadgebusiness}")
                     return
                 join_server_msg = f'\n*Results will be announced in <#1326949510336872458>*' \
                     if ctx.guild.id == official_server_id \
                     else "\n*Join the official Ukra Bot Server for the results!* (`!server`)"
                 if ctx.author.id not in active_lottery[today_date]:
-                    remove_coins_from_user(guild_id, author_id, 2500)
+                    remove_coins_from_user(guild_id, author_id, entrance_price)
                     active_lottery[today_date].append(ctx.author.id)
                     save_active_lottery()
-                    add_coins_to_user(guild_id, str(bot_id), 500)
+                    add_coins_to_user(guild_id, str(bot_id), ukra_bot_fee)
                     await ctx.reply(f"**Successfully entered lottery** {yay}\nYour balance: {get_user_balance(guild_id, author_id):,} {coin}" + join_server_msg)
                 else:
                     await ctx.reply(f"You've already joined today's lottery {peepositbusiness}" + join_server_msg)
@@ -1967,8 +2082,8 @@ class Currency(commands.Cog):
                 await ctx.send(f'# {peepositbusiness} Lottery\n'
                                '### Current lottery:\n'
                                f'- **{len(active_lottery[today_date])}** participant{'s' if len(active_lottery[today_date]) != 1 else ''}\n'
-                               f'- **{len(active_lottery[today_date]) * 2000:,}** {coin} in pool\n'
-                               f'- Participation fee: 2,500 {coin}\n'
+                               f'- **{len(active_lottery[today_date]) * payout:,}** {coin} in pool\n'
+                               f'- Participation price: {entrance_price} {coin}\n'
                                f'- Ends <t:{get_daily_reset_timestamp()}:R>\n'
                                f'If you want to participate, run `!lottery enter`')
 
