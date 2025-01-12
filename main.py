@@ -64,6 +64,7 @@ gold_emoji = '<:gold:1325823946737713233>'
 treasure_chest = '<:treasure_chest:1325811472680620122>'
 The_Catch = '<:TheCatch:1325812275172347915>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
+rare_items_to_emoji = {'gold': gold_emoji, 'fool': '✨', 'diamonds': '💎', 'treasure_chest': treasure_chest, 'the_catch': The_Catch}
 
 slot_options = [yay, o7, peeposcheme, sunfire2, stare, HUH, wicked, deadge, teripoint, pepela]
 
@@ -1254,6 +1255,20 @@ class Currency(commands.Cog):
                 try:
                     make_sure_user_profile_exists(guild_id, str(target_id))
                     num = get_user_balance(guild_id, str(target_id))
+
+                    user_streak = daily_streaks.setdefault(str(target_id), 0)
+                    now = datetime.now()
+                    last_used = user_last_used.setdefault(str(target_id), datetime.today() - timedelta(days=2))
+                    # print((now - timedelta(days=1)).date())
+                    if last_used.date() == now.date():
+                        d_msg = f"{user_streak:,}"
+                    elif last_used.date() == (now - timedelta(days=1)).date():
+                        d_msg = f"{user_streak:,} (not claimed today)"
+                    else:
+                        daily_streaks[str(target_id)] = 0
+                        save_daily()
+                        d_msg = 0
+
                     target_profile = get_profile(str(target_id))
                     if target_profile['title']:
                         profile_embed = discord.Embed(title=f"{target.display_name}'s profile", description=target_profile['title'], color=target.color)
@@ -1262,13 +1277,13 @@ class Currency(commands.Cog):
                     profile_embed.set_thumbnail(url=target.avatar.url)
                     profile_embed.add_field(name="Balance", value=f"{num:,} {coin}", inline=True)
                     profile_embed.add_field(name="Max Balance", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
+                    profile_embed.add_field(name="Daily Streak", value=d_msg, inline=True)
+                    profile_embed.add_field(name="Highest Single Win", value=f"{target_profile['highest_single_win']:,} {coin}", inline=True)
+                    profile_embed.add_field(name="Highest Single Loss", value=f"{target_profile['highest_single_loss']:,} {coin}", inline=True)
                     if target_profile['highest_global_rank'] != -1:
                         profile_embed.add_field(name="Highest Global Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
                     else:
                         profile_embed.add_field(name="", value='', inline=True)
-                    profile_embed.add_field(name="Highest Single Win", value=f"{target_profile['highest_single_win']:,} {coin}", inline=True)
-                    profile_embed.add_field(name="Highest Single Loss", value=f"{target_profile['highest_single_loss']:,} {coin}", inline=True)
-                    profile_embed.add_field(name="", value='', inline=True)
                     profile_embed.add_field(name="Total Won", value=f"{target_profile['total_won']:,} {coin}", inline=True)
                     profile_embed.add_field(name="Total Lost", value=f"{target_profile['total_lost']:,} {coin}", inline=True)
                     profile_embed.add_field(name="", value='', inline=True)
@@ -1278,6 +1293,7 @@ class Currency(commands.Cog):
                         profile_embed.add_field(name="!gamble Win Rate", value=f"0.0%", inline=True)
                     profile_embed.add_field(name="!gamble uses", value=total_gambled, inline=True)
                     profile_embed.add_field(name="", value='', inline=True)
+                    profile_embed.add_field(name="Rare Items Showcase", value=', '.join(f"{rare_items_to_emoji[item]}: {target_profile['rare_items_found'].get(item, 0)}" for item in rare_items_to_emoji), inline=False)
                     profile_embed.add_field(name="Commands used", value=f"{sum(target_profile['commands'].values()):,}", inline=False)
                     return profile_embed
                 except Exception as e:
