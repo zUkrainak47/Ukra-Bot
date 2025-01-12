@@ -267,7 +267,7 @@ def make_sure_user_has_currency(guild_: str, user_: str):
 
 def get_default_profile(user_balance: int) -> dict:
     return {'highest_balance': max(750, user_balance), 'highest_single_win': 0, 'highest_single_loss': 0,
-            'highest_global_rank': -1, 'gamble_win_ratio': [0, 0], "total_won": 0, "total_lost": 0,
+            'highest_global_rank': -1, 'gamble_win_ratio': [0, 0], "total_won": 0, "total_lost": 0, "lotteries_won": 0,
             'items': {}, 'achievements': [], 'title': '', 'rare_items_found': {}, 'commands': {}, "prestige": 0,
             "upgrades": {}, "idle": {},
 
@@ -2055,6 +2055,9 @@ class Currency(commands.Cog):
                 active_lottery = {today_date: []}
                 save_active_lottery()
                 winner = await self.bot.fetch_user(random.choice(lottery_participants))
+                make_sure_user_profile_exists(guild_id, str(winner.id))
+                global_profiles[str(winner.id)]['lotteries_won'] += 1
+                save_profiles()
                 winnings = len(lottery_participants) * payout
                 add_coins_to_user(guild_id, str(winner.id), winnings)
                 lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
