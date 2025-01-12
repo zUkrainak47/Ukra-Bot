@@ -1075,13 +1075,13 @@ def remove_coins_from_user(guild_: str, user_: str, coin_: int, save=True):
 #             save_profiles()
 
 
-def highest_balance_check(guild_: str, user_: str, num=0, save=True, make_sure=True):
+def highest_balance_check(guild_: str, user_: str, user_bal=0, save=True, make_sure=True):
     if make_sure:
         make_sure_user_profile_exists(guild_, user_)
-    if not num:
-        num = get_user_balance(guild_, user_)
-    if num > global_profiles[user_]['highest_balance']:
-        global_profiles[user_]['highest_balance'] = num
+    if not user_bal:
+        user_bal = get_user_balance(guild_, user_)
+    if user_bal > global_profiles[user_]['highest_balance']:
+        global_profiles[user_]['highest_balance'] = user_bal
         if save:
             save_profiles()
 
@@ -1237,6 +1237,8 @@ class Currency(commands.Cog):
             if ctx.guild.get_member(target_id):
                 target = ctx.guild.get_member(target_id)
 
+            highest_balance_check(guild_id, str(target_id), 0)
+
             def get_profile_embed():
                 try:
                     make_sure_user_profile_exists(guild_id, str(target_id))
@@ -1285,6 +1287,7 @@ class Currency(commands.Cog):
             if mentions := ctx.message.mentions:
                 num = make_sure_user_has_currency(guild_id, str(mentions[0].id))
                 await ctx.reply(f"**{mentions[0].display_name}'s balance:** {num:,} {coin}")
+                highest_balance_check(guild_id, str(mentions[0].id), num)
 
             else:
                 contents = ctx.message.content.split()[1:]
@@ -1292,6 +1295,7 @@ class Currency(commands.Cog):
                 if target_id == -1:
                     num = make_sure_user_has_currency(guild_id, str(ctx.author.id))
                     await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
+                    highest_balance_check(guild_id, str(ctx.author.id), num)
                     return
                 try:
                     if target_id in fetched_users:
@@ -1302,6 +1306,7 @@ class Currency(commands.Cog):
                     if global_currency.setdefault(str(target_id), 750) == 750:
                         save_currency()
                     num = get_user_balance('', str(target_id))
+                    highest_balance_check(guild_id, str(target_id), num)
                     await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}")
                 except discord.errors.NotFound:
                     await ctx.reply(f'User with ID "{target_id}" does not exist')
@@ -1635,6 +1640,7 @@ class Currency(commands.Cog):
                     save_currency()  # save file
                     num1 = get_user_balance(guild_id, author_id)
                     num2 = get_user_balance(guild_id, target_id)
+                    highest_balance_check(guild_id, target_id, num2)
                     await ctx.reply(f"## Transaction successful!\n\n**{ctx.author.display_name}:** {num1:,} {coin}\n**{mentions[0].display_name}:** {num2:,} {coin}")
                 else:
                     await ctx.reply(f"Transaction failed! You don't own {number:,} {coin} {sadgebusiness}")
@@ -2051,8 +2057,8 @@ class Currency(commands.Cog):
                         save_currency()  # save file
                         num1 = get_user_balance(guild_id, str(winner.id))
                         num2 = get_user_balance(guild_id, str(loser.id))
-                        profile_update_after_any_gamble(guild_id, str(winner.id), abs(for_author), num1)
-                        profile_update_after_any_gamble(guild_id, str(loser.id), -abs(for_author), num2)
+                        profile_update_after_any_gamble(guild_id, str(winner.id), number, num1)
+                        profile_update_after_any_gamble(guild_id, str(loser.id), -number, num2)
                         command_count_increment(guild_id, author_id, 'pvp', True, False)
                         await ctx.reply(
                             f"## PVP winner is **{winner.display_name}**!\n" +
@@ -2160,11 +2166,11 @@ class Currency(commands.Cog):
                 active_lottery = {today_date: []}
                 save_active_lottery()
                 winner = await self.bot.fetch_user(random.choice(lottery_participants))
-                make_sure_user_profile_exists(guild_id, str(winner.id))
-                global_profiles[str(winner.id)]['lotteries_won'] += 1
-                save_profiles()
                 winnings = len(lottery_participants) * payout
                 add_coins_to_user(guild_id, str(winner.id), winnings)
+                highest_balance_check(guild_id, str(ctx.author.id), 0, False)
+                global_profiles[str(winner.id)]['lotteries_won'] += 1
+                save_profiles()
                 lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
                                    f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
                                    f"Participants: {len(lottery_participants)}")
