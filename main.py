@@ -1377,7 +1377,10 @@ class Currency(commands.Cog):
             else:
                 dig_message = f'## Digging successful! {shovel}'
             add_coins_to_user(guild_id, author_id, dig_coins)  # save file
-            await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can dig again {get_timestamp(20)}")
+            num = get_user_balance(guild_id, author_id)
+            highest_balance_check(guild_id, author_id, num, False)
+            command_count_increment(guild_id, author_id, 'dig', True, False)
+            await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -1419,7 +1422,10 @@ class Currency(commands.Cog):
             else:
                 mine_message = f"## Mining successful! ⛏️\n"
             add_coins_to_user(guild_id, author_id, mine_coins)  # save file
-            await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can mine again {get_timestamp(120)}")
+            num = get_user_balance(guild_id, author_id)
+            highest_balance_check(guild_id, author_id, num, False)
+            command_count_increment(guild_id, author_id, 'mine', True, False)
+            await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can mine again {get_timestamp(120)}")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -1450,7 +1456,10 @@ class Currency(commands.Cog):
             make_sure_user_has_currency(guild_id, author_id)
             work_coins = random.randint(45, 55)
             add_coins_to_user(guild_id, author_id, work_coins)  # save file
-            await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
+            num = get_user_balance(guild_id, author_id)
+            highest_balance_check(guild_id, author_id, num, False)
+            command_count_increment(guild_id, author_id, 'work', True, False)
+            await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {num:,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -1499,7 +1508,10 @@ class Currency(commands.Cog):
                 fish_message = f"## {cast_command.capitalize()} successful! {'🎣' * (cast_command == 'fishing') + fishinge * (cast_command == 'fishinge')}\n"
                 ps_message = ''
             add_coins_to_user(guild_id, author_id, fish_coins)  # save file
-            await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
+            num = get_user_balance(guild_id, author_id)
+            highest_balance_check(guild_id, author_id, num, False)
+            command_count_increment(guild_id, author_id, 'fishinge', True, False)
+            await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
