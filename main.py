@@ -1132,6 +1132,17 @@ def command_count_increment(guild_: str, user_: str, command_name: str, save=Tru
         save_profiles()
 
 
+def rare_finds_increment(guild_: str, user_: str, find_name: str, save=True, make_sure=True):
+    if make_sure:
+        make_sure_user_profile_exists(guild_, user_)
+    if find_name in global_profiles[user_]['rare_items_found']:
+        global_profiles[user_]['rare_items_found'][find_name] += 1
+    else:
+        global_profiles[user_]['rare_items_found'][find_name] = 1
+    if save:
+        save_profiles()
+
+
 async def schedule_reminders(message, amount, duration, remind_intervals):
     reminders_sent = 0
     for remind_time in remind_intervals:
@@ -1262,9 +1273,9 @@ class Currency(commands.Cog):
                     profile_embed.add_field(name="Total Lost", value=f"{target_profile['total_lost']:,} {coin}", inline=True)
                     profile_embed.add_field(name="", value='', inline=True)
                     if total_gambled := sum(target_profile['gamble_win_ratio']):
-                        profile_embed.add_field(name="!gamble Win Ratio", value=f"{round(target_profile['gamble_win_ratio'][0]/total_gambled*100, 2)}%", inline=True)
+                        profile_embed.add_field(name="!gamble Win Rate", value=f"{round(target_profile['gamble_win_ratio'][0]/total_gambled*100, 2)}%", inline=True)
                     else:
-                        profile_embed.add_field(name="!gamble Win Ratio", value=f"0.0%", inline=True)
+                        profile_embed.add_field(name="!gamble Win Rate", value=f"0.0%", inline=True)
                     profile_embed.add_field(name="!gamble uses", value=total_gambled, inline=True)
                     profile_embed.add_field(name="", value='', inline=True)
                     profile_embed.add_field(name="Commands used", value=f"{sum(target_profile['commands'].values()):,}", inline=False)
@@ -1378,12 +1389,13 @@ class Currency(commands.Cog):
             if dig_coins == 20:
                 dig_coins = 2500
                 dig_message = f'# You found Gold! {gold_emoji}'
+                rare_finds_increment(guild_id, author_id, 'gold', False)
                 await rare_channel.send(f"**{ctx.author.mention}** found Gold {gold_emoji} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             else:
                 dig_message = f'## Digging successful! {shovel}'
             add_coins_to_user(guild_id, author_id, dig_coins)  # save file
             num = get_user_balance(guild_id, author_id)
-            highest_balance_check(guild_id, author_id, num, False)
+            highest_balance_check(guild_id, author_id, num, save=False, make_sure=dig_coins < 25)  # make sure profile exists only if gold wasn't found
             command_count_increment(guild_id, author_id, 'dig', True, False)
             await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
         elif currency_allowed(ctx):
@@ -1416,19 +1428,21 @@ class Currency(commands.Cog):
             make_sure_user_has_currency(guild_id, author_id)
             t = random.randint(1, 625)
             mine_coins = int(t**0.5 * 2)
-            if mine_coins == 50:
+            if t == 625:
                 mine_coins = 7500
                 mine_message = f'# You found Diamonds! 💎'
+                rare_finds_increment(guild_id, author_id, 'diamonds', False)
                 await rare_channel.send(f"**{ctx.author.mention}** found Diamonds 💎 - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             elif t == 1:
                 mine_coins = 1
                 mine_message = f"# You struck Fool's Gold! ✨"
+                rare_finds_increment(guild_id, author_id, 'fool', False)
                 await rare_channel.send(f"**{ctx.author.mention}** struck Fool's Gold ✨ - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             else:
                 mine_message = f"## Mining successful! ⛏️\n"
             add_coins_to_user(guild_id, author_id, mine_coins)  # save file
             num = get_user_balance(guild_id, author_id)
-            highest_balance_check(guild_id, author_id, num, False)
+            highest_balance_check(guild_id, author_id, num, save=False, make_sure=t not in (1, 625))
             command_count_increment(guild_id, author_id, 'mine', True, False)
             await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can mine again {get_timestamp(120)}")
         elif currency_allowed(ctx):
@@ -1500,10 +1514,12 @@ class Currency(commands.Cog):
                 if fish_coins == 12500:
                     fish_coins = 25000000
                     fish_message = f"# You found *The Catch*{The_Catch}\n"
+                    rare_finds_increment(guild_id, author_id, 'the_catch', False)
                     ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag to your friends'
                     await rare_channel.send(f"<@&1326967584821612614> **{ctx.author.mention}** JUST FOUND *THE CATCH* {The_Catch} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
                 else:
                     fish_message = f'# You found a huge Treasure Chest!!! {treasure_chest}'
+                    rare_finds_increment(guild_id, author_id, 'treasure_chest', False)
                     ps_message = ''
                     await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest {treasure_chest} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
             else:
@@ -1514,7 +1530,7 @@ class Currency(commands.Cog):
                 ps_message = ''
             add_coins_to_user(guild_id, author_id, fish_coins)  # save file
             num = get_user_balance(guild_id, author_id)
-            highest_balance_check(guild_id, author_id, num, False)
+            highest_balance_check(guild_id, author_id, num, save=False, make_sure=fish_coins < 200)
             command_count_increment(guild_id, author_id, 'fishinge', True, False)
             await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
         elif currency_allowed(ctx):
