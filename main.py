@@ -1062,6 +1062,76 @@ def remove_coins_from_user(guild_: str, user_: str, coin_: int, save=True):
     add_coins_to_user(guild_, user_, -coin_, save)
 
 
+# def highest_win_loss_check(guild_: str, user_: str, delta: int, save=True, make_sure=True):
+#     if make_sure:
+#         make_sure_user_profile_exists(guild_, user_)
+#     if delta < 0 and -delta > global_profiles[user_]['highest_single_loss']:
+#         global_profiles[user_]['highest_single_loss'] = -delta
+#         if save:
+#             save_profiles()
+#     elif delta > 0 and delta > global_profiles[user_]['highest_single_win']:
+#         global_profiles[user_]['highest_single_win'] = delta
+#         if save:
+#             save_profiles()
+
+
+def highest_balance_check(guild_: str, user_: str, num=0, save=True, make_sure=True):
+    if make_sure:
+        make_sure_user_profile_exists(guild_, user_)
+    if not num:
+        num = get_user_balance(guild_, user_)
+    if num > global_profiles[user_]['highest_balance']:
+        global_profiles[user_]['highest_balance'] = num
+        if save:
+            save_profiles()
+
+
+def profile_update_after_any_gamble(guild_: str, user_: str, delta: int, user_bal=0, save=True, make_sure=True):
+    if make_sure:
+        make_sure_user_profile_exists(guild_, user_)
+
+    # win loss check, total lost/won update
+    if delta < 0:
+        if -delta > global_profiles[user_]['highest_single_loss']:
+            global_profiles[user_]['highest_single_loss'] = -delta
+        global_profiles[user_]['total_lost'] += -delta
+    elif delta > 0:
+        if delta > global_profiles[user_]['highest_single_win']:
+            global_profiles[user_]['highest_single_win'] = delta
+        global_profiles[user_]['total_won'] += delta
+
+    # balance check
+    if not user_bal:
+        user_bal = get_user_balance(guild_, user_)
+    if user_bal > global_profiles[user_]['highest_balance']:
+        global_profiles[user_]['highest_balance'] = user_bal
+
+    if save:
+        save_profiles()
+
+
+def adjust_gamble_winrate(guild_: str, user_: str, win: bool, save=True, make_sure=True):
+    if make_sure:
+        make_sure_user_profile_exists(guild_, user_)
+    if win:
+        global_profiles[user_]['gamble_win_ratio'][0] += 1
+    else:
+        global_profiles[user_]['gamble_win_ratio'][1] += 1
+    if save:
+        save_profiles()
+
+
+def command_count_increment(guild_: str, user_: str, command_name: str, save=True, make_sure=True):
+    if make_sure:
+        make_sure_user_profile_exists(guild_, user_)
+    if command_name in global_profiles[user_]['commands']:
+        global_profiles[user_]['commands'][command_name] += 1
+    else:
+        global_profiles[user_]['commands'][command_name] = 1
+    if save:
+        save_profiles()
+
+
 async def schedule_reminders(message, amount, duration, remind_intervals):
     reminders_sent = 0
     for remind_time in remind_intervals:
@@ -1168,28 +1238,37 @@ class Currency(commands.Cog):
                 target = ctx.guild.get_member(target_id)
 
             def get_profile_embed():
-                make_sure_user_profile_exists(guild_id, str(target_id))
-                num = get_user_balance(guild_id, str(target_id))
-                target_profile = get_profile(str(target_id))
-                if target_profile['title']:
-                    profile_embed = discord.Embed(title=f"{target.display_name}'s profile", description=target_profile['title'], color=target.color)
-                else:
-                    profile_embed = discord.Embed(title=f"{target.display_name}'s profile", color=target.color)
-                profile_embed.set_thumbnail(url=target.avatar.url)
-                profile_embed.add_field(name="Balance", value=f"{num:,} {coin}", inline=True)
-                profile_embed.add_field(name="Max Balance", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
-                if target_profile['highest_global_rank'] != -1:
-                    profile_embed.add_field(name="Highest Global Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
-                else:
+                try:
+                    make_sure_user_profile_exists(guild_id, str(target_id))
+                    num = get_user_balance(guild_id, str(target_id))
+                    target_profile = get_profile(str(target_id))
+                    if target_profile['title']:
+                        profile_embed = discord.Embed(title=f"{target.display_name}'s profile", description=target_profile['title'], color=target.color)
+                    else:
+                        profile_embed = discord.Embed(title=f"{target.display_name}'s profile", color=target.color)
+                    profile_embed.set_thumbnail(url=target.avatar.url)
+                    profile_embed.add_field(name="Balance", value=f"{num:,} {coin}", inline=True)
+                    profile_embed.add_field(name="Max Balance", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
+                    if target_profile['highest_global_rank'] != -1:
+                        profile_embed.add_field(name="Highest Global Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
+                    else:
+                        profile_embed.add_field(name="", value='', inline=True)
+                    profile_embed.add_field(name="Highest Single Win", value=f"{target_profile['highest_single_win']:,} {coin}", inline=True)
+                    profile_embed.add_field(name="Highest Single Loss", value=f"{target_profile['highest_single_loss']:,} {coin}", inline=True)
                     profile_embed.add_field(name="", value='', inline=True)
-                profile_embed.add_field(name="Highest Single Win", value='WIP', inline=True)
-                profile_embed.add_field(name="Highest Single Loss", value='WIP', inline=True)
-                profile_embed.add_field(name="", value='', inline=True)
-                profile_embed.add_field(name="!gamble uses", value='WIP', inline=True)
-                profile_embed.add_field(name="!gamble Win Ratio", value='WIP', inline=True)
-                profile_embed.add_field(name="", value='', inline=True)
-                profile_embed.add_field(name="Commands used", value='WIP', inline=False)
-                return profile_embed
+                    profile_embed.add_field(name="Total Won", value=f"{target_profile['total_won']:,} {coin}", inline=True)
+                    profile_embed.add_field(name="Total Lost", value=f"{target_profile['total_lost']:,} {coin}", inline=True)
+                    profile_embed.add_field(name="", value='', inline=True)
+                    if total_gambled := sum(target_profile['gamble_win_ratio']):
+                        profile_embed.add_field(name="!gamble Win Ratio", value=f"{round(target_profile['gamble_win_ratio'][0]/total_gambled*100, 2)}%", inline=True)
+                    else:
+                        profile_embed.add_field(name="!gamble Win Ratio", value=f"0.0%", inline=True)
+                    profile_embed.add_field(name="!gamble uses", value=total_gambled, inline=True)
+                    profile_embed.add_field(name="", value='', inline=True)
+                    profile_embed.add_field(name="Commands used", value=f"{sum(target_profile['commands'].values()):,}", inline=False)
+                    return profile_embed
+                except Exception as e:
+                    print(e)
 
             await ctx.send(embed=get_profile_embed())
 
@@ -1728,6 +1807,8 @@ class Currency(commands.Cog):
                     delta = int(number * 2 * (did_you_win - 0.5))
                     add_coins_to_user(guild_id, author_id, delta)  # save file
                     num = get_user_balance(guild_id, author_id)
+                    profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
+                    command_count_increment(guild_id, author_id, 'coinflip', True, False)
                     messages_dict = {True: f"You win! The result was `{result.capitalize()}` {yay}", False: f"You lose! The result was `{result.capitalize()}` {o7}"}
                     await ctx.reply(f"## {messages_dict[did_you_win]}\n\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
                 else:
@@ -1763,6 +1844,9 @@ class Currency(commands.Cog):
                     delta = int(number * 2 * (result - 0.5))
                     add_coins_to_user(guild_id, author_id, delta)  # save file
                     num = get_user_balance(guild_id, author_id)
+                    profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
+                    adjust_gamble_winrate(guild_id, author_id, result == 1, False, False)
+                    command_count_increment(guild_id, author_id, 'gamble', True, False)
                     messages_dict = {1: f"You win! {yay}", 0: f"You lose! {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
                 else:
@@ -1799,6 +1883,8 @@ class Currency(commands.Cog):
                     delta = number * 5 * result - number * (not result)
                     add_coins_to_user(guild_id, author_id, delta)  # save file
                     num = get_user_balance(guild_id, author_id)
+                    profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
+                    command_count_increment(guild_id, author_id, 'dice', True, False)
                     messages_dict = {1: f"You win! The dice rolled `{dice_roll}` {yay}", 0: f"You lose! The dice rolled `{dice_roll}` {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
                 else:
@@ -1840,6 +1926,8 @@ class Currency(commands.Cog):
                     delta = number * 35 * result - number * (not result)
                     add_coins_to_user(guild_id, author_id, delta)  # save file
                     num = get_user_balance(guild_id, author_id)
+                    profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
+                    command_count_increment(guild_id, author_id, 'twodice', True, False)
                     messages_dict = {1: f"You win! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {yay}", 0: f"You lose! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
                 else:
@@ -1951,6 +2039,9 @@ class Currency(commands.Cog):
                         save_currency()  # save file
                         num1 = get_user_balance(guild_id, str(winner.id))
                         num2 = get_user_balance(guild_id, str(loser.id))
+                        profile_update_after_any_gamble(guild_id, str(winner.id), abs(for_author), num1)
+                        profile_update_after_any_gamble(guild_id, str(loser.id), -abs(for_author), num2)
+                        command_count_increment(guild_id, author_id, 'pvp', True, False)
                         await ctx.reply(
                             f"## PVP winner is **{winner.display_name}**!\n" +
                             f"**{winner.display_name}:** +{number:,} {coin}, balance: {num1:,} {coin}\n" * (number > 0) +
@@ -2018,6 +2109,8 @@ class Currency(commands.Cog):
                     delta = 500 * number if ((results[0] == sunfire2) and result) else 50 * number if result else -number
                     add_coins_to_user(guild_id, author_id, delta)  # save file
                     num = get_user_balance(guild_id, author_id)
+                    profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
+                    command_count_increment(guild_id, author_id, 'slots', True, False)
                     messages_dict = {True: f"# {' | '.join(results)}\n## You win{' **BIG**' * (results[0] == sunfire2)}!", False: f"# {' | '.join(results)}\n## You lose!"}
                     await ctx.reply(f"{messages_dict[result]}\n" + f"**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number != 0))
                     if result:
