@@ -1220,14 +1220,16 @@ class Currency(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(aliases=['p'])
-    async def profile(self, ctx):
+    @commands.command(aliases=['p', 'profile'])
+    async def info(self, ctx):
         """
         Check your or someone else's profile
         """
         global fetched_users
         guild_id = str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
+            if 'p' in ctx.message.content.split()[0]:
+                await ctx.send('This view will be accessible only via !info soon. Profiles are being reworked')
             contents = ctx.message.content.split()[1:]
             target_id = convert_msg_to_user_id(contents, True)
 
@@ -1270,20 +1272,24 @@ class Currency(commands.Cog):
                         d_msg = 0
 
                     target_profile = get_profile(str(target_id))
+
+                    global_rank = sorted(global_currency.items(), key=lambda x: x[1], reverse=True).index((str(target_id), global_currency[str(target_id)])) + 1
+                    if target_profile['highest_global_rank'] > global_rank or target_profile['highest_global_rank'] == -1:
+                        target_profile['highest_global_rank'] = global_rank
                     if target_profile['title']:
-                        profile_embed = discord.Embed(title=f"{target.display_name}'s profile", description=target_profile['title'], color=target.color)
+                        profile_embed = discord.Embed(title=f"{target.display_name} - info", description=target_profile['title'], color=target.color)
                     else:
-                        profile_embed = discord.Embed(title=f"{target.display_name}'s profile", color=target.color)
+                        profile_embed = discord.Embed(title=f"{target.display_name} - info", color=target.color)
                     profile_embed.set_thumbnail(url=target.avatar.url)
                     profile_embed.add_field(name="Balance", value=f"{num:,} {coin}", inline=True)
-                    profile_embed.add_field(name="Max Balance", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
+                    profile_embed.add_field(name="Global Rank", value=f"#{global_rank:,}", inline=True)
                     profile_embed.add_field(name="Daily Streak", value=d_msg, inline=True)
+                    profile_embed.add_field(name="Max Balance", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
+                    profile_embed.add_field(name="Highest Global Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
+                    profile_embed.add_field(name="", value='', inline=True)
                     profile_embed.add_field(name="Highest Single Win", value=f"{target_profile['highest_single_win']:,} {coin}", inline=True)
                     profile_embed.add_field(name="Highest Single Loss", value=f"{target_profile['highest_single_loss']:,} {coin}", inline=True)
-                    if target_profile['highest_global_rank'] != -1:
-                        profile_embed.add_field(name="Highest Global Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
-                    else:
-                        profile_embed.add_field(name="", value='', inline=True)
+                    profile_embed.add_field(name="", value='', inline=True)
                     profile_embed.add_field(name="Total Won", value=f"{target_profile['total_won']:,} {coin}", inline=True)
                     profile_embed.add_field(name="Total Lost", value=f"{target_profile['total_lost']:,} {coin}", inline=True)
                     profile_embed.add_field(name="", value='', inline=True)
@@ -1292,7 +1298,7 @@ class Currency(commands.Cog):
                     else:
                         profile_embed.add_field(name="!gamble Win Rate", value=f"0.0%", inline=True)
                     profile_embed.add_field(name="!gamble uses", value=total_gambled, inline=True)
-                    profile_embed.add_field(name="", value='', inline=True)
+                    profile_embed.add_field(name="Lotteries Won", value=f'{target_profile['lotteries_won']:,}', inline=True)
                     profile_embed.add_field(name="Rare Items Showcase", value=', '.join(f"{rare_items_to_emoji[item]}: {target_profile['rare_items_found'].get(item, 0)}" for item in rare_items_to_emoji), inline=False)
                     profile_embed.add_field(name="Commands used", value=f"{sum(target_profile['commands'].values()):,}", inline=False)
                     return profile_embed
@@ -2208,15 +2214,16 @@ class Currency(commands.Cog):
                                    f"Participants: {len(lottery_participants)}")
                 await lottery_channel.send(lottery_message)
             contents = ctx.message.content.split()[1:]
+            not_joined = ctx.author.id not in active_lottery[today_date]
             if len(contents) == 1 and contents[0] == 'enter':
                 author_id = str(ctx.author.id)
-                if make_sure_user_has_currency(guild_id, author_id) < entrance_price:
-                    await ctx.reply(f"You don't own {entrance_price} {coin} {sadgebusiness}")
-                    return
                 join_server_msg = f'\n*Results will be announced in <#1326949510336872458>*' \
                     if ctx.guild.id == official_server_id \
                     else "\n*Join the official Ukra Bot Server for the results!* (`!server`)"
-                if ctx.author.id not in active_lottery[today_date]:
+                if not_joined:
+                    if make_sure_user_has_currency(guild_id, author_id) < entrance_price:
+                        await ctx.reply(f"You don't own {entrance_price} {coin} {sadgebusiness}")
+                        return
                     remove_coins_from_user(guild_id, author_id, entrance_price)
                     active_lottery[today_date].append(ctx.author.id)
                     save_active_lottery()
@@ -2230,8 +2237,9 @@ class Currency(commands.Cog):
                                f'- **{len(active_lottery[today_date])}** participant{'s' if len(active_lottery[today_date]) != 1 else ''}\n'
                                f'- **{len(active_lottery[today_date]) * payout:,}** {coin} in pool\n'
                                f'- Participation price: {entrance_price} {coin}\n'
-                               f'- Ends <t:{get_daily_reset_timestamp()}:R>\n'
-                               f'If you want to participate, run `!lottery enter`')
+                               f'- Ends <t:{get_daily_reset_timestamp()}:R>\n' +
+                               f'**If you want to participate, run** `!lottery enter`' * not_joined +
+                               f"*You've joined today's lottery* {yay}" * (not not_joined))
 
     async def run_giveaway(self, ctx, admin=False):
         """
