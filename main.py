@@ -1327,16 +1327,44 @@ class Currency(commands.Cog):
     @commands.command(aliases=['p'])
     async def profile(self, ctx):
         """
-        Check your or someone else's profile
+        Check your or someone else's profile (stats being collected since 12 Jan 2025)
         """
         await self.get_user_profile(ctx, False)
 
     @commands.command()
     async def info(self, ctx):
         """
-        Check your or someone else's info
+        Check your or someone else's info (stats being collected since 12 Jan 2025)
         """
         await self.get_user_profile(ctx, True)
+
+    @commands.command()
+    async def title(self, ctx):
+        """
+        Change the title in your profile
+        """
+        guild_id = str(ctx.guild.id)
+        author_id = str(ctx.author.id)
+        make_sure_user_profile_exists(guild_id, author_id)
+        if not global_profiles[author_id]['items'].get('titles', False):
+            await ctx.reply(f'You have no titles to choose from yet :p')
+        else:
+            contents = ctx.message.content.split()[1:]
+            if len(contents) == 1 and contents[0].isdecimal() and len(global_profiles[author_id]['items']['titles']) >= int(contents[0]):
+                if int(contents[0]) == 0:
+                    global_profiles[author_id]['title'] = ''
+                    await ctx.reply('Your title has been reset')
+                    save_profiles()
+                    return
+                global_profiles[author_id]['title'] = global_profiles[author_id]['items']['titles'][int(contents[0])-1]
+                await ctx.reply(f'Your title has been changed to {global_profiles[author_id]["title"]}')
+                save_profiles()
+            else:
+                current_title = global_profiles[author_id]["title"]
+                await ctx.reply(f'## Availbable titles:\n{"\n".join(f'#{i+1} - {global_profiles[author_id]['items']['titles'][i]}' for i in range(len(global_profiles[author_id]["items"]["titles"])))}\n'
+                                f'\n'
+                                f'To set title #1, use `!title 1`, to set no title use `!title 0`\n'
+                                f'Your current title is **{current_title if current_title else 'not set'}**\n')
 
     @commands.command(aliases=['b', 'bal'])
     async def balance(self, ctx):
@@ -1732,7 +1760,7 @@ class Currency(commands.Cog):
             c = 0
             found_author = False
             contents = ctx.message.content.split()[1:]
-            if len(contents) == 1 and contents[0].isdigit() and contents[0] != '0':
+            if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
                 page = min(int(contents[0]), math.ceil(len(sorted_members)/10))
                 page_msg = f' - page #{page}'
             else:
@@ -1784,7 +1812,7 @@ class Currency(commands.Cog):
             top_users = []
             found_author = False
             contents = ctx.message.content.split()[1:]
-            if len(contents) == 1 and contents[0].isdigit() and contents[0] != '0':
+            if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
                 page = min(int(contents[0]), math.ceil(len(sorted_members)/10))
                 page_msg = f' - page #{page}'
             else:
