@@ -1345,26 +1345,29 @@ class Currency(commands.Cog):
         """
         guild_id = str(ctx.guild.id)
         author_id = str(ctx.author.id)
-        make_sure_user_profile_exists(guild_id, author_id)
-        if not global_profiles[author_id]['items'].get('titles', False):
-            await ctx.reply(f'You have no titles to choose from yet :p')
-        else:
-            contents = ctx.message.content.split()[1:]
-            if len(contents) == 1 and contents[0].isdecimal() and len(global_profiles[author_id]['items']['titles']) >= int(contents[0]):
-                if int(contents[0]) == 0:
-                    global_profiles[author_id]['title'] = ''
-                    await ctx.reply('Your title has been reset')
-                    save_profiles()
-                    return
-                global_profiles[author_id]['title'] = global_profiles[author_id]['items']['titles'][int(contents[0])-1]
-                await ctx.reply(f'Your title has been changed to {global_profiles[author_id]["title"]}')
-                save_profiles()
+        if currency_allowed(ctx) and bot_down_check(guild_id):
+            make_sure_user_profile_exists(guild_id, author_id)
+            if not global_profiles[author_id]['items'].get('titles', False):
+                await ctx.reply(f'You have no titles to choose from yet :p')
             else:
-                current_title = global_profiles[author_id]["title"]
-                await ctx.reply(f'## Availbable titles:\n{"\n".join(f'#{i+1} - {global_profiles[author_id]['items']['titles'][i]}' for i in range(len(global_profiles[author_id]["items"]["titles"])))}\n'
-                                f'\n'
-                                f'To set title #1, use `!title 1`, to set no title use `!title 0`\n'
-                                f'Your current title is **{current_title if current_title else 'not set'}**\n')
+                contents = ctx.message.content.split()[1:]
+                if len(contents) == 1 and contents[0].isdecimal() and len(global_profiles[author_id]['items']['titles']) >= int(contents[0]):
+                    if int(contents[0]) == 0:
+                        global_profiles[author_id]['title'] = ''
+                        await ctx.reply('Your title has been reset')
+                        save_profiles()
+                        return
+                    global_profiles[author_id]['title'] = global_profiles[author_id]['items']['titles'][int(contents[0])-1]
+                    await ctx.reply(f'Your title has been changed to {global_profiles[author_id]["title"]}')
+                    save_profiles()
+                else:
+                    current_title = global_profiles[author_id]["title"]
+                    await ctx.reply(f'## Availbable titles:\n{"\n".join(f'#{i+1} - {global_profiles[author_id]['items']['titles'][i]}' for i in range(len(global_profiles[author_id]["items"]["titles"])))}\n'
+                                    f'\n'
+                                    f'To set title #1, use `!title 1`, to set no title use `!title 0`\n'
+                                    f'Your current title is **{current_title if current_title else 'not set'}**\n')
+        elif currency_allowed(ctx):
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.command(aliases=['b', 'bal'])
     async def balance(self, ctx):
