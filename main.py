@@ -1220,16 +1220,13 @@ class Currency(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(aliases=['p', 'profile'])
-    async def info(self, ctx):
+    async def get_user_profile(self, ctx, full_info=False):
         """
-        Check your or someone else's profile
+        Returns embed for profile or info
         """
         global fetched_users
         guild_id = str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
-            if 'p' in ctx.message.content.split()[0]:
-                await ctx.send('This view will be accessible only via !info soon. Profiles are being reworked')
             contents = ctx.message.content.split()[1:]
             target_id = convert_msg_to_user_id(contents, True)
 
@@ -1250,6 +1247,11 @@ class Currency(commands.Cog):
 
             if ctx.guild.get_member(target_id):
                 target = ctx.guild.get_member(target_id)
+                embed_color = target.color
+                if embed_color == discord.Colour.default():
+                    embed_color = 0xffd000
+            else:
+                embed_color = 0xffd000
 
             highest_balance_check(guild_id, str(target_id), 0)
 
@@ -1276,31 +1278,43 @@ class Currency(commands.Cog):
                     global_rank = sorted(global_currency.items(), key=lambda x: x[1], reverse=True).index((str(target_id), global_currency[str(target_id)])) + 1
                     if target_profile['highest_global_rank'] > global_rank or target_profile['highest_global_rank'] == -1:
                         target_profile['highest_global_rank'] = global_rank
+                    embed_title = ' - info' if full_info else "'s profile"
                     if target_profile['title']:
-                        profile_embed = discord.Embed(title=f"{target.display_name} - info", description=target_profile['title'], color=target.color)
+                        profile_embed = discord.Embed(title=f"{target.display_name}{embed_title}", description=target_profile['title'], color=embed_color)
                     else:
-                        profile_embed = discord.Embed(title=f"{target.display_name} - info", color=target.color)
+                        profile_embed = discord.Embed(title=f"{target.display_name}{embed_title}", color=embed_color)
                     profile_embed.set_thumbnail(url=target.avatar.url)
+
                     profile_embed.add_field(name="Balance", value=f"{num:,} {coin}", inline=True)
                     profile_embed.add_field(name="Global Rank", value=f"#{global_rank:,}", inline=True)
                     profile_embed.add_field(name="Daily Streak", value=d_msg, inline=True)
-                    profile_embed.add_field(name="Max Balance", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
-                    profile_embed.add_field(name="Highest Global Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
-                    profile_embed.add_field(name="", value='', inline=True)
+
+                    if full_info:
+                        profile_embed.add_field(name="Max Balance", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
+                        profile_embed.add_field(name="Highest Global Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
+                        profile_embed.add_field(name="", value='', inline=True)
+
                     profile_embed.add_field(name="Highest Single Win", value=f"{target_profile['highest_single_win']:,} {coin}", inline=True)
                     profile_embed.add_field(name="Highest Single Loss", value=f"{target_profile['highest_single_loss']:,} {coin}", inline=True)
                     profile_embed.add_field(name="", value='', inline=True)
-                    profile_embed.add_field(name="Total Won", value=f"{target_profile['total_won']:,} {coin}", inline=True)
-                    profile_embed.add_field(name="Total Lost", value=f"{target_profile['total_lost']:,} {coin}", inline=True)
-                    profile_embed.add_field(name="", value='', inline=True)
-                    if total_gambled := sum(target_profile['gamble_win_ratio']):
-                        profile_embed.add_field(name="!gamble Win Rate", value=f"{round(target_profile['gamble_win_ratio'][0]/total_gambled*100, 2)}%", inline=True)
-                    else:
-                        profile_embed.add_field(name="!gamble Win Rate", value=f"0.0%", inline=True)
-                    profile_embed.add_field(name="!gamble uses", value=total_gambled, inline=True)
-                    profile_embed.add_field(name="Lotteries Won", value=f'{target_profile['lotteries_won']:,}', inline=True)
+
+                    if full_info:
+                        profile_embed.add_field(name="Total Won", value=f"{target_profile['total_won']:,} {coin}", inline=True)
+                        profile_embed.add_field(name="Total Lost", value=f"{target_profile['total_lost']:,} {coin}", inline=True)
+                        profile_embed.add_field(name="", value='', inline=True)
+
+                        if total_gambled := sum(target_profile['gamble_win_ratio']):
+                            profile_embed.add_field(name="!gamble Win Rate", value=f"{round(target_profile['gamble_win_ratio'][0]/total_gambled*100, 2)}%", inline=True)
+                        else:
+                            profile_embed.add_field(name="!gamble Win Rate", value=f"0.0%", inline=True)
+                        profile_embed.add_field(name="!gamble uses", value=total_gambled, inline=True)
+                        profile_embed.add_field(name="Lotteries Won", value=f'{target_profile['lotteries_won']:,}', inline=True)
+
                     profile_embed.add_field(name="Rare Items Showcase", value=', '.join(f"{rare_items_to_emoji[item]}: {target_profile['rare_items_found'].get(item, 0)}" for item in rare_items_to_emoji), inline=False)
-                    profile_embed.add_field(name="Commands used", value=f"{sum(target_profile['commands'].values()):,}", inline=False)
+
+                    if full_info:
+                        profile_embed.add_field(name="Commands used", value=f"{sum(target_profile['commands'].values()):,}", inline=False)
+
                     return profile_embed
                 except Exception as e:
                     print(e)
@@ -1309,6 +1323,20 @@ class Currency(commands.Cog):
 
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
+
+    @commands.command(aliases=['p'])
+    async def profile(self, ctx):
+        """
+        Check your or someone else's profile
+        """
+        await self.get_user_profile(ctx, False)
+
+    @commands.command()
+    async def info(self, ctx):
+        """
+        Check your or someone else's info
+        """
+        await self.get_user_profile(ctx, True)
 
     @commands.command(aliases=['b', 'bal'])
     async def balance(self, ctx):
