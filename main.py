@@ -239,11 +239,12 @@ def make_sure_server_settings_exist(guild_id, save=True):
     """
     Makes sure the server settings exist, saves them to file by default, returns list of users in server
     """
-    server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands)
-    server_settings.get(guild_id).setdefault('members', [])
-    if save:
-        save_settings()
-    return server_settings.get(guild_id).get('members')
+    if guild_id:
+        server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands)
+        server_settings.get(guild_id).setdefault('members', [])
+        if save:
+            save_settings()
+        return server_settings.get(guild_id).get('members')
 
 
 def make_sure_user_has_currency(guild_: str, user_: str):
@@ -254,9 +255,10 @@ def make_sure_user_has_currency(guild_: str, user_: str):
     Makes sure user has coins
     Returns user's balance
     """
-    if user_ not in make_sure_server_settings_exist(guild_, save=False):
-        server_settings[guild_]['members'].append(user_)
-        save_settings()
+    if guild_:
+        if user_ not in make_sure_server_settings_exist(guild_, save=False):
+            server_settings[guild_]['members'].append(user_)
+            save_settings()
     if global_currency.setdefault(user_, 750) == 750:
         save_currency()
     if daily_streaks.setdefault(user_, 0) == 0:
@@ -586,7 +588,8 @@ async def dnd(ctx):
     Examples: !dnd 2d6, !dnd d20, !dnd 5, !dnd
     !roll <n1>d<n1> where n1 and n2 are numbers, d is a separator, 0 < n1 <= 100, 0 < n2 <= 1000
     """
-    guild_id = str(ctx.guild.id)
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+
     make_sure_server_settings_exist(guild_id)
     if 'dnd' in server_settings.get(guild_id).get('allowed_commands'):
         contents = ''.join(ctx.message.content.split()[1:])
@@ -643,6 +646,8 @@ async def botpp(ctx):
         await ctx.send("!pp")
     except discord.errors.NotFound:
         await ctx.send("Jarv Bot is not in the server")
+    except:
+        await ctx.send("Can't use PP here :P")
 
 
 @client.command(aliases=['botafk'])
@@ -667,7 +672,7 @@ async def compliment(ctx):
     Compliments user based on 3x100 most popular compliments lmfaoooooo
     !compliment @user
     """
-    guild_id = str(ctx.guild.id)
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
     if 'compliment' in server_settings.get(guild_id).get('allowed_commands'):
         with open(Path('dev', 'compliments.txt')) as fp:
@@ -677,15 +682,18 @@ async def compliment(ctx):
             await ctx.send(f"{mentions[0].mention}, {compliment_[0].lower()}{compliment_[1:]}")
         else:
             await ctx.send(compliment_)
-        await log_channel.send(f'✅ {ctx.author.mention} casted a compliment in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
-    else:
-        await log_channel.send(f"🫡 {ctx.author.mention} tried to cast a compliment in {ctx.channel.mention} but compliments aren't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
+        # await log_channel.send(f'✅ {ctx.author.mention} casted a compliment in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
+    # else:
+        # await log_channel.send(f"🫡 {ctx.author.mention} tried to cast a compliment in {ctx.channel.mention} but compliments aren't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
 
 
 @client.command()
 async def settings(ctx):
     """Shows current server settings"""
-    guild_id = str(ctx.guild.id)
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    # if not guild_id:
+    #     await ctx.reply("No settings to configure in DMs!")
+    #     return
     make_sure_server_settings_exist(guild_id)
     guild_settings = server_settings.get(guild_id)
     allowed_commands = guild_settings.get('allowed_commands')
@@ -732,7 +740,10 @@ async def setrole(ctx):
     example: !setrole segs @Segs Role
     """
     allowed_roles = ['segs', 'backshot', 'backshots']
-    guild_id = str(ctx.guild.id)
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    if not guild_id:
+        await ctx.reply("Can't use this in DMs!")
+        return
     make_sure_server_settings_exist(guild_id)
     guild = ctx.guild
     split_msg = ctx.message.content.split()
@@ -775,7 +786,10 @@ async def toggle_channel_currency(ctx):
     If currency system is disabled, will have no effect
     Can only be used by administrators
     """
-    guild_id = str(ctx.guild.id)
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    if not guild_id:
+        await ctx.reply("Can't use this in DMs!")
+        return
     make_sure_server_settings_exist(guild_id)
     if 'currency_system' in server_settings.get(guild_id).get('allowed_commands') and ctx.channel.id in ignored_channels:
         ignored_channels.remove(ctx.channel.id)
@@ -796,7 +810,10 @@ async def enable(ctx):
     Enables command of choice
     Can only be used by administrators
     """
-    guild_id = str(ctx.guild.id)
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    if not guild_id:
+        await ctx.reply("Can't use this in DMs!")
+        return
     make_sure_server_settings_exist(guild_id)
     cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
     if cmd in toggleable_commands and cmd not in server_settings.get(guild_id).get('allowed_commands'):
@@ -821,7 +838,10 @@ async def disable(ctx):
     Disables command of choice
     Can only be used by administrators
     """
-    guild_id = str(ctx.guild.id)
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    if not guild_id:
+        await ctx.reply("Can't use this in DMs!")
+        return
     make_sure_server_settings_exist(guild_id)
     cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
     if cmd in toggleable_commands and cmd in server_settings.get(guild_id).get('allowed_commands'):
@@ -853,13 +873,13 @@ def check_cooldown(ctx):
 @client.command()
 async def segs(ctx):
     """
-    Distributes Segs Role for 60 seconds with a small chance to backfire
+    Distributes Segs Role for 2 minutes with a small chance to backfire
     Cannot be used on users who have been shot or segsed
     !segs @victim, gives victim the Segs Role
     Has a 2-minute cooldown
     """
     caller = ctx.author
-    guild_id = str(ctx.guild.id)
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
     if 'segs' in server_settings.get(guild_id).get('allowed_commands') and server_settings.get(guild_id).get('segs_role'):
         mentions = ctx.message.mentions
@@ -942,13 +962,13 @@ async def segs(ctx):
 @client.command(aliases=['backshoot'])
 async def backshot(ctx):
     """
-    Distributes Backshots Role for 60 seconds with a small chance to backfire
+    Distributes Backshots Role for 90 seconds with a small chance to backfire
     Cannot be used on users who have been shot or backshot
     !backshot @victim, gives victim the Backshot Role
     Has a 2-second cooldown
     """
     caller = ctx.author
-    guild_id = str(ctx.guild.id)
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
     if 'backshot' in server_settings.get(guild_id).get('allowed_commands') and server_settings.get(guild_id).get('backshots_role'):
         mentions = ctx.message.mentions
@@ -1031,7 +1051,8 @@ active_pvp_requests = dict()
 
 
 def currency_allowed(context):
-    guild_ = str(context.guild.id)
+    # guild_ = str(context.guild.id)
+    guild_ = '' if not context.guild else str(context.guild.id)
     channel_ = context.channel.id
     return 'currency_system' in server_settings.get(guild_).get('allowed_commands') and channel_ not in ignored_channels
 
@@ -1214,6 +1235,118 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
         print(f"Error finalizing giveaway {message_id}: {e}")
 
 
+# taken from https://youtu.be/PRC4Ev5TJwc + chatgpt refined
+class PaginationView(discord.ui.View):
+    current_page: int = 1
+    page_size: int = 5
+
+    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', '']):
+        super().__init__()
+        self.data = data_
+        self.title = title_
+        self.color = color_
+        self.stickied_msg = stickied_msg_
+        self.footer, self.icon = footer_
+        self.message = None
+
+    async def send_embed(self, ctx):
+        self.message = await ctx.reply(view=self)
+        await self.update_message(self.data[:self.page_size])
+
+    def create_embed(self, data):
+        embed = discord.Embed(title=f"{self.title.capitalize()} - Page {self.current_page} / {math.ceil(len(self.data) / self.page_size)}", color=self.color)
+        for item in data:
+            embed.add_field(name=item['label'], value=item['item'], inline=False)
+        if self.stickied_msg:
+            embed.add_field(name='', value='')
+            embed.add_field(name='', value='')
+            for i in self.stickied_msg:
+                embed.add_field(name='', value=i, inline=False)
+        if self.footer:
+            embed.set_footer(text=self.footer, icon_url=self.icon)
+
+        return embed
+
+    async def update_message(self, data):
+        self.update_buttons()
+        await self.message.edit(embed=self.create_embed(data), view=self)
+
+    # def update_buttons(self):
+    #     if self.current_page == 1:
+    #         self.first_page_button.disabled = True
+    #         self.prev_button.disabled = True
+    #         self.first_page_button.style = discord.ButtonStyle.gray
+    #         self.prev_button.style = discord.ButtonStyle.gray
+    #     else:
+    #         self.first_page_button.disabled = False
+    #         self.prev_button.disabled = False
+    #         self.first_page_button.style = discord.ButtonStyle.green
+    #         self.prev_button.style = discord.ButtonStyle.primary
+    #
+    #     if self.current_page == math.ceil(len(self.data) / self.page_size):
+    #         self.next_button.disabled = True
+    #         self.last_page_button.disabled = True
+    #         self.last_page_button.style = discord.ButtonStyle.gray
+    #         self.next_button.style = discord.ButtonStyle.gray
+    #     else:
+    #         self.next_button.disabled = False
+    #         self.last_page_button.disabled = False
+    #         self.last_page_button.style = discord.ButtonStyle.green
+    #         self.next_button.style = discord.ButtonStyle.primary
+
+    def update_buttons(self):
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                if child.label == "|<":
+                    child.disabled = self.current_page == 1
+                elif child.label == "<":
+                    child.disabled = self.current_page == 1
+                elif child.label == ">":
+                    child.disabled = self.current_page == math.ceil(len(self.data) / self.page_size)
+                elif child.label == ">|":
+                    child.disabled = self.current_page == math.ceil(len(self.data) / self.page_size)
+
+    # def get_current_page_data(self):
+    #     until_item = self.current_page * self.page_size
+    #     from_item = until_item - self.page_size
+    #     if not self.current_page == 1:
+    #         from_item = 0
+    #         until_item = self.page_size
+    #     if self.current_page == math.ceil(len(self.data) / self.page_size):
+    #         from_item = self.current_page * self.page_size - self.page_size
+    #         until_item = len(self.data)
+    #     return self.data[from_item:until_item]
+
+    def get_current_page_data(self):
+        from_item = (self.current_page - 1) * self.page_size
+        until_item = self.current_page * self.page_size
+        return self.data[from_item:until_item]
+
+    @discord.ui.button(label="|<", style=discord.ButtonStyle.green)
+    async def first_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_page = 1
+        await self.update_message(self.get_current_page_data())
+
+    @discord.ui.button(label="<", style=discord.ButtonStyle.primary)
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_page -= 1
+        await self.update_message(self.get_current_page_data())
+
+    @discord.ui.button(label=">", style=discord.ButtonStyle.primary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_page += 1
+        await self.update_message(self.get_current_page_data())
+
+    @discord.ui.button(label=">|", style=discord.ButtonStyle.green)
+    async def last_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_page = math.ceil(len(self.data) / self.page_size)
+        await self.update_message(self.get_current_page_data())
+
+
 class Currency(commands.Cog):
     """Commands related to the currency system"""
 
@@ -1225,7 +1358,7 @@ class Currency(commands.Cog):
         Returns embed for profile or info
         """
         global fetched_users
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             contents = ctx.message.content.split()[1:]
             target_id = convert_msg_to_user_id(contents, True)
@@ -1245,7 +1378,7 @@ class Currency(commands.Cog):
                     await ctx.reply(f'User with ID "{target_id}" does not exist')
                     return
 
-            if ctx.guild.get_member(target_id):
+            if ctx.guild and ctx.guild.get_member(target_id):
                 target = ctx.guild.get_member(target_id)
                 embed_color = target.color
                 if embed_color == discord.Colour.default():
@@ -1307,7 +1440,7 @@ class Currency(commands.Cog):
                             profile_embed.add_field(name="!gamble Win Rate", value=f"{round(target_profile['gamble_win_ratio'][0]/total_gambled*100, 2)}%", inline=True)
                         else:
                             profile_embed.add_field(name="!gamble Win Rate", value=f"0.0%", inline=True)
-                        profile_embed.add_field(name="!gamble uses", value=total_gambled, inline=True)
+                        profile_embed.add_field(name="!gamble uses", value=f'{total_gambled:,}', inline=True)
                         profile_embed.add_field(name="Lotteries Won", value=f'{target_profile['lotteries_won']:,}', inline=True)
 
                     profile_embed.add_field(name="Rare Items Showcase", value=', '.join(f"{rare_items_to_emoji[item]}: {target_profile['rare_items_found'].get(item, 0)}" for item in rare_items_to_emoji), inline=False)
@@ -1338,12 +1471,69 @@ class Currency(commands.Cog):
         """
         await self.get_user_profile(ctx, True)
 
+    # @commands.command()
+    # async def paginate(self, ctx):
+    #     data_ = []
+    #     for i in range(1, 15):
+    #         data_.append({
+    #             "label": "User Event",
+    #             "item": f"User {i} has been added"
+    #         })
+    #
+    #     pagination_view = PaginationView(data_, title_='test')
+    #     await pagination_view.send_embed(ctx)
+
+    @commands.command()
+    async def title_(self, ctx):
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            author_id = str(ctx.author.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                make_sure_user_profile_exists(guild_id, author_id)
+                if not global_profiles[author_id]['items'].get('titles', False):
+                    await ctx.reply(f'You have no titles to choose from yet :p')
+                else:
+                    contents = ctx.message.content.split()[1:]
+                    if len(contents) == 1 and contents[0].isdecimal() and len(global_profiles[author_id]['items']['titles']) >= int(contents[0]):
+                        if int(contents[0]) == 0:
+                            global_profiles[author_id]['title'] = ''
+                            await ctx.reply('Your title has been reset')
+                            save_profiles()
+                            return
+                        global_profiles[author_id]['title'] = global_profiles[author_id]['items']['titles'][int(contents[0])-1]
+                        await ctx.reply(f'Your title has been changed to {global_profiles[author_id]["title"]}')
+                        save_profiles()
+                    else:
+                        current_title = global_profiles[author_id]["title"]
+                        embed_data = []
+                        for i in range(len(global_profiles[author_id]["items"]["titles"])):
+                            embed_data.append({
+                                "label": f'#{i+1} - {global_profiles[author_id]['items']['titles'][i]}',
+                                "item": ''
+                            })
+                        stickied_msg = ['To set title #1 use `!title_ 1`', 'To set no title use `!title_ 0`']
+                        footer = f'Your current title is {current_title if current_title else 'not set'}'
+                        if ctx.guild and ctx.guild.get_member(ctx.author.id):
+                            target = ctx.guild.get_member(ctx.author.id)
+                            embed_color = target.color
+                            if embed_color == discord.Colour.default():
+                                embed_color = 0xffd000
+                        else:
+                            embed_color = 0xffd000
+
+                        pagination_view = PaginationView(embed_data, title_='Titles', color_=embed_color, stickied_msg_=stickied_msg, footer_=[footer, ctx.author.avatar.url])
+                        await pagination_view.send_embed(ctx)
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception as e:
+            print(e)
+
     @commands.command()
     async def title(self, ctx):
         """
         Change the title in your profile
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         author_id = str(ctx.author.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             make_sure_user_profile_exists(guild_id, author_id)
@@ -1364,7 +1554,8 @@ class Currency(commands.Cog):
                     current_title = global_profiles[author_id]["title"]
                     await ctx.reply(f'## Availbable titles:\n{"\n".join(f'#{i+1} - {global_profiles[author_id]['items']['titles'][i]}' for i in range(len(global_profiles[author_id]["items"]["titles"])))}\n'
                                     f'\n'
-                                    f'To set title #1, use `!title 1`, to set no title use `!title 0`\n'
+                                    f'To set title #1 use `!title 1`\n'
+                                    f'To set no title use `!title 0`\n'
                                     f'Your current title is **{current_title if current_title else 'not set'}**\n')
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
@@ -1374,7 +1565,7 @@ class Currency(commands.Cog):
         """
         Check your or someone else's balance
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             if mentions := ctx.message.mentions:
                 num = make_sure_user_has_currency(guild_id, str(mentions[0].id))
@@ -1411,7 +1602,7 @@ class Currency(commands.Cog):
         """
         Displays cooldowns for farming commands
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             tracked_commands = ['dig', 'mine', 'work', 'fish']  # Commands to include in the cooldown list
@@ -1462,7 +1653,7 @@ class Currency(commands.Cog):
         If number is 400 you win 2,500 coins
         Has a 20-second cooldown
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1471,7 +1662,11 @@ class Currency(commands.Cog):
                 dig_coins = 2500
                 dig_message = f'# You found Gold! {gold_emoji}'
                 rare_finds_increment(guild_id, author_id, 'gold', False)
-                await rare_channel.send(f"**{ctx.author.mention}** found Gold {gold_emoji} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                if ctx.guild:
+                    link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
+                else:
+                    link = '(in DMs)'
+                await rare_channel.send(f"**{ctx.author.mention}** found Gold {gold_emoji} {link}")
             else:
                 dig_message = f'## Digging successful! {shovel}'
             add_coins_to_user(guild_id, author_id, dig_coins)  # save file
@@ -1503,7 +1698,7 @@ class Currency(commands.Cog):
         If number is 625 you to win 7,500 coins
         Has a 2-minute cooldown
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1513,12 +1708,20 @@ class Currency(commands.Cog):
                 mine_coins = 7500
                 mine_message = f'# You found Diamonds! 💎'
                 rare_finds_increment(guild_id, author_id, 'diamonds', False)
-                await rare_channel.send(f"**{ctx.author.mention}** found Diamonds 💎 - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                if ctx.guild:
+                    link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
+                else:
+                    link = '(in DMs)'
+                await rare_channel.send(f"**{ctx.author.mention}** found Diamonds 💎 {link}")
             elif t == 1:
                 mine_coins = 1
                 mine_message = f"# You struck Fool's Gold! ✨"
                 rare_finds_increment(guild_id, author_id, 'fool', False)
-                await rare_channel.send(f"**{ctx.author.mention}** struck Fool's Gold ✨ - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                if ctx.guild:
+                    link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
+                else:
+                    link = '(in DMs)'
+                await rare_channel.send(f"**{ctx.author.mention}** struck Fool's Gold ✨ {link}")
             else:
                 mine_message = f"## Mining successful! ⛏️\n"
             add_coins_to_user(guild_id, author_id, mine_coins)  # save file
@@ -1550,7 +1753,7 @@ class Currency(commands.Cog):
         Choose random number from 45-55, that's the payout
         Has a 5-minute cooldown
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1585,7 +1788,7 @@ class Currency(commands.Cog):
         If the amount chosen was 12,500 you win 25,000,000 coins
         Has a 10-minute cooldown
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1597,12 +1800,22 @@ class Currency(commands.Cog):
                     fish_message = f"# You found *The Catch*{The_Catch}\n"
                     rare_finds_increment(guild_id, author_id, 'the_catch', False)
                     ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag to your friends'
-                    await rare_channel.send(f"<@&1326967584821612614> **{ctx.author.mention}** JUST FOUND *THE CATCH* {The_Catch} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                    if ctx.guild:
+                        link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
+                    else:
+                        link = '(in DMs)'
+
+                    await rare_channel.send(f"<@&1326967584821612614> **{ctx.author.mention}** JUST FOUND *THE CATCH* {The_Catch} {link}")
                 else:
                     fish_message = f'# You found a huge Treasure Chest!!! {treasure_chest}'
                     rare_finds_increment(guild_id, author_id, 'treasure_chest', False)
                     ps_message = ''
-                    await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest {treasure_chest} - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                    if ctx.guild:
+                        link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
+                    else:
+                        link = '(in DMs)'
+
+                    await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest {treasure_chest} {link}")
             else:
                 cast_command = ctx.message.content.split()[0].lower().lstrip('!')
                 if cast_command in ('fish', 'f'):
@@ -1635,7 +1848,7 @@ class Currency(commands.Cog):
         """
         Claim daily coins
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1669,7 +1882,7 @@ class Currency(commands.Cog):
         """
         Claim weekly coins
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1704,7 +1917,7 @@ class Currency(commands.Cog):
         Give someone an amount of coins
         !give @user <number>
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1752,8 +1965,11 @@ class Currency(commands.Cog):
         View the top 10 richest users of the server (optionally accepts a page)
         Also shows your rank
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
+            if not guild_id:
+                await ctx.reply("Can't use leaderboard in DMs! Try `!glb`")
+                return
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             members = server_settings.get(guild_id).get('members')
@@ -1806,7 +2022,7 @@ class Currency(commands.Cog):
         Also shows your global rank
         """
         global fetched_users
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1874,7 +2090,7 @@ class Currency(commands.Cog):
         """
         results = ['heads', 'tails']
         result = random.choice(results)
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1943,7 +2159,7 @@ class Currency(commands.Cog):
         """
         results = [1, 0]
         result = random.choice(results)
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -1981,7 +2197,7 @@ class Currency(commands.Cog):
         """
         dice_roll = random.choice(range(1, 7))
         result = (dice_roll == 6)
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -2024,7 +2240,7 @@ class Currency(commands.Cog):
         dice_roll_1 = random.choice(range(1, 7))
         dice_roll_2 = random.choice(range(1, 7))
         result = (dice_roll_1 == dice_roll_2 == 6)
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -2063,7 +2279,7 @@ class Currency(commands.Cog):
         !pvp @user number
         """
         results = [1, -1]
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             active_pvp_requests.setdefault(guild_id, set())
             author_id = str(ctx.author.id)
@@ -2205,7 +2421,7 @@ class Currency(commands.Cog):
         !slots number
         Has a 2-second cooldown
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
@@ -2229,7 +2445,12 @@ class Currency(commands.Cog):
                     messages_dict = {True: f"# {' | '.join(results)}\n## You win{' **BIG**' * (results[0] == sunfire2)}!", False: f"# {' | '.join(results)}\n## You lose!"}
                     await ctx.reply(f"{messages_dict[result]}\n" + f"**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number != 0))
                     if result:
-                        await rare_channel.send(f"**{ctx.author.mention}** won{' **BIG**' * (results[0] == sunfire2)} in Slots 🎰 - https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})")
+                        if ctx.guild:
+                            link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
+                        else:
+                            link = '(in DMs)'
+
+                        await rare_channel.send(f"**{ctx.author.mention}** won{' **BIG**' * (results[0] == sunfire2)} in Slots 🎰 {link}")
                 else:
                     await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
@@ -2250,12 +2471,12 @@ class Currency(commands.Cog):
         entrance_price = 500
         ukra_bot_fee = 0
         payout = 500
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             today_date = datetime.now().date().isoformat()
             global active_lottery
             if today_date not in active_lottery:
-                announce_msg = '' if ctx.guild.id == official_server_id \
+                announce_msg = '' if (ctx.guild and ctx.guild.id == official_server_id) \
                     else "\nJoin the official Ukra Bot Server for the results! (`!server`)"
                 await ctx.send(f"Thanks for triggering the lottery payout {puppy}" + announce_msg)
                 last_lottery_date = next(iter(active_lottery))
@@ -2267,6 +2488,9 @@ class Currency(commands.Cog):
                 add_coins_to_user(guild_id, str(winner.id), winnings)
                 highest_balance_check(guild_id, str(ctx.author.id), 0, False)
                 global_profiles[str(winner.id)]['lotteries_won'] += 1
+                if 'Lottery Winner' not in global_profiles[str(winner.id)]['items'].setdefault('titles', []):
+                    global_profiles[str(winner.id)]['items']['titles'].append('Lottery Winner')
+                    await ctx.author.send("You've unlocked the *Lottery Winner* title! Run `!title` to change")
                 save_profiles()
                 lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
                                    f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
@@ -2277,7 +2501,7 @@ class Currency(commands.Cog):
             if len(contents) == 1 and contents[0] == 'enter':
                 author_id = str(ctx.author.id)
                 join_server_msg = f'\n*Results will be announced in <#1326949510336872458>*' \
-                    if ctx.guild.id == official_server_id \
+                    if ctx.guild and ctx.guild.id == official_server_id \
                     else "\n*Join the official Ukra Bot Server for the results!* (`!server`)"
                 if not_joined:
                     if make_sure_user_has_currency(guild_id, author_id) < entrance_price:
@@ -2304,13 +2528,16 @@ class Currency(commands.Cog):
         """
         Starts a giveaway for some coins of some duration, taking admin as a parameter
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         author_id = str(ctx.author.id)
         if admin and ctx.author.id not in allowed_users:
             await ctx.reply(f"You can't use this command due to lack of permissions :3")
             return
 
         if currency_allowed(ctx) and bot_down_check(guild_id):
+            if not guild_id:
+                await ctx.reply("Can't host giveaways in DMs!")
+                return
             contents = ctx.message.content.split()[1:]
             remind = True
             if admin and len(contents) == 3:
@@ -2405,7 +2632,7 @@ class Currency(commands.Cog):
         Only usable by bot developoer
         !bless @user <number>
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             if ctx.author.id not in allowed_users:
                 await ctx.reply(f"You can't use this command due to lack of permissions :3")
@@ -2449,7 +2676,7 @@ class Currency(commands.Cog):
         Only usable by bot developoer
         !curse @user <number>
         """
-        guild_id = str(ctx.guild.id)
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             if ctx.author.id not in allowed_users:
                 await ctx.reply(f"You can't use this command due to lack of permissions :3")
