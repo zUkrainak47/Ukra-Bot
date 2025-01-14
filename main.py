@@ -559,7 +559,8 @@ async def server(ctx):
     You should write this command for exclusive giveaways :3
     DM's the sender a link to Ukra Bot Server
     """
-    await ctx.reply(f"Check your DMs {sunfire2stonks}")
+    if ctx.guild:
+        await ctx.reply(f"Check your DMs {sunfire2stonks}")
     await ctx.author.send("discord.gg/qY6YEGmz")
 
 
@@ -1411,9 +1412,17 @@ class Currency(commands.Cog):
                     global_rank = sorted(global_currency.items(), key=lambda x: x[1], reverse=True).index((str(target_id), global_currency[str(target_id)])) + 1
                     if target_profile['highest_global_rank'] > global_rank or target_profile['highest_global_rank'] == -1:
                         target_profile['highest_global_rank'] = global_rank
+                        if global_rank == 1:
+                            if 'Reached #1' not in global_profiles[str(target_id)]['items'].setdefault('titles', []):
+                                global_profiles[str(target_id)]['items']['titles'].append('Reached #1')
+                                if ctx.guild:
+                                    ctx.send(f"{target.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
+                                else:
+                                    target.send("You've unlocked the *Reached #1* Title! Run `!title` to change it!")
+                        save_profiles()
                     embed_title = ' - info' if full_info else "'s profile"
                     if target_profile['title']:
-                        profile_embed = discord.Embed(title=f"{target.display_name}{embed_title}", description=target_profile['title'], color=embed_color)
+                        profile_embed = discord.Embed(title=f"{target.display_name}{embed_title}", description=f"*{target_profile['title']}*", color=embed_color)
                     else:
                         profile_embed = discord.Embed(title=f"{target.display_name}{embed_title}", color=embed_color)
                     profile_embed.set_thumbnail(url=target.avatar.url)
@@ -1483,7 +1492,7 @@ class Currency(commands.Cog):
     #     pagination_view = PaginationView(data_, title_='test')
     #     await pagination_view.send_embed(ctx)
 
-    @commands.command()
+    @commands.command(aliases=['titles_'])
     async def title_(self, ctx):
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1528,7 +1537,7 @@ class Currency(commands.Cog):
         except Exception as e:
             print(e)
 
-    @commands.command()
+    @commands.command(aliases=['titles'])
     async def title(self, ctx):
         """
         Change the title in your profile
@@ -2060,6 +2069,10 @@ class Currency(commands.Cog):
                         if rank < highest_rank or highest_rank == -1:
                             global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
                             save_profiles()
+                            if rank == 1:
+                                if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
+                                    global_profiles[author_id]['items']['titles'].append('Reached #1')
+                                ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
                 except discord.NotFound:
                     global_currency.remove(user_id)
                     save_currency()
@@ -2069,6 +2082,10 @@ class Currency(commands.Cog):
                 if rank < highest_rank or highest_rank == -1:
                     global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
                     save_profiles()
+                    if rank == 1:
+                        if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
+                            global_profiles[author_id]['items']['titles'].append('Reached #1')
+                        ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
                 you = f"\n\nYou're at **#{rank}**"
             else:
                 you = ''
@@ -2490,7 +2507,7 @@ class Currency(commands.Cog):
                 global_profiles[str(winner.id)]['lotteries_won'] += 1
                 if 'Lottery Winner' not in global_profiles[str(winner.id)]['items'].setdefault('titles', []):
                     global_profiles[str(winner.id)]['items']['titles'].append('Lottery Winner')
-                    await ctx.author.send("You've unlocked the *Lottery Winner* title! Run `!title` to change")
+                    await ctx.author.send("You've unlocked the *Lottery Winner* Title! Run `!title` to change it!")
                 save_profiles()
                 lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
                                    f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
