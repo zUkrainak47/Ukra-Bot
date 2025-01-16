@@ -437,7 +437,7 @@ async def on_ready():
 
     async def resume_giveaway(message_id):
         try:
-            channel_id, guild_id, author_id, amount, end_time, remind, admin = active_giveaways[message_id]
+            channel_id, guild_id, author_id, amount, end_time, remind, admin, t = active_giveaways[message_id]
             guild = await client.fetch_guild(guild_id)
             print('guild fetched - resume', guild.id, guild.name)
             if not guild:
@@ -450,7 +450,7 @@ async def on_ready():
             print('duration', duration)
             if duration <= 0:
                 print('duration is negative, finalizing')
-                await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin, too_late=True)
+                await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin, t, too_late=True)
                 return
 
             channel = await guild.fetch_channel(channel_id)
@@ -478,7 +478,7 @@ async def on_ready():
                 print('have no reminders - getting ready to sleep', duration)
                 await asyncio.sleep(duration)
             print('finalizing giveaway', message.id)
-            await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin)
+            await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin, t)
         except Exception as e:
             print(f"Error resuming giveaway {message_id}: {e}")
 
@@ -966,7 +966,7 @@ async def backshot(ctx):
     Distributes Backshots Role for 90 seconds with a small chance to backfire
     Cannot be used on users who have been shot or backshot
     !backshot @victim, gives victim the Backshot Role
-    Has a 2-second cooldown
+    Has a 2-minute cooldown
     """
     caller = ctx.author
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1178,11 +1178,12 @@ async def schedule_reminders(message, amount, duration, remind_intervals):
     await asyncio.sleep(time_remaining)
 
 
-async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, author_id: str, amount: int, admin: bool, too_late=False):
+async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, author_id: str, amount: int, admin: bool, t: str = 'regular', too_late=False):
     # Collect reactions
     try:
         guild = await client.fetch_guild(int(guild_id))
         if not guild:
+            add_coins_to_user(guild_id, author_id, amount)
             print(f"Error finalizing giveaway {message_id}: guild not found")
             return
         print('guild fetched - finalize', guild.name)
@@ -1194,12 +1195,14 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
 
         channel = await guild.fetch_channel(channel_id)
         if not channel:
+            add_coins_to_user(guild_id, author_id, amount)
             print(f"Error finalizing giveaway {message_id}: channel not found")
             return
         print('channel fetched - finalize', channel.id, channel.name)
 
         message = await channel.fetch_message(int(message_id))
         if not message:
+            add_coins_to_user(guild_id, author_id, amount)
             print(f"Error finalizing giveaway {message_id}: giveaway message not found")
             return
 
@@ -1214,10 +1217,15 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
             print('winner chosen', winner_id, 'paying out', amount, 'coins')
             make_sure_user_has_currency(guild_id, winner_id)
             add_coins_to_user(guild_id, winner_id, amount)  # save file
-            await message.reply(
-                f"# 🎉 Congratulations {winner.mention}, you won **{amount:,}** {coin}!\n"
-                f"Balance: {get_user_balance(guild_id, winner_id):,} {coin}" +
-                f"\nSorry for the delay btw the bot was down {sunfire2}" * too_late)
+            win_msg = (f"# 🎉 Congratulations {winner.mention}, you won **{amount:,}** {coin}!\n"
+                       f"Balance: {get_user_balance(guild_id, winner_id):,} {coin}" +
+                       f"\nSorry for the delay btw the bot was down {sunfire2}" * too_late)
+
+            if t != 'official':
+                await message.reply(win_msg)
+            else:
+                win_channel = await guild.fetch_channel(1328994312934916146)
+                await win_channel.send(win_msg)
         else:
             print('no participants, going to refund')
             if not admin:
@@ -1389,7 +1397,7 @@ class Currency(commands.Cog):
 
             highest_balance_check(guild_id, str(target_id), 0)
 
-            def get_profile_embed():
+            async def get_profile_embed():
                 try:
                     make_sure_user_profile_exists(guild_id, str(target_id))
                     num = get_user_balance(guild_id, str(target_id))
@@ -1416,9 +1424,9 @@ class Currency(commands.Cog):
                             if 'Reached #1' not in global_profiles[str(target_id)]['items'].setdefault('titles', []):
                                 global_profiles[str(target_id)]['items']['titles'].append('Reached #1')
                                 if ctx.guild:
-                                    ctx.send(f"{target.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
+                                    await ctx.send(f"{target.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
                                 else:
-                                    target.send("You've unlocked the *Reached #1* Title! Run `!title` to change it!")
+                                    await target.send("You've unlocked the *Reached #1* Title! Run `!title` to change it!")
                         save_profiles()
                     embed_title = ' - info' if full_info else "'s profile"
                     if target_profile['title']:
@@ -1461,7 +1469,7 @@ class Currency(commands.Cog):
                 except Exception as e:
                     print(e)
 
-            await ctx.send(embed=get_profile_embed())
+            await ctx.send(embed=await get_profile_embed())
 
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
@@ -2072,7 +2080,7 @@ class Currency(commands.Cog):
                             if rank == 1:
                                 if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
                                     global_profiles[author_id]['items']['titles'].append('Reached #1')
-                                ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
+                                await ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
                 except discord.NotFound:
                     global_currency.remove(user_id)
                     save_currency()
@@ -2085,7 +2093,7 @@ class Currency(commands.Cog):
                     if rank == 1:
                         if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
                             global_profiles[author_id]['items']['titles'].append('Reached #1')
-                        ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
+                        await ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
                 you = f"\n\nYou're at **#{rank}**"
             else:
                 you = ''
@@ -2507,7 +2515,7 @@ class Currency(commands.Cog):
                 global_profiles[str(winner.id)]['lotteries_won'] += 1
                 if 'Lottery Winner' not in global_profiles[str(winner.id)]['items'].setdefault('titles', []):
                     global_profiles[str(winner.id)]['items']['titles'].append('Lottery Winner')
-                    await ctx.author.send("You've unlocked the *Lottery Winner* Title! Run `!title` to change it!")
+                    await winner.send("You've unlocked the *Lottery Winner* Title! Run `!title` to change it!")
                 save_profiles()
                 lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
                                    f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
@@ -2556,7 +2564,7 @@ class Currency(commands.Cog):
                 await ctx.reply("Can't host giveaways in DMs!")
                 return
             contents = ctx.message.content.split()[1:]
-            remind = True
+            (t, remind) = ('regular', True) if ctx.channel.id != 1326949579848941710 else ('official', False)
             if admin and len(contents) == 3:
                 if contents[2] == 'noremind':
                     remind = False
@@ -2598,29 +2606,28 @@ class Currency(commands.Cog):
 
             # Announce the giveaway
             end_time = discord.utils.utcnow() + timedelta(seconds=duration)
-            message = await ctx.send(f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T'*(duration<85000)}> to join the giveaway for **{amount:,}** {coin}!")
+            message = await ctx.send(f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T' * (duration < 85000)}> to join the giveaway for **{amount:,}** {coin}!{'\n<@&1327071226664845342>' * (t == 'official')}")
             if not admin:
                 remove_coins_from_user(guild_id, author_id, amount)
-            active_giveaways[str(message.id)] = [ctx.channel.id, ctx.guild.id, ctx.author.id, amount, int(end_time.timestamp()), remind, admin]
+            active_giveaways[str(message.id)] = [ctx.channel.id, ctx.guild.id, ctx.author.id, amount, int(end_time.timestamp()), remind, admin, t]
             save_active_giveaways()
             await message.add_reaction("🎉")
             if not admin:
                 await ctx.send(f"Btw {ctx.author.display_name}, your balance has been deducted {amount:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}")
-            if not remind:
-                await ctx.author.send(f'No reminders will be sent for [this giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id})')
-            else:
-                await ctx.author.send(f'Thanks for hosting a [giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id}) {yay}')
 
-            if remind:
+            if not remind:
+                await ctx.author.send(f'No reminders will be sent for [this giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id})')
+                await asyncio.sleep(duration)
+
+            else:
+                await ctx.author.send(f'Thanks for hosting a [giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}) {yay}')
                 # Calculate reminder intervals
                 reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
                 reminder_interval = duration // reminders_to_send - min(5, duration // 10)
                 remind_intervals = [reminder_interval for _ in range(1, reminders_to_send+1)]
                 await asyncio.create_task(schedule_reminders(message, amount, duration, remind_intervals))
-            else:
-                await asyncio.sleep(duration)
 
-            await finalize_giveaway(str(message.id), ctx.channel.id, guild_id, author_id, amount, admin)
+            await finalize_giveaway(str(message.id), ctx.channel.id, guild_id, author_id, amount, admin, t)
 
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
