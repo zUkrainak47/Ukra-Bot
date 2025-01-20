@@ -1054,7 +1054,8 @@ active_pvp_requests = dict()
 def currency_allowed(context):
     # guild_ = str(context.guild.id)
     guild_ = '' if not context.guild else str(context.guild.id)
-    channel_ = context.channel.id
+    make_sure_server_settings_exist(guild_)
+    channel_ = 0 if not context.channel else context.channel.id
     return 'currency_system' in server_settings.get(guild_).get('allowed_commands') and channel_ not in ignored_channels
 
 
@@ -1062,7 +1063,6 @@ def bot_down_check(guild_: str):
     """
     Returns True if (bot_down is False) or (bot_down is True and guild_id is allowed)
     """
-    make_sure_server_settings_exist(guild_)
     return (not bot_down) or (guild_ == '692070633177350235')
 
 
@@ -1424,9 +1424,9 @@ class Currency(commands.Cog):
                             if 'Reached #1' not in global_profiles[str(target_id)]['items'].setdefault('titles', []):
                                 global_profiles[str(target_id)]['items']['titles'].append('Reached #1')
                                 if ctx.guild:
-                                    await ctx.send(f"{target.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
+                                    await ctx.send(f"{target.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
                                 else:
-                                    await target.send("You've unlocked the *Reached #1* Title! Run `!title` to change it!")
+                                    await target.send("You've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
                         save_profiles()
                     embed_title = ' - info' if full_info else "'s profile"
                     if target_profile['title']:
@@ -1614,8 +1614,8 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['cooldowns', 'cooldown'])
-    async def cd(self, ctx):
+    @commands.command(aliases=['cooldown', 'cd', 'xd', 'св'])
+    async def cooldowns(self, ctx):
         """
         Displays cooldowns for farming commands
         """
@@ -2080,7 +2080,7 @@ class Currency(commands.Cog):
                             if rank == 1:
                                 if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
                                     global_profiles[author_id]['items']['titles'].append('Reached #1')
-                                await ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
+                                await ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
                 except discord.NotFound:
                     global_currency.remove(user_id)
                     save_currency()
@@ -2093,7 +2093,7 @@ class Currency(commands.Cog):
                     if rank == 1:
                         if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
                             global_profiles[author_id]['items']['titles'].append('Reached #1')
-                        await ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title! Run `!title` to change it!")
+                        await ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
                 you = f"\n\nYou're at **#{rank}**"
             else:
                 you = ''
@@ -2515,7 +2515,7 @@ class Currency(commands.Cog):
                 global_profiles[str(winner.id)]['lotteries_won'] += 1
                 if 'Lottery Winner' not in global_profiles[str(winner.id)]['items'].setdefault('titles', []):
                     global_profiles[str(winner.id)]['items']['titles'].append('Lottery Winner')
-                    await winner.send("You've unlocked the *Lottery Winner* Title! Run `!title` to change it!")
+                    await winner.send("You've unlocked the *Lottery Winner* Title!\nRun `!title` to change it!")
                 save_profiles()
                 lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
                                    f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
