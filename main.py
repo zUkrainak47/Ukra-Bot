@@ -67,6 +67,18 @@ madgeclap = '<a:madgeclap:1322719157241905242>'
 rare_items_to_emoji = {'gold': gold_emoji, 'fool': '✨', 'diamonds': '💎', 'treasure_chest': treasure_chest, 'the_catch': The_Catch}
 
 slot_options = [yay, o7, peeposcheme, sunfire2, stare, HUH, wicked, deadge, teripoint, pepela]
+SPECIAL_CODES = {}
+SECRET_CODES = {code: lis.split(',') for (code, lis) in [x.split(':-:') for x in os.getenv('SECRET_CODES').split(', ')]}
+SPECIAL_CODES.update(SECRET_CODES)
+titles = [
+    'Ukra Bot Dev', 'Top Contributor', 'Reached #1', 'Lottery Winner',
+
+    'Gave away 25k', 'Gave away 50k', 'Gave away 100k',
+    'Gave away 250k', 'Gave away 500k', 'Gave away 1M',
+    'Gave away 25M', 'Gave away 50M', 'Gave away 100M',
+    'Gave away 250M', 'Gave away 500M', 'Gave away 1B',
+]
+sorted_titles = {title: number for number, title in enumerate(titles)}
 
 SETTINGS_FILE = Path("dev", "server_settings.json")
 if os.path.exists(SETTINGS_FILE):
@@ -561,7 +573,7 @@ async def server(ctx):
     """
     if ctx.guild:
         await ctx.reply(f"Check your DMs {sunfire2stonks}")
-    await ctx.author.send("discord.gg/qY6YEGmz")
+    await ctx.author.send("discord.gg/n24Bbdjg43")
 
 
 @client.command(aliases=['choice'])
@@ -1510,6 +1522,7 @@ class Currency(commands.Cog):
                 if not global_profiles[author_id]['items'].get('titles', False):
                     await ctx.reply(f'You have no titles to choose from yet :p')
                 else:
+                    user_titles = sorted(global_profiles[author_id]["items"]["titles"], key=lambda t: sorted_titles[t])
                     contents = ctx.message.content.split()[1:]
                     if len(contents) == 1 and contents[0].isdecimal() and len(global_profiles[author_id]['items']['titles']) >= int(contents[0]):
                         if int(contents[0]) == 0:
@@ -1517,15 +1530,15 @@ class Currency(commands.Cog):
                             await ctx.reply('Your title has been reset')
                             save_profiles()
                             return
-                        global_profiles[author_id]['title'] = global_profiles[author_id]['items']['titles'][int(contents[0])-1]
+                        global_profiles[author_id]['title'] = user_titles[int(contents[0])-1]
                         await ctx.reply(f'Your title has been changed to {global_profiles[author_id]["title"]}')
                         save_profiles()
                     else:
                         current_title = global_profiles[author_id]["title"]
                         embed_data = []
-                        for i in range(len(global_profiles[author_id]["items"]["titles"])):
+                        for n, i in enumerate(user_titles, start=1):
                             embed_data.append({
-                                "label": f'#{i+1} - {global_profiles[author_id]['items']['titles'][i]}',
+                                "label": f'#{n} - {i}',
                                 "item": ''
                             })
                         stickied_msg = ['To set title #1 use `!title_ 1`', 'To set no title use `!title_ 0`']
@@ -1557,6 +1570,7 @@ class Currency(commands.Cog):
             if not global_profiles[author_id]['items'].get('titles', False):
                 await ctx.reply(f'You have no titles to choose from yet :p')
             else:
+                user_titles = sorted(global_profiles[author_id]["items"]["titles"], key=lambda t: sorted_titles[t])
                 contents = ctx.message.content.split()[1:]
                 if len(contents) == 1 and contents[0].isdecimal() and len(global_profiles[author_id]['items']['titles']) >= int(contents[0]):
                     if int(contents[0]) == 0:
@@ -1564,12 +1578,13 @@ class Currency(commands.Cog):
                         await ctx.reply('Your title has been reset')
                         save_profiles()
                         return
-                    global_profiles[author_id]['title'] = global_profiles[author_id]['items']['titles'][int(contents[0])-1]
+                    global_profiles[author_id]['title'] = user_titles[int(contents[0])-1]
                     await ctx.reply(f'Your title has been changed to {global_profiles[author_id]["title"]}')
                     save_profiles()
                 else:
                     current_title = global_profiles[author_id]["title"]
-                    await ctx.reply(f'## Availbable titles:\n{"\n".join(f'#{i+1} - {global_profiles[author_id]['items']['titles'][i]}' for i in range(len(global_profiles[author_id]["items"]["titles"])))}\n'
+                    await ctx.reply(f'## Available titles:\n'
+                                    f'{"\n".join(f'#{n} - {i}' for n, i in enumerate(user_titles, start=1))}\n'
                                     f'\n'
                                     f'To set title #1 use `!title 1`\n'
                                     f'To set no title use `!title 0`\n'
@@ -1611,6 +1626,42 @@ class Currency(commands.Cog):
                 except discord.errors.NotFound:
                     await ctx.reply(f'User with ID "{target_id}" does not exist')
 
+        elif currency_allowed(ctx):
+            await ctx.reply(f'{reason}, currency commands are disabled')
+
+    @commands.command(aliases=['claim', 'code'])
+    async def redeem(self, ctx):
+        """
+        Redeem special codes :peeposcheme:
+        """
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
+            author_id = str(ctx.author.id)
+
+            async def redeem_code(code_: str, call_: str):
+                if code_ in SPECIAL_CODES:
+                    make_sure_user_profile_exists(guild_id, author_id)
+                    if code_ in global_profiles[author_id]['list_1']:
+                        await ctx.reply('You have already redeemed this code!')
+                        return
+                    code_info = SPECIAL_CODES[code_]
+                    print(code_info)
+                    if len(code_info) == 3 and code_info[2] not in call_:
+                        return
+                    add_coins_to_user(guild_id, author_id, int(code_info[0]))
+                    if len(code_info) > 1 and code_info[1]:
+                        await ctx.reply(code_info[1])
+                        func_ = ctx.send
+                    else:
+                        func_ = ctx.reply
+                    await func_(f"## Code Redemption Successful!\n**{ctx.author.display_name}:** +{int(code_info[0]):,} {coin}, balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
+                    global_profiles[author_id]['list_1'].append(code_)
+                    save_profiles()
+                else:
+                    print(code_)
+
+            call, contents = ctx.message.content.split()[0], ' '.join(ctx.message.content.split()[1:])
+            await redeem_code(contents, call)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -1863,7 +1914,8 @@ class Currency(commands.Cog):
     @commands.command()
     async def daily(self, ctx):
         """
-        Claim daily coins
+        Claim a random number of daily coins from 140 to 260
+        Multiply daily coins by sqrt of daily streak
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
@@ -2606,7 +2658,7 @@ class Currency(commands.Cog):
 
             # Announce the giveaway
             end_time = discord.utils.utcnow() + timedelta(seconds=duration)
-            message = await ctx.send(f"# React with 🎉 until <t:{int(end_time.timestamp())}{':T' * (duration < 85000)}> to join the giveaway for **{amount:,}** {coin}!{'\n<@&1327071226664845342>' * (t == 'official')}")
+            message = await ctx.send(f"# React with 🎉 until <t:{int(end_time.timestamp())}> to join the giveaway for **{amount:,}** {coin}!{'\n<@&1327071226664845342>' * (t == 'official')}")
             if not admin:
                 remove_coins_from_user(guild_id, author_id, amount)
             active_giveaways[str(message.id)] = [ctx.channel.id, ctx.guild.id, ctx.author.id, amount, int(end_time.timestamp()), remind, admin, t]
@@ -2693,13 +2745,14 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command()
+    @commands.command(aliases=['fund'])
     async def curse(self, ctx):
         """
         Curse someone by magically removing a number of coins from their balance
         Only usable by bot developoer
         !curse @user <number>
         """
+        cmd = 'Funding' if 'fund' in ctx.message.content.split()[0] else 'Curse'
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             if ctx.author.id not in allowed_users:
@@ -2725,7 +2778,7 @@ class Currency(commands.Cog):
                 number = min(current_balance, number)
                 remove_coins_from_user(guild_id, target_id, number)  # save file
                 num = get_user_balance(guild_id, target_id)
-                await ctx.reply(f"## Curse successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}")
+                await ctx.reply(f"## {cmd} successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}")
             except:
                 await ctx.reply("Curse failed!")
         elif currency_allowed(ctx):
