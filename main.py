@@ -67,7 +67,7 @@ madgeclap = '<a:madgeclap:1322719157241905242>'
 rare_items_to_emoji = {'gold': gold_emoji, 'fool': '✨', 'diamonds': '💎', 'treasure_chest': treasure_chest, 'the_catch': The_Catch}
 
 slot_options = [yay, o7, peeposcheme, sunfire2, stare, HUH, wicked, deadge, teripoint, pepela]
-SPECIAL_CODES = {}
+SPECIAL_CODES = {'genshingift': [3]}
 SECRET_CODES = {code: lis.split(',') for (code, lis) in [x.split(':-:') for x in os.getenv('SECRET_CODES').split(', ')]}
 SPECIAL_CODES.update(SECRET_CODES)
 titles = [
@@ -1500,6 +1500,16 @@ class Currency(commands.Cog):
         """
         await self.get_user_profile(ctx, True)
 
+    @commands.command()
+    async def request(self, ctx):
+        """
+        DMs you all data the bot collected about you
+        """
+        make_sure_user_profile_exists(str(ctx.guild.id), str(ctx.author.id))
+        await ctx.author.send("```\n"
+                              f"{global_profiles[str(ctx.author.id)]}\n"
+                              "```")
+
     # @commands.command()
     # async def paginate(self, ctx):
     #     data_ = []
@@ -1661,7 +1671,7 @@ class Currency(commands.Cog):
                     print(code_)
 
             call, contents = ctx.message.content.split()[0], ' '.join(ctx.message.content.split()[1:])
-            await redeem_code(contents, call)
+            await redeem_code(contents.lower(), call.lower())
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
