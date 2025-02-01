@@ -1634,10 +1634,17 @@ class Currency(commands.Cog):
                 return
 
             make_sure_user_profile_exists(guild_id, str(target_id))
+            if passed_title in global_profiles[str(target_id)]['items'].setdefault('titles', []):
+                await ctx.send(f"{user.display_name} already has the *{passed_title}* Title!")
+                return
+
             global_profiles[str(target_id)]['items'].setdefault('titles', []).append(passed_title)
             save_profiles()
+
             if ctx.message.mentions:
-                await ctx.send(f"**{user.display_name}**, you've unlocked the *{passed_title}* Title!")
+                await ctx.send(f"**{user.display_name}**, you've unlocked the *{passed_title}* Title!\nRun `!title` to change it!")
+            else:
+                await ctx.reply(f"**{user.display_name}** has been granted the *{passed_title}* Title")
 
     @commands.command(aliases=['b', 'bal'])
     async def balance(self, ctx):
