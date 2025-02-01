@@ -1091,10 +1091,11 @@ def add_coins_to_user(guild_: str, user_: str, coin_: int, save=True):
     global_currency[user_] += coin_
     if save:
         save_currency()
+    return global_currency.get(user_)
 
 
 def remove_coins_from_user(guild_: str, user_: str, coin_: int, save=True):
-    add_coins_to_user(guild_, user_, -coin_, save)
+    return add_coins_to_user(guild_, user_, -coin_, save)
 
 
 # def highest_win_loss_check(guild_: str, user_: str, delta: int, save=True, make_sure=True):
@@ -1602,11 +1603,49 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
+    @commands.command(aliases=['givetitle'])
+    async def addtitle(self, ctx):
+        """
+        Adds title to user. Only usable by bot developer
+        """
+        global fetched_users
+        contents = ctx.message.content.split()[1:]
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
+            if ctx.author.id not in allowed_users:
+                await ctx.send("You can't use this command, silly")
+                return
+
+            target_id = convert_msg_to_user_id(contents, True)
+            if target_id == -1:
+                await ctx.reply("Something went wrong, please make sure that the command has a user mention or ID")
+                return
+
+            passed_title = ' '.join([x for x in ctx.message.content.split()[1:] if target_id not in x])
+            print(passed_title)
+
+            if target_id in fetched_users:
+                user = fetched_users.get(target_id)
+            else:
+                user = await self.bot.fetch_user(target_id)
+                fetched_users[target_id] = user
+
+            if passed_title not in sorted_titles:
+                await ctx.reply('erm thats not a valid title')
+                return
+
+            make_sure_user_profile_exists(guild_id, str(target_id))
+            global_profiles[str(target_id)]['items'].setdefault('titles', []).append(passed_title)
+            save_profiles()
+            if ctx.message.mentions:
+                await ctx.send(f"**{user.display_name}**, you've unlocked the *{passed_title}* Title!")
+
     @commands.command(aliases=['b', 'bal'])
     async def balance(self, ctx):
         """
         Check your or someone else's balance
         """
+        global fetched_users
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             if mentions := ctx.message.mentions:
@@ -1658,13 +1697,14 @@ class Currency(commands.Cog):
                     print(code_info)
                     if len(code_info) == 3 and code_info[2] not in call_:
                         return
-                    add_coins_to_user(guild_id, author_id, int(code_info[0]))
+                    num = add_coins_to_user(guild_id, author_id, int(code_info[0]))
+                    highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
                     if len(code_info) > 1 and code_info[1]:
                         await ctx.reply(code_info[1])
                         func_ = ctx.send
                     else:
                         func_ = ctx.reply
-                    await func_(f"## Code Redemption Successful!\n**{ctx.author.display_name}:** +{int(code_info[0]):,} {coin}, balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
+                    await func_(f"## Code Redemption Successful!\n**{ctx.author.display_name}:** +{int(code_info[0]):,} {coin}, balance: {num:,} {coin}\n")
                     global_profiles[author_id]['list_1'].append(code_)
                     save_profiles()
                 else:
