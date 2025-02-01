@@ -1620,8 +1620,7 @@ class Currency(commands.Cog):
             if target_id == -1:
                 await ctx.reply("Something went wrong, please make sure that the command has a user mention or ID")
                 return
-
-            passed_title = ' '.join([x for x in ctx.message.content.split()[1:] if target_id not in x])
+            passed_title = ' '.join([x for x in ctx.message.content.split()[1:] if str(target_id) not in x])
             print(passed_title)
 
             if target_id in fetched_users:
