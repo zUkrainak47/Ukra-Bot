@@ -62,6 +62,7 @@ prayge = '<:prayge:1326268872990523492>'
 stopbeingmean = '<:stopbeingmean:1326525905199435837>'
 peepositbusiness = '<:peepositbusiness:1327594898844684288>'
 puppy = '<:puppy:1327588192282480670>'
+clueless = '<:clueless:1335599640279515167>'
 shovel = '<:shovel:1325823488216268801>'
 gold_emoji = '<:gold:1325823946737713233>'
 treasure_chest = '<:treasure_chest:1325811472680620122>'
@@ -70,7 +71,7 @@ madgeclap = '<a:madgeclap:1322719157241905242>'
 rare_items_to_emoji = {'gold': gold_emoji, 'fool': '✨', 'diamonds': '💎', 'treasure_chest': treasure_chest, 'the_catch': The_Catch}
 
 slot_options = [yay, o7, peeposcheme, sunfire2, stare, HUH, wicked, deadge, teripoint, pepela]
-SPECIAL_CODES = {'genshingift': [3]}
+SPECIAL_CODES = {'genshingift': [3, 'https://cdn.discordapp.com/attachments/696842659989291130/1335602103460036639/image.png?ex=67a0c3e3&is=679f7263&hm=d91c7f72d6dcb4576948d98ea6206395c1da900f08d2ba8982ccb48f719b73ac&']}
 SECRET_CODES = {code: lis.split(',') for (code, lis) in [x.split(':-:') for x in os.getenv('SECRET_CODES').split(', ')]}
 SPECIAL_CODES.update(SECRET_CODES)
 titles = [
@@ -1530,7 +1531,8 @@ class Currency(commands.Cog):
         """
         DMs you all data the bot collected about you
         """
-        make_sure_user_profile_exists(str(ctx.guild.id), str(ctx.author.id))
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        make_sure_user_profile_exists(guild_id, str(ctx.author.id))
         await ctx.author.send("```\n"
                               f"{global_profiles[str(ctx.author.id)]}\n"
                               "```")
@@ -1726,6 +1728,7 @@ class Currency(commands.Cog):
                     code_info = SPECIAL_CODES[code_]
                     print(code_info)
                     if len(code_info) == 3 and code_info[2] not in call_:
+                        await ctx.reply(clueless)
                         return
                     num = add_coins_to_user(guild_id, author_id, int(code_info[0]))
                     highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
@@ -1738,10 +1741,15 @@ class Currency(commands.Cog):
                     global_profiles[author_id]['list_1'].append(code_)
                     save_profiles()
                 else:
+                    await ctx.reply(f"`{code_}` is not a valid code :p")
                     print(code_)
 
             call, contents = ctx.message.content.split()[0], ' '.join(ctx.message.content.split()[1:])
-            await redeem_code(contents.lower(), call.lower())
+            if contents:
+                await redeem_code(contents.lower(), call.lower())
+            else:
+                await ctx.reply('Provide a code to redeem!\nFor example `!redeem GENSHINGIFT`')
+
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -2867,7 +2875,7 @@ class Currency(commands.Cog):
                             global_profiles[target_id]['items']['titles'].append(ti)
                             new_titles.append(ti)
                     save_profiles()
-                    additional_msg = f'\nTotal Funded: {given_away:,} {coin}'
+                    additional_msg = f'\n\nTotal Funded: {given_away:,} {coin}'
                     if new_titles:
                         if len(new_titles) > 1:
                             additional_msg += f"\n\n{mentions[0].mention}, you've unlocked new Titles: *{', '.join(new_titles)}*.\nRun `!title` to change your Titles!"
