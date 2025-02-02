@@ -16,6 +16,9 @@ from pathlib import Path
 import math
 start = time.perf_counter()
 
+# list_1 - used codes
+# num_1 - total funded giveaways
+
 bot_name = 'Ukra Bot'
 bot_down = False
 reason = f'{bot_name} is in Development Mode'
@@ -75,10 +78,27 @@ titles = [
 
     'Gave away 25k', 'Gave away 50k', 'Gave away 100k',
     'Gave away 250k', 'Gave away 500k', 'Gave away 1M',
+    'Gave away 2.5M', 'Gave away 5M', 'Gave away 10M',
     'Gave away 25M', 'Gave away 50M', 'Gave away 100M',
     'Gave away 250M', 'Gave away 500M', 'Gave away 1B',
 ]
 sorted_titles = {title: number for number, title in enumerate(titles)}
+num_to_title = {25000: 'Gave away 25k', 50000: 'Gave away 50k', 100000: 'Gave away 100k',
+                250000: 'Gave away 250k', 500000: 'Gave away 500k', 1000000: 'Gave away 1M',
+                2500000: 'Gave away 2.5M', 5000000: 'Gave away 5M', 10000000: 'Gave away 10M',
+                25000000: 'Gave away 25M', 50000000: 'Gave away 50M', 100000000: 'Gave away 100M',
+                250000000: 'Gave away 250M', 500000000: 'Gave away 500M', 1000000000: 'Gave away 1B',}
+
+
+def should_have_titles(num: int) -> list:
+    ts = []
+    for n in num_to_title:
+        if num >= n:
+            ts.append(num_to_title[n])
+        else:
+            return ts
+    return ts
+
 
 SETTINGS_FILE = Path("dev", "server_settings.json")
 if os.path.exists(SETTINGS_FILE):
@@ -296,6 +316,7 @@ def make_sure_user_profile_exists(guild_: str, user_: str):
     bal = make_sure_user_has_currency(guild_, user_)
     if global_profiles.setdefault(user_, get_default_profile(bal)) == get_default_profile(bal):
         save_profiles()
+    return bal
 
 
 def get_daily_reset_timestamp():
@@ -1455,11 +1476,14 @@ class Currency(commands.Cog):
                     if full_info:
                         profile_embed.add_field(name="Max Balance", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
                         profile_embed.add_field(name="Highest Global Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
-                        profile_embed.add_field(name="", value='', inline=True)
+                        profile_embed.add_field(name="Total Given Away", value=f"{target_profile['num_1']:,} {coin}", inline=True)
 
                     profile_embed.add_field(name="Highest Single Win", value=f"{target_profile['highest_single_win']:,} {coin}", inline=True)
                     profile_embed.add_field(name="Highest Single Loss", value=f"{target_profile['highest_single_loss']:,} {coin}", inline=True)
-                    profile_embed.add_field(name="", value='', inline=True)
+                    if not full_info:
+                        profile_embed.add_field(name="Total Given Away", value=f"{target_profile['num_1']:,} {coin}", inline=True)
+                    else:
+                        profile_embed.add_field(name="", value='', inline=True)
 
                     if full_info:
                         profile_embed.add_field(name="Total Won", value=f"{target_profile['total_won']:,} {coin}", inline=True)
@@ -2792,8 +2816,8 @@ class Currency(commands.Cog):
 
             try:
                 make_sure_user_has_currency(guild_id, target_id)
-                add_coins_to_user(guild_id, target_id, number)  # save file
-                num = get_user_balance(guild_id, target_id)
+                num = add_coins_to_user(guild_id, target_id, number)  # save file
+                highest_balance_check(guild_id, target_id, num)
                 await ctx.reply(f"## Blessing successful!\n\n**{mentions[0].display_name}:** +{number:,} {coin}\nBalance: {num:,} {coin}")
             except:
                 await ctx.reply("Blessing failed!")
@@ -2818,25 +2842,43 @@ class Currency(commands.Cog):
                 target_id = str(mentions[0].id)
                 contents = ctx.message.content.split()[1:]
                 if len(contents) != 2:
-                    await ctx.reply("!curse takes exactly 2 arguments - a user mention and an amount of coins\n({len(contents)} arguments were passed)")
+                    await ctx.reply("This command takes exactly 2 arguments - a user mention and an amount of coins\n({len(contents)} arguments were passed)")
                     return
 
                 number, _, _ = convert_msg_to_number(contents, guild_id, target_id)
                 if number == -1:
-                    await ctx.reply("Please include the amount you'd like to curse the user out of")
+                    await ctx.reply("Please include the amount you'd like the user to lose")
                     return
             else:
                 await ctx.reply("Something went wrong, please make sure that the command has a user mention")
                 return
 
             try:
-                current_balance = make_sure_user_has_currency(guild_id, target_id)
+                current_balance = make_sure_user_profile_exists(guild_id, target_id)
                 number = min(current_balance, number)
-                remove_coins_from_user(guild_id, target_id, number)  # save file
-                num = get_user_balance(guild_id, target_id)
-                await ctx.reply(f"## {cmd} successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}")
-            except:
-                await ctx.reply("Curse failed!")
+                num = remove_coins_from_user(guild_id, target_id, number)  # save file
+                if cmd == 'Funding':
+                    global_profiles[target_id]['num_1'] += number
+                    given_away = global_profiles[target_id]['num_1']
+                    user_titles = global_profiles[target_id]['items'].setdefault('titles', [])
+                    new_titles = []
+                    for ti in should_have_titles(given_away):
+                        if ti not in user_titles:
+                            global_profiles[target_id]['items']['titles'].append(ti)
+                            new_titles.append(ti)
+                    save_profiles()
+                    additional_msg = f'\nTotal Funded: {given_away:,} {coin}'
+                    if new_titles:
+                        if len(new_titles) > 1:
+                            additional_msg += f"\n\n{mentions[0].mention}, you've unlocked new Titles: *{', '.join(new_titles)}*.\nRun `!title` to change your Titles!"
+                        else:
+                            additional_msg += f"\n\n{mentions[0].mention}, you've unlocked the *{new_titles[0]}* Title!\nRun `!title` to change it!"
+                else:
+                    additional_msg = ''
+                await ctx.reply(f"## {cmd} successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}{additional_msg}")
+            except Exception as e:
+                print(e)
+                await ctx.reply(f"{cmd} failed!")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
