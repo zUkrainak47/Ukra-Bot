@@ -16,6 +16,7 @@ from pathlib import Path
 import math
 start = time.perf_counter()
 
+# dict_1 - loans
 # list_1 - used codes
 # num_1 - total funded giveaways
 
@@ -191,6 +192,14 @@ else:
     active_lottery = {datetime.now().date().isoformat(): []}
 
 
+LOAN_FILE = Path("dev", "active_loans.json")
+if os.path.exists(LOAN_FILE):
+    with open(LOAN_FILE, "r") as file:
+        active_loans = json.load(file)
+else:
+    active_loans = []
+
+
 def save_settings():
     with open(SETTINGS_FILE, "w") as file:
         json.dump(server_settings, file, indent=4)
@@ -254,6 +263,11 @@ def save_active_lottery():
         json.dump(active_lottery, file, indent=4)
 
 
+def save_active_loans():
+    with open(LOAN_FILE, "w") as file:
+        json.dump(active_loans, file, indent=4)
+
+
 def save_everything():
     save_settings()
     save_currency()
@@ -266,6 +280,7 @@ def save_everything():
     save_active_giveaways()
     save_ignored_channels()
     save_active_lottery()
+    save_active_loans()
 
 
 def make_sure_server_settings_exist(guild_id, save=True):
@@ -1083,6 +1098,7 @@ async def backshot(ctx):
 # CURRENCY
 coin = "<:fishingecoin:1324905329657643179>"
 active_pvp_requests = dict()
+active_loan_requests = dict()
 
 
 def currency_allowed(context):
@@ -1800,7 +1816,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['d'])
+    @commands.command(aliases=['d', 'в'])
     @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
     async def dig(self, ctx):
         """
@@ -1845,7 +1861,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['m'])
+    @commands.command(aliases=['m', 'ь'])
     @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
     async def mine(self, ctx):
         """
@@ -1901,7 +1917,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['w'])
+    @commands.command(aliases=['w', 'ц'])
     @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
     async def work(self, ctx):
         """
@@ -1935,7 +1951,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['fish', 'f'])
+    @commands.command(aliases=['fish', 'f', 'а'])
     @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
     async def fishinge(self, ctx):
         """
@@ -1974,12 +1990,11 @@ class Currency(commands.Cog):
                     await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest {treasure_chest} {link}")
             else:
                 cast_command = ctx.message.content.split()[0].lower().lstrip('!')
-                if cast_command in ('fish', 'f'):
+                if cast_command in ('fish', 'f', 'а'):
                     cast_command = 'fishing'
                 fish_message = f"## {cast_command.capitalize()} successful! {'🎣' * (cast_command == 'fishing') + fishinge * (cast_command == 'fishinge')}\n"
                 ps_message = ''
-            add_coins_to_user(guild_id, author_id, fish_coins)  # save file
-            num = get_user_balance(guild_id, author_id)
+            num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
             highest_balance_check(guild_id, author_id, num, save=False, make_sure=fish_coins < 200)
             command_count_increment(guild_id, author_id, 'fishinge', True, False)
             await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
@@ -2484,7 +2499,7 @@ class Currency(commands.Cog):
                 return
 
             if number > get_user_balance(guild_id, author_id):
-                await ctx.reply(f"PVP failed! You don't own {number:,} {coin} {sadgebusiness}")
+                await ctx.reply(f"PVP failed! **{ctx.author.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
                 return
             if number > get_user_balance(guild_id, target_id):
                 await ctx.reply(f"PVP failed! **{mentions[0].display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
@@ -2505,9 +2520,11 @@ class Currency(commands.Cog):
                     await react_to.add_reaction('❌')
 
                     def check(reaction, user):
-                        return ((user == mentions[0] and str(reaction.emoji) in ['✅', '❌']) or
-                                (user == ctx.author and str(reaction.emoji) == '❌') and
-                                reaction.message.id == react_to.id)
+                        return ((
+                                 (user == mentions[0] and str(reaction.emoji) in ['✅', '❌']) or
+                                 (user == ctx.author and str(reaction.emoji) == '❌')
+                                ) and
+                                (reaction.message.id == react_to.id))
                 else:
                     bot_challenged = False
 
@@ -2518,7 +2535,7 @@ class Currency(commands.Cog):
                         if number > get_user_balance(guild_id, author_id):
                             active_pvp_requests.get(guild_id).discard(mentions[0].id)
                             active_pvp_requests.get(guild_id).discard(ctx.author.id)
-                            await ctx.reply(f"PVP failed! You don't own {number:,} {coin} {sadgebusiness}")
+                            await ctx.reply(f"PVP failed! **{ctx.author.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
                             return
                         if number > get_user_balance(guild_id, target_id):
                             active_pvp_requests.get(guild_id).discard(mentions[0].id)
