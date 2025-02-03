@@ -1,4 +1,5 @@
 # from typing import Final
+import traceback
 import asyncio
 import datetime
 import re
@@ -197,7 +198,7 @@ if os.path.exists(LOAN_FILE):
     with open(LOAN_FILE, "r") as file:
         active_loans = json.load(file)
 else:
-    active_loans = []
+    active_loans = {}
 
 
 def save_settings():
@@ -281,6 +282,32 @@ def save_everything():
     save_ignored_channels()
     save_active_lottery()
     save_active_loans()
+
+
+def loan_payment(id_: str, payment: int):
+    """
+    Returns
+    whether the loan is paid back,
+    who the loaner was,
+    how big the loan was,
+    how much money is left for the loanee
+    """
+    active_loans[id_][3] += payment
+    amount = active_loans[id_][2]
+    loaner = active_loans[id_][0]
+    if active_loans[id_][3] >= active_loans[id_][2]:
+        left_over = active_loans[id_][3] - active_loans[id_][2]
+        global_profiles[str(active_loans[id_][0])]['dict_1']['out'].remove(id_)
+        global_profiles[str(active_loans[id_][1])]['dict_1']['in'].remove(id_)
+        save_profiles()
+
+        del active_loans[id_]
+        save_active_loans()
+
+        return True, loaner, amount, left_over
+
+    save_active_loans()
+    return False, loaner, amount, 0
 
 
 def make_sure_server_settings_exist(guild_id, save=True):
@@ -1098,7 +1125,7 @@ async def backshot(ctx):
 # CURRENCY
 coin = "<:fishingecoin:1324905329657643179>"
 active_pvp_requests = dict()
-active_loan_requests = dict()
+active_loan_requests = set()
 
 
 def currency_allowed(context):
@@ -1841,11 +1868,30 @@ class Currency(commands.Cog):
                 await rare_channel.send(f"**{ctx.author.mention}** found Gold {gold_emoji} {link}")
             else:
                 dig_message = f'## Digging successful! {shovel}'
-            add_coins_to_user(guild_id, author_id, dig_coins)  # save file
-            num = get_user_balance(guild_id, author_id)
-            highest_balance_check(guild_id, author_id, num, save=False, make_sure=dig_coins < 25)  # make sure profile exists only if gold wasn't found
-            command_count_increment(guild_id, author_id, 'dig', True, False)
-            await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
+            if dig_coins != 2500 or (dig_coins == 2500 and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
+                num = add_coins_to_user(guild_id, author_id, dig_coins)  # save file
+                highest_balance_check(guild_id, author_id, num, save=False, make_sure=dig_coins != 2500)  # make sure profile exists only if gold wasn't found
+                command_count_increment(guild_id, author_id, 'dig', True, False)
+                await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
+            else:
+                await ctx.reply(dig_message)
+                loans = global_profiles[author_id]['dict_1']['in'].copy()
+                for loan_id in loans:
+                    finalized, loaner_id, loan_size, dig_coins = loan_payment(loan_id, dig_coins)
+
+                    if finalized:
+                        await ctx.reply(f'## Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back')
+                    else:
+                        await ctx.reply(f'## Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far')
+                    if not dig_coins:
+                        break
+                else:
+                    num = add_coins_to_user(guild_id, author_id, dig_coins)  # save file
+                    highest_balance_check(guild_id, author_id, num, save=False, make_sure=dig_coins != 2500)  # make sure profile exists only if gold wasn't found
+                    command_count_increment(guild_id, author_id, 'dig', True, False)
+                    await ctx.reply(
+                        f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
+
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -1896,11 +1942,29 @@ class Currency(commands.Cog):
                 await rare_channel.send(f"**{ctx.author.mention}** struck Fool's Gold ✨ {link}")
             else:
                 mine_message = f"## Mining successful! ⛏️\n"
-            add_coins_to_user(guild_id, author_id, mine_coins)  # save file
-            num = get_user_balance(guild_id, author_id)
-            highest_balance_check(guild_id, author_id, num, save=False, make_sure=t not in (1, 625))
-            command_count_increment(guild_id, author_id, 'mine', True, False)
-            await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can mine again {get_timestamp(120)}")
+            if t not in (1, 625) or (t in (1, 625) and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
+                num = add_coins_to_user(guild_id, author_id, mine_coins)  # save file
+                highest_balance_check(guild_id, author_id, num, save=False, make_sure=True)
+                command_count_increment(guild_id, author_id, 'mine', True, False)
+                await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can mine again {get_timestamp(120)}")
+            else:
+                await ctx.reply(mine_message)
+                loans = global_profiles[author_id]['dict_1']['in'].copy()
+                for loan_id in loans:
+                    finalized, loaner_id, loan_size, mine_coins = loan_payment(loan_id, mine_coins)
+
+                    if finalized:
+                        await ctx.reply(f'## Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back')
+                    else:
+                        await ctx.reply(f'## Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far')
+                    if not mine_coins:
+                        break
+                else:
+                    num = add_coins_to_user(guild_id, author_id, mine_coins)  # save file
+                    highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
+                    command_count_increment(guild_id, author_id, 'mine', True, False)
+                    await ctx.reply(
+                        f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can mine again {get_timestamp(120)}")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -1994,10 +2058,30 @@ class Currency(commands.Cog):
                     cast_command = 'fishing'
                 fish_message = f"## {cast_command.capitalize()} successful! {'🎣' * (cast_command == 'fishing') + fishinge * (cast_command == 'fishinge')}\n"
                 ps_message = ''
-            num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
-            highest_balance_check(guild_id, author_id, num, save=False, make_sure=fish_coins < 200)
-            command_count_increment(guild_id, author_id, 'fishinge', True, False)
-            await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
+            if fish_coins < 200 or (fish_coins > 200 and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
+                num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
+                highest_balance_check(guild_id, author_id, num, save=False, make_sure=fish_coins < 200)
+                command_count_increment(guild_id, author_id, 'fishinge', True, False)
+                await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
+            else:
+                await ctx.reply(fish_message)
+                loans = global_profiles[author_id]['dict_1']['in'].copy()
+                for loan_id in loans:
+                    finalized, loaner_id, loan_size, fish_coins = loan_payment(loan_id, fish_coins)
+
+                    if finalized:
+                        await ctx.reply(f'## Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back')
+                    else:
+                        await ctx.reply(f'## Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far')
+                    if not fish_coins:
+                        break
+                else:
+                    num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
+                    highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
+                    command_count_increment(guild_id, author_id, 'fishinge', True, False)
+                    await ctx.reply(
+                        f"**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
+
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -2117,17 +2201,35 @@ class Currency(commands.Cog):
             try:
                 make_sure_user_has_currency(guild_id, target_id)
                 if number <= get_user_balance(guild_id, author_id):
-                    add_coins_to_user(guild_id, target_id, number, save=False)
-                    remove_coins_from_user(guild_id, author_id, number, save=False)
+                    num1 = remove_coins_from_user(guild_id, author_id, number, save=False)
+                    num2 = add_coins_to_user(guild_id, target_id, number, save=False)
+                    make_sure_user_profile_exists(guild_id, author_id)
+                    make_sure_user_profile_exists(guild_id, target_id)
+                    loan_money = number
+                    loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
+                    for loan_id in loans:
+                        print(loan_id)
+                        if active_loans[loan_id][0] == mentions[0].id:
+                            finalized, loaner_id, loan_size, loan_money = loan_payment(loan_id, loan_money)
+                            print(finalized, loaner_id, loan_size, loan_money)
+
+                            if finalized:
+                                await ctx.reply(f'## Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back')
+                            else:
+                                await ctx.reply(f'## Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far')
+                            if not loan_money:
+                                break
+
                     save_currency()  # save file
-                    num1 = get_user_balance(guild_id, author_id)
-                    num2 = get_user_balance(guild_id, target_id)
                     highest_balance_check(guild_id, target_id, num2)
                     await ctx.reply(f"## Transaction successful!\n\n**{ctx.author.display_name}:** {num1:,} {coin}\n**{mentions[0].display_name}:** {num2:,} {coin}")
                 else:
                     await ctx.reply(f"Transaction failed! You don't own {number:,} {coin} {sadgebusiness}")
-            except:
+
+            except Exception:
+                print(traceback.format_exc())
                 await ctx.reply("Transaction failed!")
+
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -2581,8 +2683,10 @@ class Currency(commands.Cog):
             except Exception as e:
                 print(e)
                 await ctx.reply("PVP failed!")
+
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
+
         else:
             if mentions := ctx.message.mentions:
                 if mentions[0].id == ctx.author.id:
@@ -2594,6 +2698,210 @@ class Currency(commands.Cog):
             else:
                 await ctx.reply("Something went wrong, please make sure that the command has a user mention")
                 return
+
+    @commands.command()
+    async def loan(self, ctx):
+        """
+        Takes a user mention, amount, and optional interest. Until the loan is repaid, all rare drops the loanee
+        receives will go to the loaner, but not more than what's left to pay.
+
+        For example, if 3k/5k of a loan is paid back, finding diamonds transfers 2k to the loaner and 5.5k to the loanee
+
+        Usage: !loan @user number interest
+        Example: !loan @user 10k 50%  -  this means @user will have to pay you back 15k
+        """
+
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            if ctx.author.id in active_loan_requests:
+                await ctx.reply(f"You already have a loan request pending")
+                return
+
+            if mentions := ctx.message.mentions:
+                target_id = str(mentions[0].id)
+                if mentions[0].id == ctx.author.id:
+                    await ctx.reply("You can't loan yourself, silly")
+                    return
+                if mentions[0].id in active_loan_requests:
+                    await ctx.reply(f"**{mentions[0].display_name}** already has a loan request pending")
+                    return
+                for loan in global_profiles[author_id]['dict_1']['in']:
+                    if mentions[0].id in active_loans[loan]:
+                        await ctx.reply('You literally owe them coins bro pay back the loan first')
+                        return
+                contents = ctx.message.content.split()[1:]
+                if len(contents) > 3:
+                    await ctx.reply(f"!loan takes at most 3 arguments - a user mention, the amount loaned and an optional interest\n({len(contents)} arguments were passed)")
+                    return
+
+                make_sure_user_has_currency(guild_id, target_id)
+                number, source, msg = convert_msg_to_number([contents[1]], guild_id, author_id, ignored_sources=['%', 'all', 'half'])
+                if number <= 0:
+                    await ctx.reply("You need to input the amount you'd like to loan.\nExample: `!loan @user 10k`")
+                    return
+
+                if len(contents) == 3:
+                    if '%' not in contents[2]:
+                        interest, source_, msg_ = convert_msg_to_number([contents[2]], guild_id, author_id, ignored_sources=['%', 'all', 'half'])
+                    elif contents[2].count('%') == 1 and contents[2].rstrip('%').replace('.', '').isdecimal() and contents[2].count('.') <= 1:
+                        interest, source_, msg_ = int(number * float(contents[2].rstrip('%')) / 100), '%', contents[2]
+                    else:
+                        await ctx.reply("If you are passing a third parameter, it needs to be the interest.\nExample: `!loan @user 10k 5k` or `!loan @user 10k 25%`")
+                        return
+                    if interest < 0:
+                        await ctx.reply("If you are passing a third parameter, it needs to be the interest (it also needs to be positive lmao)\nExample: `!loan @user 10k 5k` or `!loan @user 10k 25%`")
+                        return
+
+                else:
+                    interest, source_, msg_ = 0, None, None
+
+            else:
+                await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+                return
+
+            if number > get_user_balance(guild_id, author_id):
+                await ctx.reply(f"Loan failed! You don't own {number:,} {coin} {sadgebusiness}")
+                return
+
+            active_loan_requests.add(mentions[0].id)
+            active_loan_requests.add(ctx.author.id)
+            try:
+                if mentions[0].id == bot_id:
+                    await ctx.reply("I don't need your loan lmao")
+                    active_loan_requests.discard(mentions[0].id)
+                    active_loan_requests.discard(ctx.author.id)
+                    return
+
+                inter = ' with ' + f'{interest:,} {coin} as interest' if interest else ''
+                react_to_1 = await ctx.reply(
+                    f'## {ctx.author.mention}, are you sure you would like to loan {mentions[0].display_name} {number:,} {coin}{inter}?\n' +
+                    f"This means that\n"
+                    f"- You pay **{number:,}** {coin} to {mentions[0].display_name} now\n"
+                    f"- They will need to pay you back **{number+interest:,}** {coin} in the future\n\n"
+                    f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
+                    f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
+                await react_to_1.add_reaction('✅')
+                await react_to_1.add_reaction('❌')
+
+                def check1(reaction, user):
+                    return ((user == ctx.author and str(reaction.emoji) in ['✅', '❌']) and
+                            (reaction.message.id == react_to_1.id))
+
+                try:
+                    reaction1, user1 = await self.bot.wait_for('reaction_add', timeout=150.0, check=check1)
+                    if str(reaction1.emoji) == '✅':
+
+                        if number > get_user_balance(guild_id, author_id):
+                            active_loan_requests.discard(mentions[0].id)
+                            active_loan_requests.discard(ctx.author.id)
+                            await ctx.reply(f"Loan failed! You don't own {number:,} {coin} {sadgebusiness}")
+                            return
+
+                        react_to_2 = await ctx.reply(
+                            f'## {mentions[0].mention}, do you accept the loan for {number + interest:,} {coin} from {ctx.author.display_name}?\n' +
+                            f"This means that\n"
+                            f"- {ctx.author.display_name} gives you **{number:,}** {coin} now\n"
+                            f"- You will need to pay them back **{number + interest:,}** {coin} in the future\n"
+                            f"- Until your loan is paid out, __every rare drop you get__ ({gold_emoji}, ✨, 💎, {treasure_chest}, {The_Catch}) will go to {ctx.author.display_name}. (`!help loan` for more info on this)\n\n"
+                            f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
+                            f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
+                        await react_to_2.add_reaction('✅')
+                        await react_to_2.add_reaction('❌')
+
+                        def check2(reaction, user):
+                            return ((user == mentions[0] and str(reaction.emoji) in ['✅', '❌']) and
+                                    (reaction.message.id == react_to_2.id))
+
+                        try:
+                            reaction2, user2 = await self.bot.wait_for('reaction_add', timeout=150.0, check=check2)
+                            if str(reaction2.emoji) == '✅':
+                                if number > get_user_balance(guild_id, author_id):
+                                    active_loan_requests.discard(mentions[0].id)
+                                    active_loan_requests.discard(ctx.author.id)
+                                    await ctx.reply(f"Loan failed! {ctx.author.display_name} doesn't own {number:,} {coin} {sadgebusiness}")
+                                    return
+
+
+                                command_count_increment(guild_id, author_id, 'loan')
+                                author_bal = remove_coins_from_user(guild_id, author_id, number, save=False)
+                                target_bal = add_coins_to_user(guild_id, target_id, number, save=False)
+                                save_currency()  # save file
+                                highest_balance_check(guild_id, target_id, target_bal)
+
+                                await ctx.reply(f"## Loan successful! - `#{react_to_2.id}`\n" +
+                                                f"**{mentions[0].display_name}:** +{number:,} {coin}, balance: {target_bal:,} {coin}\n" +
+                                                f"**{ctx.author.display_name}:** -{number:,} {coin}, balance: {author_bal:,} {coin}\n\n"
+                                                f"**{mentions[0].display_name}** owes **{ctx.author.display_name}** {number+interest:,} {coin}")
+                                active_loan_requests.discard(mentions[0].id)
+                                active_loan_requests.discard(ctx.author.id)
+
+                                active_loans[str(react_to_2.id)] = [ctx.author.id, mentions[0].id, number+interest, 0]
+                                save_active_loans()
+
+                                global_profiles[str(ctx.author.id)]['dict_1'].setdefault('out', []).append(str(react_to_2.id))
+                                global_profiles[str(mentions[0].id)]['dict_1'].setdefault('in', []).append(str(react_to_2.id))
+                                save_profiles()
+
+                            elif str(reaction2.emoji) == '❌':
+                                await ctx.reply(f"{mentions[0].display_name} declined the Loan request")
+                                active_loan_requests.discard(mentions[0].id)
+                                active_loan_requests.discard(ctx.author.id)
+
+                        except asyncio.TimeoutError:
+                            await ctx.reply(f"{mentions[0].display_name} did not respond in time")
+                            active_loan_requests.discard(mentions[0].id)
+                            active_loan_requests.discard(ctx.author.id)
+
+                    elif str(reaction1.emoji) == '❌':
+                        await ctx.reply(f"{ctx.author.display_name} canceled the Loan request")
+                        active_loan_requests.discard(mentions[0].id)
+                        active_loan_requests.discard(ctx.author.id)
+
+                except asyncio.TimeoutError:
+                    await ctx.reply(f"{ctx.author.display_name} did not respond in time")
+                    active_loan_requests.discard(mentions[0].id)
+                    active_loan_requests.discard(ctx.author.id)
+
+            except Exception as e:
+                print(e)
+                await ctx.reply("Loan failed!")
+
+        elif currency_allowed(ctx):
+            await ctx.reply(f'{reason}, currency commands are disabled')
+
+    @commands.command()
+    async def loans(self, ctx):
+        global fetched_users
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
+            author_id = str(ctx.author.id)
+            make_sure_user_profile_exists(guild_id, author_id)
+            answer = '## Your loans:\n'
+            for i in global_profiles[str(author_id)]['dict_1']['out']:
+                loanee_id = active_loans[i][1]
+                if loanee_id in fetched_users:
+                    loanee = fetched_users.get(loanee_id)
+                else:
+                    loanee = await self.bot.fetch_user(loanee_id)
+                    fetched_users[loanee_id] = loanee
+
+                answer += f"- **{loanee.display_name}** owes **{ctx.author.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+            answer += '\n'
+            for i in global_profiles[str(author_id)]['dict_1']['in']:
+                loanee_id = active_loans[i][0]
+                if loanee_id in fetched_users:
+                    loanee = fetched_users.get(loanee_id)
+                else:
+                    loanee = await self.bot.fetch_user(loanee_id)
+                    fetched_users[loanee_id] = loanee
+
+                answer += f"- **{ctx.author.display_name}** owes **{loanee.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+            await ctx.reply(answer)
+
+        elif currency_allowed(ctx):
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
     @commands.command(aliases=['slot', 's'])
