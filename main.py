@@ -2722,7 +2722,10 @@ class Currency(commands.Cog):
             if mentions := ctx.message.mentions:
                 target_id = str(mentions[0].id)
                 if mentions[0].id == ctx.author.id:
-                    await ctx.reply("You can't loan yourself, silly")
+                    await ctx.reply("You can't loan to yourself, silly")
+                    return
+                if mentions[0].id == bot_id:
+                    await ctx.reply("I don't need your loan lmao")
                     return
                 if mentions[0].id in active_loan_requests:
                     await ctx.reply(f"**{mentions[0].display_name}** already has a loan request pending")
@@ -2732,6 +2735,10 @@ class Currency(commands.Cog):
                         await ctx.reply('You literally owe them coins bro pay back the loan first')
                         return
                 contents = ctx.message.content.split()[1:]
+                if len(contents) == 1:
+                    await ctx.reply(f"!loan takes at least 2 arguments - a user mention, the amount loaned (and an optional interest)\n(1 argument was passed)")
+                    return
+
                 if len(contents) > 3:
                     await ctx.reply(f"!loan takes at most 3 arguments - a user mention, the amount loaned and an optional interest\n({len(contents)} arguments were passed)")
                     return
@@ -2768,12 +2775,6 @@ class Currency(commands.Cog):
             active_loan_requests.add(mentions[0].id)
             active_loan_requests.add(ctx.author.id)
             try:
-                if mentions[0].id == bot_id:
-                    await ctx.reply("I don't need your loan lmao")
-                    active_loan_requests.discard(mentions[0].id)
-                    active_loan_requests.discard(ctx.author.id)
-                    return
-
                 inter = ' with ' + f'{interest:,} {coin} as interest' if interest else ''
                 react_to_1 = await ctx.reply(
                     f'## {ctx.author.mention}, are you sure you would like to loan {mentions[0].display_name} {number:,} {coin}{inter}?\n' +
@@ -2873,13 +2874,17 @@ class Currency(commands.Cog):
 
     @commands.command()
     async def loans(self, ctx):
+        """
+        Displays your active loans
+        """
         global fetched_users
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        found_loan = False
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_profile_exists(guild_id, author_id)
             answer = '## Your loans:\n'
-            for i in global_profiles[str(author_id)]['dict_1']['out']:
+            for i in global_profiles[str(author_id)]['dict_1'].setdefault('out', []):
                 loanee_id = active_loans[i][1]
                 if loanee_id in fetched_users:
                     loanee = fetched_users.get(loanee_id)
@@ -2888,8 +2893,9 @@ class Currency(commands.Cog):
                     fetched_users[loanee_id] = loanee
 
                 answer += f"- **{loanee.display_name}** owes **{ctx.author.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+                found_loan = True
             answer += '\n'
-            for i in global_profiles[str(author_id)]['dict_1']['in']:
+            for i in global_profiles[str(author_id)]['dict_1'].setdefault('in', []):
                 loanee_id = active_loans[i][0]
                 if loanee_id in fetched_users:
                     loanee = fetched_users.get(loanee_id)
@@ -2898,7 +2904,12 @@ class Currency(commands.Cog):
                     fetched_users[loanee_id] = loanee
 
                 answer += f"- **{ctx.author.display_name}** owes **{loanee.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
-            await ctx.reply(answer)
+                found_loan = True
+            if found_loan:
+                await ctx.reply(answer)
+            else:
+                await ctx.reply("You have no active loans!")
+
 
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
