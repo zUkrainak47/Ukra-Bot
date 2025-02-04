@@ -1376,7 +1376,7 @@ class PaginationView(discord.ui.View):
     current_page: int = 1
     page_size: int = 5
 
-    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = ''):
+    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', own_: bool = False, ctx_=None):
         super().__init__()
         self.data = data_
         self.title = title_
@@ -1386,14 +1386,22 @@ class PaginationView(discord.ui.View):
         self.description = description_
         self.author = author_
         self.author_icon = author_icon_
+        self.own = own_
+        self.ctx = ctx_
         self.message = None
 
     async def send_embed(self, ctx):
-        embed = self.create_embed(self.data[:self.page_size])
+        # Prepare the embed with the first page's data
+        current_data = self.get_current_page_data()
+        embed = self.create_embed(current_data)
         self.update_buttons()
+        # If we are not in footer mode, update dynamic item buttons.
+        if not (self.footer and self.footer_icon):
+            self.update_item_buttons()
         self.message = await ctx.reply(embed=embed, view=self)
 
     def create_embed(self, data):
+        # Use one embed style if footer and footer_icon are provided
         if self.footer and self.footer_icon:
             embed = discord.Embed(title=f"{self.title.capitalize()} - Page {self.current_page} / {math.ceil(len(self.data) / self.page_size)}", color=self.color)
             for item in data:
@@ -1406,10 +1414,12 @@ class PaginationView(discord.ui.View):
             embed.set_footer(text=self.footer, icon_url=self.footer_icon)
 
         else:
+            # Otherwise use a description-style embed.
             desc = ''
             for item, num in data:
-                desc += f'{item_emojis[item] if item in item_emojis else ''} **{item_names[item] if item in item_names else item}** ─ {num:,}\n'
-
+                emoji = item_emojis[item] if item in item_emojis else ''
+                name = item_names[item] if item in item_names else item
+                desc += f'{emoji} **{name}** ─ {num:,}\n'
             embed = discord.Embed(title="", color=self.color, description=desc)
 
             if self.author:
@@ -1425,6 +1435,8 @@ class PaginationView(discord.ui.View):
 
     async def update_message(self, data):
         self.update_buttons()
+        if not (self.footer and self.footer_icon):
+            self.update_item_buttons()
         await self.message.edit(embed=self.create_embed(data), view=self)
 
     def update_buttons(self):
@@ -1444,29 +1456,79 @@ class PaginationView(discord.ui.View):
         until_item = self.current_page * self.page_size
         return self.data[from_item:until_item]
 
-    @discord.ui.button(label="|<", style=discord.ButtonStyle.green)
+    def update_item_buttons(self):
+        # Remove any previously added dynamic item buttons.
+        # (Assuming the navigation buttons do not have the attribute `is_item_button`)
+        for child in list(self.children):
+            if getattr(child, "is_item_button", False):
+                self.remove_item(child)
+
+        # Add a new button for each item on the current page.
+        # This only happens when NOT using the footer/footer_icon mode.
+        if not (self.footer and self.footer_icon):
+            for item, num in self.get_current_page_data():
+                # Assuming that in this mode each item is a tuple or dict.
+                # Adjust the key/index as necessary.
+                if item  in item_emojis:
+                    button = discord.ui.Button(emoji=item_emojis[item], style=discord.ButtonStyle.secondary, row=1)
+                else:
+                    button = discord.ui.Button(label=item, style=discord.ButtonStyle.secondary, row=1)
+                # Mark this button as dynamic so we can remove it later.
+                button.is_item_button = True
+
+                # Define the callback function with a default parameter to capture the current item.
+                async def item_callback(interaction: discord.Interaction, *, item_data=item):
+                    if self.own:
+                        await interaction.response.defer()  # Acknowledge the interaction immediately
+                        await use(self.ctx, item_data)  # Call the function to use the item
+                        await interaction.followup.send(f"This would have used 1 {item_emojis[item_data]} {item_names[item_data]} but using items is currently in development {pupperrun}", ephemeral=True)  # Send the response
+                    else:
+                        await interaction.response.send_message("This is not your inventory!", ephemeral=True)
+
+                button.callback = item_callback
+
+                # Add the button to the view.
+                self.add_item(button)
+
+    @discord.ui.button(label="|<", style=discord.ButtonStyle.green, row=0)
     async def first_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page = 1
         await self.update_message(self.get_current_page_data())
 
-    @discord.ui.button(label="<", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="<", style=discord.ButtonStyle.primary, row=0)
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page -= 1
         await self.update_message(self.get_current_page_data())
 
-    @discord.ui.button(label=">", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label=">", style=discord.ButtonStyle.primary, row=0)
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page += 1
         await self.update_message(self.get_current_page_data())
 
-    @discord.ui.button(label=">|", style=discord.ButtonStyle.green)
+    @discord.ui.button(label=">|", style=discord.ButtonStyle.green, row=0)
     async def last_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page = math.ceil(len(self.data) / self.page_size)
         await self.update_message(self.get_current_page_data())
+
+
+async def use(ctx, item):
+    """
+    Uses an item of choice
+    """
+    try:
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        author_id = str(ctx.author.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
+            # await ctx.send(f"Are you sure you'd like to use a {item_emojis[item]} {item_names[item]}")
+            pass
+        elif currency_allowed(ctx):
+            await ctx.reply(f'{reason}, currency commands are disabled')
+    except Exception as e:
+        print(e)
 
 
 class Currency(commands.Cog):
@@ -1629,7 +1691,7 @@ class Currency(commands.Cog):
     @commands.command(aliases=['inv'])
     async def inventory(self, ctx):
         """
-        Displays your or someone else's inventory. To use an item - !use item
+        Displays your or someone else's inventory
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1658,23 +1720,8 @@ class Currency(commands.Cog):
                     else:
                         embed_color = 0xffd000
 
-                    pagination_view = PaginationView(items, title_=f"", author_=f"{user.display_name}'s Inventory", author_icon_=user.avatar.url, color_=embed_color, description_=desc)
+                    pagination_view = PaginationView(items, title_=f"", author_=f"{user.display_name}'s Inventory", author_icon_=user.avatar.url, color_=embed_color, description_=desc, own_=(user_in_question == ctx.author.id), ctx_=ctx)
                     await pagination_view.send_embed(ctx)
-            elif currency_allowed(ctx):
-                await ctx.reply(f'{reason}, currency commands are disabled')
-        except Exception as e:
-            print(e)
-
-    @commands.command()
-    async def use(self, ctx):
-        """
-        Uses an item of choice
-        """
-        try:
-            guild_id = '' if not ctx.guild else str(ctx.guild.id)
-            author_id = str(ctx.author.id)
-            if currency_allowed(ctx) and bot_down_check(guild_id):
-                await ctx.reply(f'Using items is in development {pupperrun}')
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception as e:
