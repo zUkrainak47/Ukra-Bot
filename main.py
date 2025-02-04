@@ -2172,25 +2172,30 @@ class Currency(commands.Cog):
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
+            example = 'Example: `Give @user 100` gives @user 100 coins'
+            contents = ctx.message.content.split()[1:]
+            if not contents:
+                await ctx.reply('This command is used to give coins to someone!\n' + example)
+                return
+
             if mentions := ctx.message.mentions:
                 target_id = str(mentions[0].id)
                 if mentions[0].id == ctx.author.id:
                     await ctx.reply(f"You can't send {coin} to yourself, silly")
                     return
-                contents = ctx.message.content.split()[1:]
                 if len(contents) != 2:
-                    await ctx.reply(f"!give takes exactly 2 arguments - a user mention and the amount\n({len(contents)} arguments were passed)")
+                    await ctx.reply(f"!give takes exactly 2 arguments - a user mention and the amount\n({len(contents)} arguments were passed)\n\n{example}")
                     return
 
                 number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
                 if number == -1:
-                    await ctx.reply("Please include the amount you'd like the give")
+                    await ctx.reply(f"Please include the amount you'd like the give\n\n{example}")
                     return
                 if not number:
                     await ctx.reply("You gotta send something at least")
                     return
             else:
-                await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+                await ctx.reply(f"Something went wrong, please make sure that the command has a user mention\n\n{example}")
                 return
 
             try:
@@ -2556,6 +2561,12 @@ class Currency(commands.Cog):
             active_pvp_requests.setdefault(guild_id, set())
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
+            example = 'Example: `!pvp @user 2.5k` means both you and @user put 2.5k coins on the line and a winner is chosen randomly - the winner walks away with 5k coins, the loser walks away with nothing'
+            contents = ctx.message.content.split()[1:]
+            if not contents:
+                await ctx.reply("This command is used to PVP another user for coins!\n" + example)
+                return
+
             if ctx.author.id in active_pvp_requests.get(guild_id):
                 await ctx.reply(f"You already have a pvp request pending")
                 return
@@ -2568,9 +2579,8 @@ class Currency(commands.Cog):
                     await ctx.reply(f"**{mentions[0].display_name}** already has a pvp request pending")
                     return
 
-                contents = ctx.message.content.split()[1:]
                 if len(contents) > 2:
-                    await ctx.reply(f"!pvp takes at most 2 arguments - a user mention and a bet\n({len(contents)} arguments were passed)")
+                    await ctx.reply(f"!pvp takes at most 2 arguments - a user mention and a bet\n({len(contents)} arguments were passed)\n\n{example}")
                     return
 
                 make_sure_user_has_currency(guild_id, target_id)
@@ -2587,7 +2597,7 @@ class Currency(commands.Cog):
                 elif number == -1:
                     number = 0
             else:
-                await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+                await ctx.reply(f"Something went wrong, please make sure that the command has a user mention\n\n{example}")
                 return
 
             if number > get_user_balance(guild_id, author_id):
@@ -2706,6 +2716,12 @@ class Currency(commands.Cog):
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 author_id = str(ctx.author.id)
                 make_sure_user_has_currency(guild_id, author_id)
+                example = 'Examples: `!loan @user 7.5k 50%` / `!loan @user 7.5k 3.75k` - both of these mean the following: you give @user 7500 coins now and they will have to pay you back 11250 coins later'
+                contents = ctx.message.content.split()[1:]
+                if not contents:
+                    await ctx.reply('This command is used to loan coins to someone!\n' + example)
+                    return
+
                 if ctx.author.id in active_loan_requests:
                     await ctx.reply(f"You already have a loan request pending")
                     return
@@ -2725,19 +2741,18 @@ class Currency(commands.Cog):
                         if mentions[0].id in active_loans[loan]:
                             await ctx.reply('You literally owe them coins bro pay back the loan first')
                             return
-                    contents = ctx.message.content.split()[1:]
                     if len(contents) == 1:
-                        await ctx.reply(f"!loan takes at least 2 arguments - a user mention and the amount loaned (and an optional interest)\n(1 argument was passed)")
+                        await ctx.reply(f"!loan takes at least 2 arguments - a user mention and the amount loaned (and an optional interest)\n(1 argument was passed)\n\n{example}")
                         return
 
                     if len(contents) > 3:
-                        await ctx.reply(f"!loan takes at most 3 arguments - a user mention, the amount loaned and an optional interest\n({len(contents)} arguments were passed)")
+                        await ctx.reply(f"!loan takes at most 3 arguments - a user mention, the amount loaned and an optional interest\n({len(contents)} arguments were passed)\n\n{example}")
                         return
 
                     make_sure_user_has_currency(guild_id, target_id)
                     number, source, msg = convert_msg_to_number([contents[1]], guild_id, author_id, ignored_sources=['%', 'all', 'half'])
                     if number <= 0:
-                        await ctx.reply("You need to input the amount you'd like to loan.\nExample: `!loan @user 10k`")
+                        await ctx.reply(f"You need to input the amount you'd like to loan\n\n{example}")
                         return
 
                     if len(contents) == 3:
@@ -2746,17 +2761,17 @@ class Currency(commands.Cog):
                         elif contents[2].count('%') == 1 and contents[2].rstrip('%').replace('.', '').isdecimal() and contents[2].count('.') <= 1:
                             interest, source_, msg_ = int(number * float(contents[2].rstrip('%')) / 100), '%', contents[2]
                         else:
-                            await ctx.reply("If you are passing a third parameter, it needs to be the interest.\nExample: `!loan @user 10k 5k` or `!loan @user 10k 25%`")
+                            await ctx.reply("If you are passing a third parameter, it needs to be the interest.\n\nExample: `!loan @user 10k 5k` or `!loan @user 10k 25%`")
                             return
                         if interest < 0:
-                            await ctx.reply("If you are passing a third parameter, it needs to be the interest (it also needs to be positive lmao)\nExample: `!loan @user 10k 5k` or `!loan @user 10k 25%`")
+                            await ctx.reply("If you are passing a third parameter, it needs to be the interest (it also needs to be positive lmao)\n\nExample: `!loan @user 10k 5k` or `!loan @user 10k 25%`")
                             return
 
                     else:
                         interest, source_, msg_ = 0, None, None
 
                 else:
-                    await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+                    await ctx.reply(f"Something went wrong, please make sure that the command has a user mention\n\n{example}")
                     return
 
                 if number > get_user_balance(guild_id, author_id):
