@@ -2815,26 +2815,34 @@ class Currency(commands.Cog):
                                         await ctx.reply(f"Loan failed! {ctx.author.display_name} doesn't own {number:,} {coin} {sadgebusiness}")
                                         return
 
-
                                     command_count_increment(guild_id, author_id, 'loan')
                                     author_bal = remove_coins_from_user(guild_id, author_id, number, save=False)
                                     target_bal = add_coins_to_user(guild_id, target_id, number, save=False)
                                     save_currency()  # save file
                                     highest_balance_check(guild_id, target_id, target_bal)
 
-                                    await ctx.reply(f"## Loan successful! - `#{react_to_2.id}`\n" +
-                                                    f"**{mentions[0].display_name}:** +{number:,} {coin}, balance: {target_bal:,} {coin}\n" +
-                                                    f"**{ctx.author.display_name}:** -{number:,} {coin}, balance: {author_bal:,} {coin}\n\n"
-                                                    f"**{mentions[0].display_name}** owes **{ctx.author.display_name}** {number+interest:,} {coin}")
-                                    active_loan_requests.discard(mentions[0].id)
-                                    active_loan_requests.discard(ctx.author.id)
+                                    for loan in global_profiles[author_id]['dict_1'].setdefault('out', []):
+                                        if mentions[0].id in active_loans[loan]:
+                                            active_loans[loan][2] += number+interest
+                                            loan_info = loan, True
+                                            ps = f"**{mentions[0].display_name}** now owes **{ctx.author.display_name}** {number + interest:,} {coin} more\n(that's {active_loans[loan][3]:,}/{active_loans[loan][2]:,} {coin} total)"
+                                            break
+                                    else:
+                                        active_loans[str(react_to_2.id)] = [ctx.author.id, mentions[0].id, number+interest, 0]
+                                        loan_info = react_to_2.id, False
+                                        ps = f"**{mentions[0].display_name}** owes **{ctx.author.display_name}** {number+interest:,} {coin}"
+                                        global_profiles[str(ctx.author.id)]['dict_1'].setdefault('out', []).append(str(react_to_2.id))
+                                        global_profiles[str(mentions[0].id)]['dict_1'].setdefault('in', []).append(str(react_to_2.id))
+                                        save_profiles()
 
-                                    active_loans[str(react_to_2.id)] = [ctx.author.id, mentions[0].id, number+interest, 0]
                                     save_active_loans()
 
-                                    global_profiles[str(ctx.author.id)]['dict_1'].setdefault('out', []).append(str(react_to_2.id))
-                                    global_profiles[str(mentions[0].id)]['dict_1'].setdefault('in', []).append(str(react_to_2.id))
-                                    save_profiles()
+                                    await ctx.reply(f"## Loan successful! - `#{loan_info[0]}`\n" +
+                                                    f"**{mentions[0].display_name}:** +{number:,} {coin}, balance: {target_bal:,} {coin}\n" +
+                                                    f"**{ctx.author.display_name}:** -{number:,} {coin}, balance: {author_bal:,} {coin}\n\n"
+                                                    f"{ps}")
+                                    active_loan_requests.discard(mentions[0].id)
+                                    active_loan_requests.discard(ctx.author.id)
 
                                 elif str(reaction2.emoji) == '❌':
                                     await ctx.reply(f"{mentions[0].display_name} declined the Loan request")
