@@ -77,7 +77,7 @@ SPECIAL_CODES = {'genshingift': [3, 'https://cdn.discordapp.com/attachments/6968
 SECRET_CODES = {code: lis.split(',') for (code, lis) in [x.split(':-:') for x in os.getenv('SECRET_CODES').split(', ')]}
 SPECIAL_CODES.update(SECRET_CODES)
 titles = [
-    'Ukra Bot Dev', 'Top Contributor', 'Reached #1', 'Lottery Winner',
+    'Ukra Bot Dev', 'Top Contributor', 'Reached #1', 'Bug Hunter', 'Lottery Winner',
 
     'Gave away 25k', 'Gave away 50k', 'Gave away 100k',
     'Gave away 250k', 'Gave away 500k', 'Gave away 1M',
@@ -297,6 +297,8 @@ def loan_payment(id_: str, payment: int):
     loaner = active_loans[id_][0]
     if active_loans[id_][3] >= active_loans[id_][2]:
         left_over = active_loans[id_][3] - active_loans[id_][2]
+        add_coins_to_user('', str(loaner), amount)
+        save_currency()
         global_profiles[str(active_loans[id_][0])]['dict_1']['out'].remove(id_)
         global_profiles[str(active_loans[id_][1])]['dict_1']['in'].remove(id_)
         save_profiles()
@@ -1888,7 +1890,7 @@ class Currency(commands.Cog):
                 command_count_increment(guild_id, author_id, 'dig', True, False)
                 await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
             else:
-                loans = global_profiles[author_id]['dict_1']['in'].copy()
+                loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, dig_coins = loan_payment(loan_id, dig_coins)
 
@@ -1961,7 +1963,7 @@ class Currency(commands.Cog):
                 command_count_increment(guild_id, author_id, 'mine', True, False)
                 await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can mine again {get_timestamp(120)}")
             else:
-                loans = global_profiles[author_id]['dict_1']['in'].copy()
+                loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, mine_coins = loan_payment(loan_id, mine_coins)
 
@@ -2075,7 +2077,7 @@ class Currency(commands.Cog):
                 command_count_increment(guild_id, author_id, 'fishinge', True, False)
                 await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
             else:
-                loans = global_profiles[author_id]['dict_1']['in'].copy()
+                loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, fish_coins = loan_payment(loan_id, fish_coins)
 
@@ -2137,7 +2139,7 @@ class Currency(commands.Cog):
             today_coins = random.randint(140, 260)
             today_coins_bonus = int(today_coins * (user_streak**0.5 - 1))
             message = f"# Daily {coin} claimed! {streak_msg}\n"
-            loans = global_profiles[author_id]['dict_1']['in'].copy()
+            loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
             for loan_id in loans:
                 finalized, loaner_id, loan_size, today_coins_bonus = loan_payment(loan_id, today_coins_bonus)
 
