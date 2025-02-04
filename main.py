@@ -343,7 +343,7 @@ async def loan_payment(id_: str, payment: int, pay_loaner=True):
     if pay_loaner:
         add_coins_to_user('', str(loaner_id), paid)
     if active_loans[id_][3] == amount:
-        left_over = active_loans[id_][3] - amount
+        left_over = payment - paid
         global_profiles[str(loaner_id)]['dict_1']['out'].remove(id_)
         global_profiles[str(loanee_id)]['dict_1']['in'].remove(id_)
         save_profiles()
@@ -1746,7 +1746,7 @@ class Currency(commands.Cog):
             user_id = str(user.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 make_sure_user_profile_exists(guild_id, user_id)
-                items = sorted([(item, global_profiles[user_id]["items"][item]) for item in global_profiles[user_id]["items"] if item != 'titles'])
+                items = sorted([(item, global_profiles[user_id]["items"][item]) for item in global_profiles[user_id]["items"] if ((item != 'titles') and (global_profiles[user_id]["items"][item]))])
                 if not items:
                     await ctx.reply(f'**{user.display_name}** has no items yet :p')
                     return
@@ -2310,7 +2310,7 @@ class Currency(commands.Cog):
     @commands.command()
     async def daily(self, ctx):
         """
-        Claim a random number of daily coins from 140 to 260
+        Claim 1 Daily Item and a random number of daily coins from 140 to 260
         Multiply daily coins by sqrt of daily streak
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
