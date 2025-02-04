@@ -46,6 +46,13 @@ intents.reactions = True
 client = commands.Bot(command_prefix="!", intents=intents)
 
 # EMOJIS
+rigged_potion = '<:rigged_potion:1336395108244787232>'
+daily_item = '<:daily_item:1336399274476306646>'
+
+gold_emoji = '<:gold:1325823946737713233>'
+treasure_chest = '<:treasure_chest:1325811472680620122>'
+The_Catch = '<:TheCatch:1325812275172347915>'
+
 yay = '<:yay:1322721331896389702>'
 o7 = '<:o7:1323425011234639942>'
 peeposcheme = '<:peeposcheme:1322225542027804722>'
@@ -63,16 +70,17 @@ fishinge = '<:Fishinge:1325810706393596035>'
 prayge = '<:prayge:1326268872990523492>'
 stopbeingmean = '<:stopbeingmean:1326525905199435837>'
 peepositbusiness = '<:peepositbusiness:1327594898844684288>'
+shovel = '<:shovel:1325823488216268801>'
 puppy = '<:puppy:1327588192282480670>'
 clueless = '<:clueless:1335599640279515167>'
-shovel = '<:shovel:1325823488216268801>'
-gold_emoji = '<:gold:1325823946737713233>'
-treasure_chest = '<:treasure_chest:1325811472680620122>'
-The_Catch = '<:TheCatch:1325812275172347915>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
-rare_items_to_emoji = {'gold': gold_emoji, 'fool': '✨', 'diamonds': '💎', 'treasure_chest': treasure_chest, 'the_catch': The_Catch}
+pupperrun = '<a:pupperrun:1336403935291773029>'
 
+item_emojis = {'rigged_potion': rigged_potion, 'daily_item': daily_item}
+item_names = {'rigged_potion': 'Rigged Potion', 'daily_item': 'Daily Item'}
+rare_items_to_emoji = {'gold': gold_emoji, 'fool': '✨', 'diamonds': '💎', 'treasure_chest': treasure_chest, 'the_catch': The_Catch}
 slot_options = [yay, o7, peeposcheme, sunfire2, stare, HUH, wicked, deadge, teripoint, pepela]
+
 SPECIAL_CODES = {'genshingift': [3, 'https://cdn.discordapp.com/attachments/696842659989291130/1335602103460036639/image.png?ex=67a0c3e3&is=679f7263&hm=d91c7f72d6dcb4576948d98ea6206395c1da900f08d2ba8982ccb48f719b73ac&']}
 SECRET_CODES = {code: lis.split(',') for (code, lis) in [x.split(':-:') for x in os.getenv('SECRET_CODES').split(', ')]}
 SPECIAL_CODES.update(SECRET_CODES)
@@ -1368,59 +1376,56 @@ class PaginationView(discord.ui.View):
     current_page: int = 1
     page_size: int = 5
 
-    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', '']):
+    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = ''):
         super().__init__()
         self.data = data_
         self.title = title_
         self.color = color_
         self.stickied_msg = stickied_msg_
-        self.footer, self.icon = footer_
+        self.footer, self.footer_icon = footer_
+        self.description = description_
+        self.author = author_
+        self.author_icon = author_icon_
         self.message = None
 
     async def send_embed(self, ctx):
-        self.message = await ctx.reply(view=self)
-        await self.update_message(self.data[:self.page_size])
+        embed = self.create_embed(self.data[:self.page_size])
+        self.update_buttons()
+        self.message = await ctx.reply(embed=embed, view=self)
 
     def create_embed(self, data):
-        embed = discord.Embed(title=f"{self.title.capitalize()} - Page {self.current_page} / {math.ceil(len(self.data) / self.page_size)}", color=self.color)
-        for item in data:
-            embed.add_field(name=item['label'], value=item['item'], inline=False)
-        if self.stickied_msg:
-            embed.add_field(name='', value='')
-            embed.add_field(name='', value='')
-            for i in self.stickied_msg:
-                embed.add_field(name='', value=i, inline=False)
-        if self.footer:
-            embed.set_footer(text=self.footer, icon_url=self.icon)
+        if self.footer and self.footer_icon:
+            embed = discord.Embed(title=f"{self.title.capitalize()} - Page {self.current_page} / {math.ceil(len(self.data) / self.page_size)}", color=self.color)
+            for item in data:
+                embed.add_field(name=item['label'], value=item['item'], inline=False)
+            if self.stickied_msg:
+                embed.add_field(name='', value='')
+                embed.add_field(name='', value='')
+                for i in self.stickied_msg:
+                    embed.add_field(name='', value=i, inline=False)
+            embed.set_footer(text=self.footer, icon_url=self.footer_icon)
+
+        else:
+            desc = ''
+            for item, num in data:
+                desc += f'{item_emojis[item] if item in item_emojis else ''} **{item_names[item] if item in item_names else item}** ─ {num:,}\n'
+
+            embed = discord.Embed(title="", color=self.color, description=desc)
+
+            if self.author:
+                embed.set_author(name=self.author, icon_url=self.author_icon)
+            if self.stickied_msg:
+                embed.add_field(name='', value='')
+                embed.add_field(name='', value='')
+                for i in self.stickied_msg:
+                    embed.add_field(name='', value=i, inline=False)
+            embed.set_footer(text=f"Page {self.current_page} / {math.ceil(len(self.data) / self.page_size)}")
 
         return embed
 
     async def update_message(self, data):
         self.update_buttons()
         await self.message.edit(embed=self.create_embed(data), view=self)
-
-    # def update_buttons(self):
-    #     if self.current_page == 1:
-    #         self.first_page_button.disabled = True
-    #         self.prev_button.disabled = True
-    #         self.first_page_button.style = discord.ButtonStyle.gray
-    #         self.prev_button.style = discord.ButtonStyle.gray
-    #     else:
-    #         self.first_page_button.disabled = False
-    #         self.prev_button.disabled = False
-    #         self.first_page_button.style = discord.ButtonStyle.green
-    #         self.prev_button.style = discord.ButtonStyle.primary
-    #
-    #     if self.current_page == math.ceil(len(self.data) / self.page_size):
-    #         self.next_button.disabled = True
-    #         self.last_page_button.disabled = True
-    #         self.last_page_button.style = discord.ButtonStyle.gray
-    #         self.next_button.style = discord.ButtonStyle.gray
-    #     else:
-    #         self.next_button.disabled = False
-    #         self.last_page_button.disabled = False
-    #         self.last_page_button.style = discord.ButtonStyle.green
-    #         self.next_button.style = discord.ButtonStyle.primary
 
     def update_buttons(self):
         for child in self.children:
@@ -1433,17 +1438,6 @@ class PaginationView(discord.ui.View):
                     child.disabled = self.current_page == math.ceil(len(self.data) / self.page_size)
                 elif child.label == ">|":
                     child.disabled = self.current_page == math.ceil(len(self.data) / self.page_size)
-
-    # def get_current_page_data(self):
-    #     until_item = self.current_page * self.page_size
-    #     from_item = until_item - self.page_size
-    #     if not self.current_page == 1:
-    #         from_item = 0
-    #         until_item = self.page_size
-    #     if self.current_page == math.ceil(len(self.data) / self.page_size):
-    #         from_item = self.current_page * self.page_size - self.page_size
-    #         until_item = len(self.data)
-    #     return self.data[from_item:until_item]
 
     def get_current_page_data(self):
         from_item = (self.current_page - 1) * self.page_size
@@ -1632,17 +1626,59 @@ class Currency(commands.Cog):
         if guild_id:
             await ctx.reply('Check your DMs')
 
-    # @commands.command()
-    # async def paginate(self, ctx):
-    #     data_ = []
-    #     for i in range(1, 15):
-    #         data_.append({
-    #             "label": "User Event",
-    #             "item": f"User {i} has been added"
-    #         })
-    #
-    #     pagination_view = PaginationView(data_, title_='test')
-    #     await pagination_view.send_embed(ctx)
+    @commands.command(aliases=['inv'])
+    async def inventory(self, ctx):
+        """
+        Displays your or someone else's inventory. To use an item - !use item
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            contents = ctx.message.content.split()[1:]
+            if len(contents):
+                user_in_question = convert_msg_to_user_id(contents)
+            if not len(contents) or user_in_question == -1:
+                user_in_question = ctx.author.id
+            user = await self.get_user(user_in_question)
+            user_id = str(user.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                make_sure_user_profile_exists(guild_id, user_id)
+                items = sorted([(item, global_profiles[user_id]["items"][item]) for item in global_profiles[user_id]["items"] if item != 'titles'])
+                if not items:
+                    await ctx.reply(f'**{user.display_name}** has no items yet :p')
+                    return
+                else:
+                    desc = ''
+                    # for item, num in items:
+                    #     desc += f'{item_emojis[item] if item in item_emojis else ''} **{item_names[item] if item in item_names else item}** ─ {num:,}\n'
+                    if ctx.guild and ctx.guild.get_member(user.id):
+                        target = ctx.guild.get_member(user.id)
+                        embed_color = target.color
+                        if embed_color == discord.Colour.default():
+                            embed_color = 0xffd000
+                    else:
+                        embed_color = 0xffd000
+
+                    pagination_view = PaginationView(items, title_=f"", author_=f"{user.display_name}'s Inventory", author_icon_=user.avatar.url, color_=embed_color, description_=desc)
+                    await pagination_view.send_embed(ctx)
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception as e:
+            print(e)
+
+    @commands.command()
+    async def use(self, ctx):
+        """
+        Uses an item of choice
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            author_id = str(ctx.author.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                await ctx.reply(f'Using items is in development {pupperrun}')
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception as e:
+            print(e)
 
     @commands.command(aliases=['titles_'])
     async def title_(self, ctx):
@@ -2167,6 +2203,13 @@ class Currency(commands.Cog):
             today_coins = random.randint(140, 260)
             today_coins_bonus = int(today_coins * (user_streak**0.5 - 1))
             message = f"# Daily {coin} claimed! {streak_msg}\n"
+
+            if 'daily_item' in global_profiles[author_id]['items']:
+                global_profiles[author_id]['items']['daily_item'] += 1
+            else:
+                global_profiles[author_id]['items']['daily_item'] = 1
+            message += f'+1 {daily_item} Daily Item ({global_profiles[author_id]['items']['daily_item']} {daily_item} owned)\n'
+
             loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
             for loan_id in loans:
                 finalized, loaner_id, loan_size, today_coins_bonus, paid = await loan_payment(loan_id, today_coins_bonus)
@@ -2179,7 +2222,8 @@ class Currency(commands.Cog):
                     break
 
             num = add_coins_to_user(guild_id, author_id, today_coins + today_coins_bonus)  # save file
-            highest_balance_check(guild_id, author_id, num, save=True, make_sure=False)
+            highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
+            save_profiles()
             await ctx.reply(f"{message}**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{today_coins_bonus:,} {coin} streak bonus = {today_coins + today_coins_bonus:,} {coin})\nBalance: {num:,} {coin}\n\nYou can use this command again <t:{get_daily_reset_timestamp()}:R>")
 
             user_last_used[author_id] = now
