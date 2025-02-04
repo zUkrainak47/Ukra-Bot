@@ -596,15 +596,29 @@ async def ping(ctx):
     await ctx.send(f"Pong! {round(client.latency * 1000)}ms")
 
 
+# @client.command()
+# async def uptime(ctx):
+#     """check how long the bot has been running for"""
+#     end = time.perf_counter()
+#     run_time = end - start
+#     to_hours = time.strftime("%T", time.gmtime(run_time))
+#     decimals = f'{(run_time % 1):.3f}'
+#     msg = f'{bot_name} has been up for {to_hours}:{str(decimals)[2:]}'
+#
+#     await ctx.send(msg)
+
+
 @client.command()
 async def uptime(ctx):
-    """check how long the bot has been running for"""
+    """Check how long the bot has been running for"""
     end = time.perf_counter()
     run_time = end - start
-    to_hours = time.strftime("%T", time.gmtime(run_time))
-    decimals = f'{(run_time % 1):.3f}'
-    msg = f'{bot_name} has been up for {to_hours}:{str(decimals)[2:]}'
 
+    days = int(run_time // 86400)
+    time_str = time.strftime("%H:%M:%S", time.gmtime(run_time % 86400))
+    decimals = f'{(run_time % 1):.3f}'
+
+    msg = f'{bot_name} has been up for {days}d {time_str}:{str(decimals)[2:]}'
     await ctx.send(msg)
 
 
@@ -629,7 +643,7 @@ async def source(ctx):
     await ctx.reply("https://github.com/zUkrainak47/Ukra-Bot")
 
 
-@client.command()
+@client.command(aliases=['invite'])
 async def server(ctx):
     """
     You should write this command for exclusive giveaways :3
@@ -1583,7 +1597,7 @@ class Currency(commands.Cog):
         make_sure_user_profile_exists(guild_id, str(ctx.author.id))
         await ctx.author.send("```\n"
                               f"{global_profiles[str(ctx.author.id)]}\n"
-                              "```\n"
+                              "```\n\n"
                               "`dict_1` - loans, `list_1` - used codes, `num_1` - total funded giveaways")
         if guild_id:
             await ctx.reply('Check your DMs')
@@ -2102,7 +2116,7 @@ class Currency(commands.Cog):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)
+            make_sure_user_profile_exists(guild_id, author_id)
             user_streak = daily_streaks.setdefault(author_id, 0)
             now = datetime.now()
             last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=2))
@@ -2121,10 +2135,25 @@ class Currency(commands.Cog):
             user_streak = daily_streaks.get(author_id)
 
             today_coins = random.randint(140, 260)
-            add_coins_to_user(guild_id, author_id, int(today_coins * user_streak**0.5))  # save file
+            today_coins_bonus = int(today_coins * user_streak**0.5 - 1)
+            message = f"# Daily {coin} claimed! {streak_msg}\n"
+            loans = global_profiles[author_id]['dict_1']['in'].copy()
+            for loan_id in loans:
+                finalized, loaner_id, loan_size, today_coins_bonus = loan_payment(loan_id, today_coins_bonus)
+
+                if finalized:
+                    message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back\n'
+                else:
+                    message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far\n'
+                if not today_coins_bonus:
+                    break
+
+            num = add_coins_to_user(guild_id, author_id, today_coins + today_coins_bonus)  # save file
+            highest_balance_check(guild_id, author_id, num, save=True, make_sure=False)
+            await ctx.reply(f"{message} **{ctx.author.display_name}:** +{today_coins:,} {coin} (+{today_coins_bonus:,} {coin} streak bonus = {today_coins + today_coins_bonus:,} {coin})\nBalance: {num:,} {coin}\n\nYou can use this command again <t:{get_daily_reset_timestamp()}:R>")
+
             user_last_used[author_id] = now
             save_last_used()
-            await ctx.reply(f"# Daily {coin} claimed! {streak_msg}\n**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{int(today_coins * (user_streak**0.5 - 1)):,} {coin} streak bonus = {int(today_coins * user_streak**0.5):,} {coin})\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can use this command again <t:{get_daily_reset_timestamp()}:R>")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -2464,12 +2493,12 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
+    @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
     @commands.command(aliases=['1d', 'onedice'])
     async def dice(self, ctx):
         """
         Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet
-        There is a 2-second cooldown
+        There is a 1-second cooldown
         !1d number
         """
         dice_roll = random.choice(range(1, 7))
@@ -2506,12 +2535,12 @@ class Currency(commands.Cog):
     async def dice_error(self, ctx, error):
         pass
 
-    @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
+    @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
     @commands.command(aliases=['2d'])
     async def twodice(self, ctx):
         """
         Takes a bet, rolls 2d6, if it rolled 12 you win 35x the bet
-        There is a 2-second cooldown
+        There is a 1-second cooldown
         !2d number
         """
         dice_roll_1 = random.choice(range(1, 7))
@@ -2699,11 +2728,11 @@ class Currency(commands.Cog):
                 await ctx.reply("Something went wrong, please make sure that the command has a user mention")
                 return
 
-    @commands.command()
+    @commands.command(aliases=['lend'])
     async def loan(self, ctx):
         """
         Takes a user mention, amount, and optional interest. Until the loan is repaid, all rare drops the loanee
-        receives will go towards paying back the loan
+        receives as well as their !daily bonus will go towards paying back the loan
 
         For example, if 3k/5k of a loan is paid back, finding diamonds transfers 2k to the loaner and the remaining
         5.5k to the loanee
@@ -2811,7 +2840,7 @@ class Currency(commands.Cog):
                                 f"This means that\n"
                                 f"- {ctx.author.display_name} gives you **{number:,}** {coin} now\n"
                                 f"- You will need to pay them back **{number + interest:,}** {coin} in the future\n"
-                                f"- Until your loan is paid out, __every rare drop you get__ ({gold_emoji}, ✨, 💎, {treasure_chest}, {The_Catch}) will go towards paying back this loan. (`!help loan` for more info on this)\n\n"
+                                f"- Until your loan is paid out, __every rare drop you get__ ({gold_emoji}, ✨, 💎, {treasure_chest}, {The_Catch}) as well as your !daily bonus will go towards paying back this loan. (`!help loan` for more info on this)\n\n"
                                 f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
                                 f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
                             await react_to_2.add_reaction('✅')
@@ -2934,13 +2963,13 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
+    @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
     @commands.command(aliases=['slot', 's'])
     async def slots(self, ctx):
         """
         Takes a bet, spins three wheels of 10 emojis, if all of them match you win 50x the bet, if they are :sunfire2: you win 500x the bet
         !slots number
-        Has a 2-second cooldown
+        Has a 1-second cooldown
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
