@@ -15,6 +15,7 @@ import time
 import atexit
 from pathlib import Path
 import math
+from rapidfuzz import process
 start = time.perf_counter()
 
 # dict_1 - loans
@@ -76,8 +77,6 @@ clueless = '<:clueless:1335599640279515167>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
 pupperrun = '<a:pupperrun:1336403935291773029>'
 
-item_emojis = {'rigged_potion': rigged_potion, 'daily_item': daily_item}
-item_names = {'rigged_potion': 'Rigged Potion', 'daily_item': 'Daily Item'}
 rare_items_to_emoji = {'gold': gold_emoji, 'fool': '✨', 'diamonds': '💎', 'treasure_chest': treasure_chest, 'the_catch': The_Catch}
 slot_options = [yay, o7, peeposcheme, sunfire2, stare, HUH, wicked, deadge, teripoint, pepela]
 
@@ -290,6 +289,41 @@ def save_everything():
     save_ignored_channels()
     save_active_lottery()
     save_active_loans()
+
+
+class Item:
+    def __init__(self, name, description, emoji, emoji_url):
+        self.name = name
+        self.description = description
+        self.emoji = emoji
+        self.emoji_url = emoji_url
+
+    def __str__(self):
+        return f"{self.emoji} {self.name}"
+
+    def describe(self, embed_color, owned):
+        try:
+            item_embed = discord.Embed(title=self.name, description=self.description, color=embed_color)
+            item_embed.set_thumbnail(url=self.emoji_url)
+            item_embed.set_footer(text=f'Owned: {owned}')
+            return item_embed
+
+        except Exception:
+            print(traceback.format_exc())
+
+
+# item_emojis = {'rigged_potion': rigged_potion, 'daily_item': daily_item}
+# item_names = {'rigged_potion': 'Rigged Potion', 'daily_item': 'Daily Item'}
+items = {
+    'rigged_potion': Item("Rigged Potion", "Upon use, this potion doubles your balance.\nBe cautious when you use it!", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
+    'daily_item': Item("Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
+}
+item_names = list(items.keys())
+
+
+def find_closest_item(input_str):
+    match, score, _ = process.extractOne(input_str, item_names)
+    return match if score > 30 else None  # Adjust threshold
 
 
 async def loan_payment(id_: str, payment: int, pay_loaner=True):
@@ -1388,7 +1422,7 @@ class PaginationView(discord.ui.View):
         self.user_in_question = user_in_question_
         self.ctx = ctx_
         self.message = None
-        self.page_size = 8 - 3 * (self.footer and self.footer_icon)
+        self.page_size = 5 if (self.footer and self.footer_icon) else 8
 
     async def send_embed(self, ctx):
         # Prepare the embed with the first page's data
@@ -1417,8 +1451,7 @@ class PaginationView(discord.ui.View):
             # Otherwise use a description-style embed.
             desc = ''
             for item, num in data:
-                emoji = item_emojis[item] if item in item_emojis else ''
-                name = item_names[item] if item in item_names else item
+                emoji, name = items[item].emoji, items[item].name
                 desc += f'{emoji} **{name}** ─ {num:,}\n'
             embed = discord.Embed(title="", color=self.color, description=desc)
 
@@ -1469,8 +1502,8 @@ class PaginationView(discord.ui.View):
             for item, num in self.get_current_page_data():
                 # Assuming that in this mode each item is a tuple or dict.
                 # Adjust the key/index as necessary.
-                if item  in item_emojis:
-                    button = discord.ui.Button(emoji=item_emojis[item], style=discord.ButtonStyle.secondary, row=1)
+                if item in items:
+                    button = discord.ui.Button(emoji=items[item].emoji, style=discord.ButtonStyle.secondary, row=1)
                 else:
                     button = discord.ui.Button(label=item, style=discord.ButtonStyle.secondary, row=1)
                 # Mark this button as dynamic so we can remove it later.
@@ -1478,12 +1511,21 @@ class PaginationView(discord.ui.View):
 
                 # Define the callback function with a default parameter to capture the current item.
                 async def item_callback(interaction: discord.Interaction, *, item_data=item):
-                    if interaction.user.id == self.user_in_question:
-                        await interaction.response.defer()  # Acknowledge the interaction immediately
-                        await use(self.ctx, item_data)  # Call the function to use the item
-                        await interaction.followup.send(f"This would have used 1 {item_emojis[item_data]} {item_names[item_data]} but using items is currently in development {pupperrun}", ephemeral=True)  # Send the response
-                    else:
-                        await interaction.response.send_message("This is not your inventory!", ephemeral=True)
+                    # if interaction.user.id == self.user_in_question:
+                        # await interaction.response.defer()  # Acknowledge the interaction immediately
+                        # await use(self.ctx, item_data)  # Call the function to use the item
+                        # await interaction.followup.send(f"This would have used 1 {items[item]} but using items is currently in development {pupperrun}", ephemeral=True)  # Send the response
+                        if self.ctx.guild and self.ctx.guild.get_member(self.user_in_question):
+                            target = self.ctx.guild.get_member(self.user_in_question)
+                            embed_color = target.color
+                            if embed_color == discord.Colour.default():
+                                embed_color = 0xffd000
+                        else:
+                            embed_color = 0xffd000
+                        owned = global_profiles[str(interaction.user.id)]['items'].setdefault(item_data, 0)
+                        await interaction.response.send_message(embed=items[item].describe(embed_color, owned))  # Send the response
+                    # else:
+                    #     await interaction.response.send_message("This is not your inventory!", ephemeral=True)
 
                 button.callback = item_callback
 
@@ -1523,12 +1565,12 @@ async def use(ctx, item):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         author_id = str(ctx.author.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
-            # await ctx.send(f"Are you sure you'd like to use a {item_emojis[item]} {item_names[item]}")
+            # await ctx.send(f"Are you sure you'd like to use a {items[item]}")
             pass
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
-    except Exception as e:
-        print(e)
+    except Exception:
+        print(traceback.format_exc())
 
 
 class Currency(commands.Cog):
@@ -1652,8 +1694,8 @@ class Currency(commands.Cog):
                         profile_embed.add_field(name="Commands used", value=f"{sum(target_profile['commands'].values()):,}", inline=False)
 
                     return profile_embed
-                except Exception as e:
-                    print(e)
+                except Exception:
+                    print(traceback.format_exc())
 
             await ctx.send(embed=await get_profile_embed())
 
@@ -1710,8 +1752,6 @@ class Currency(commands.Cog):
                     return
                 else:
                     desc = ''
-                    # for item, num in items:
-                    #     desc += f'{item_emojis[item] if item in item_emojis else ''} **{item_names[item] if item in item_names else item}** ─ {num:,}\n'
                     if ctx.guild and ctx.guild.get_member(user.id):
                         target = ctx.guild.get_member(user.id)
                         embed_color = target.color
@@ -1724,8 +1764,55 @@ class Currency(commands.Cog):
                     await pagination_view.send_embed(ctx)
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
-        except Exception as e:
-            print(e)
+        except Exception:
+            print(traceback.format_exc())
+
+    @commands.command()
+    async def item(self, ctx):
+        """
+        Displays info on an item
+        Example: !info daily
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            author_id = str(ctx.author.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                make_sure_user_profile_exists(guild_id, author_id)
+                content = ' '.join(ctx.message.content.split()[1:])
+                if not content:
+                    await ctx.reply('You need to provide the item name!\nExample: `!item rigged`\nRun `!items` for the list of all items')
+                    return
+                item = find_closest_item(content)
+                if not item:
+                    await ctx.reply('Item not found')
+                    return
+                if ctx.guild:
+                    embed_color = ctx.author.color
+                    if embed_color == discord.Colour.default():
+                        embed_color = 0xffd000
+                else:
+                    embed_color = 0xffd000
+                owned = global_profiles[str(ctx.author.id)]['items'].setdefault(item, 0)
+                await ctx.reply(embed=items[item].describe(embed_color, owned))  # Send the response
+
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
+
+    @commands.command()
+    async def items(self, ctx):
+        """
+        Lists all items in the bot
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                await ctx.reply('\n'.join([f'- {items[item]}' for item in items]))
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
 
     @commands.command(aliases=['titles_'])
     async def title_(self, ctx):
@@ -1770,8 +1857,8 @@ class Currency(commands.Cog):
                         await pagination_view.send_embed(ctx)
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
-        except Exception as e:
-            print(e)
+        except Exception:
+            print(traceback.format_exc())
 
     @commands.command(aliases=['titles'])
     async def title(self, ctx):
@@ -2829,8 +2916,8 @@ class Currency(commands.Cog):
                     active_pvp_requests.get(guild_id).discard(mentions[0].id)
                     active_pvp_requests.get(guild_id).discard(ctx.author.id)
 
-            except Exception as e:
-                print(e)
+            except Exception:
+                print(traceback.format_exc())
                 await ctx.reply("PVP failed!")
 
         elif currency_allowed(ctx):
@@ -3454,8 +3541,8 @@ class Currency(commands.Cog):
                 else:
                     additional_msg = ''
                 await ctx.reply(f"## {cmd} successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}{additional_msg}")
-            except Exception as e:
-                print(e)
+            except Exception:
+                print(traceback.format_exc())
                 await ctx.reply(f"{cmd} failed!")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
