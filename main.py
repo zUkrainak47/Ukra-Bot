@@ -292,6 +292,8 @@ def loan_payment(id_: str, payment: int):
     how big the loan was,
     how much money is left for the loanee
     """
+    to_be_paid = active_loans[id_][2] - active_loans[id_][3]
+    paid = min(payment, to_be_paid)
     active_loans[id_][3] += payment
     amount = active_loans[id_][2]
     loaner = active_loans[id_][0]
@@ -306,10 +308,10 @@ def loan_payment(id_: str, payment: int):
         del active_loans[id_]
         save_active_loans()
 
-        return True, loaner, amount, left_over
+        return True, loaner, amount, left_over, paid
 
     save_active_loans()
-    return False, loaner, amount, 0
+    return False, loaner, amount, 0, paid
 
 
 def make_sure_server_settings_exist(guild_id, save=True):
@@ -1892,12 +1894,12 @@ class Currency(commands.Cog):
             else:
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
-                    finalized, loaner_id, loan_size, dig_coins = loan_payment(loan_id, dig_coins)
+                    finalized, loaner_id, loan_size, dig_coins, paid = loan_payment(loan_id, dig_coins)
 
                     if finalized:
-                        dig_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back'
+                        dig_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
-                        dig_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far'
+                        dig_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not dig_coins:
                         break
                 else:
@@ -1965,12 +1967,12 @@ class Currency(commands.Cog):
             else:
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
-                    finalized, loaner_id, loan_size, mine_coins = loan_payment(loan_id, mine_coins)
+                    finalized, loaner_id, loan_size, mine_coins, paid = loan_payment(loan_id, mine_coins)
 
                     if finalized:
-                        mine_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back'
+                        mine_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
-                        mine_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far'
+                        mine_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not mine_coins:
                         break
                 else:
@@ -2079,12 +2081,12 @@ class Currency(commands.Cog):
             else:
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
-                    finalized, loaner_id, loan_size, fish_coins = loan_payment(loan_id, fish_coins)
+                    finalized, loaner_id, loan_size, fish_coins, paid = loan_payment(loan_id, fish_coins)
 
                     if finalized:
-                        fish_message += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back'
+                        fish_message += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
-                        fish_message += f'\n- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far'
+                        fish_message += f'\n- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not fish_coins:
                         break
                 else:
@@ -2141,12 +2143,12 @@ class Currency(commands.Cog):
             message = f"# Daily {coin} claimed! {streak_msg}\n"
             loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
             for loan_id in loans:
-                finalized, loaner_id, loan_size, today_coins_bonus = loan_payment(loan_id, today_coins_bonus)
+                finalized, loaner_id, loan_size, today_coins_bonus, paid = loan_payment(loan_id, today_coins_bonus)
 
                 if finalized:
-                    message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back\n'
+                    message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)\n'
                 else:
-                    message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far\n'
+                    message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)\n'
                 if not today_coins_bonus:
                     break
 
@@ -2241,12 +2243,12 @@ class Currency(commands.Cog):
                     loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                     for loan_id in loans:
                         if active_loans[loan_id][0] == mentions[0].id:
-                            finalized, loaner_id, loan_size, loan_money = loan_payment(loan_id, loan_money)
+                            finalized, loaner_id, loan_size, loan_money, paid = loan_payment(loan_id, loan_money)
 
                             if finalized:
-                                answer += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} has been fully paid back'
+                                answer += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} has been fully paid back ({paid:,} {coin} were paid now)'
                             else:
-                                answer += f'\n- Loan `#{loan_id}`: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far'
+                                answer += f'\n- Loan `#{loan_id}`: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                             if not loan_money:
                                 break
 
@@ -2842,7 +2844,7 @@ class Currency(commands.Cog):
                                 f"This means that\n"
                                 f"- {ctx.author.display_name} gives you **{number:,}** {coin} now\n"
                                 f"- You will need to pay them back **{number + interest:,}** {coin} in the future\n"
-                                f"- Until your loan is paid out, __every rare drop you get__ ({gold_emoji}, ✨, 💎, {treasure_chest}, {The_Catch}) as well as your !daily bonus will go towards paying back this loan. (`!help loan` for more info on this)\n\n"
+                                f"- Until your loan is paid out, __every rare drop you get__ ({gold_emoji}, ✨, 💎, {treasure_chest}, {The_Catch}) as well as __your !daily bonus__ will go towards paying back this loan. (`!help loan` for more info on this)\n\n"
                                 f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
                                 f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
                             await react_to_2.add_reaction('✅')
