@@ -2135,7 +2135,7 @@ class Currency(commands.Cog):
             user_streak = daily_streaks.get(author_id)
 
             today_coins = random.randint(140, 260)
-            today_coins_bonus = int(today_coins * user_streak**0.5 - 1)
+            today_coins_bonus = int(today_coins * (user_streak**0.5 - 1))
             message = f"# Daily {coin} claimed! {streak_msg}\n"
             loans = global_profiles[author_id]['dict_1']['in'].copy()
             for loan_id in loans:
@@ -2150,7 +2150,7 @@ class Currency(commands.Cog):
 
             num = add_coins_to_user(guild_id, author_id, today_coins + today_coins_bonus)  # save file
             highest_balance_check(guild_id, author_id, num, save=True, make_sure=False)
-            await ctx.reply(f"{message} **{ctx.author.display_name}:** +{today_coins:,} {coin} (+{today_coins_bonus:,} {coin} streak bonus = {today_coins + today_coins_bonus:,} {coin})\nBalance: {num:,} {coin}\n\nYou can use this command again <t:{get_daily_reset_timestamp()}:R>")
+            await ctx.reply(f"{message}**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{today_coins_bonus:,} {coin} streak bonus = {today_coins + today_coins_bonus:,} {coin})\nBalance: {num:,} {coin}\n\nYou can use this command again <t:{get_daily_reset_timestamp()}:R>")
 
             user_last_used[author_id] = now
             save_last_used()
