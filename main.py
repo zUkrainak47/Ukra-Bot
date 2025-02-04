@@ -284,7 +284,7 @@ def save_everything():
     save_active_loans()
 
 
-def loan_payment(id_: str, payment: int):
+def loan_payment(id_: str, payment: int, pay_loaner=True):
     """
     Returns
     whether the loan is paid back,
@@ -292,15 +292,16 @@ def loan_payment(id_: str, payment: int):
     how big the loan was,
     how much money is left for the loanee
     """
-    to_be_paid = active_loans[id_][2] - active_loans[id_][3]
+    amount = active_loans[id_][2]
+    to_be_paid = amount - active_loans[id_][3]
     paid = min(payment, to_be_paid)
     active_loans[id_][3] += paid
-    amount = active_loans[id_][2]
     loaner = active_loans[id_][0]
-    add_coins_to_user('', str(loaner), paid)
-    if active_loans[id_][3] == active_loans[id_][2]:
-        left_over = active_loans[id_][3] - active_loans[id_][2]
-        global_profiles[str(active_loans[id_][0])]['dict_1']['out'].remove(id_)
+    if pay_loaner:
+        add_coins_to_user('', str(loaner), paid)
+    if active_loans[id_][3] == amount:
+        left_over = active_loans[id_][3] - amount
+        global_profiles[str(loaner)]['dict_1']['out'].remove(id_)
         global_profiles[str(active_loans[id_][1])]['dict_1']['in'].remove(id_)
         save_profiles()
 
@@ -2245,8 +2246,7 @@ class Currency(commands.Cog):
                     loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                     for loan_id in loans:
                         if active_loans[loan_id][0] == mentions[0].id:
-                            finalized, loaner_id, loan_size, loan_money, paid = loan_payment(loan_id, loan_money)
-                            remove_coins_from_user(guild_id, target_id, paid)  # because they are additionally added in loan_payment()
+                            finalized, loaner_id, loan_size, loan_money, paid = loan_payment(loan_id, loan_money, False)
 
                             if finalized:
                                 answer += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} has been fully paid back ({paid:,} {coin} were paid now)'
