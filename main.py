@@ -301,11 +301,11 @@ class Item:
     def __str__(self):
         return f"{self.emoji} {self.name}"
 
-    def describe(self, embed_color, owned):
+    def describe(self, embed_color, owned, avatar_url):
         try:
             item_embed = discord.Embed(title=self.name, description=self.description, color=embed_color)
             item_embed.set_thumbnail(url=self.emoji_url)
-            item_embed.set_footer(text=f'Owned: {owned}')
+            item_embed.set_footer(text=f'Owned: {owned}', icon_url=avatar_url)
             return item_embed
 
         except Exception:
@@ -1515,15 +1515,16 @@ class PaginationView(discord.ui.View):
                         # await interaction.response.defer()  # Acknowledge the interaction immediately
                         # await use(self.ctx, item_data)  # Call the function to use the item
                         # await interaction.followup.send(f"This would have used 1 {items[item]} but using items is currently in development {pupperrun}", ephemeral=True)  # Send the response
-                        if self.ctx.guild and self.ctx.guild.get_member(self.user_in_question):
-                            target = self.ctx.guild.get_member(self.user_in_question)
+                        if self.ctx.guild and self.ctx.guild.get_member(interaction.user.id):
+                            target = self.ctx.guild.get_member(interaction.user.id)
                             embed_color = target.color
                             if embed_color == discord.Colour.default():
                                 embed_color = 0xffd000
                         else:
+                            target = interaction.user
                             embed_color = 0xffd000
                         owned = global_profiles[str(interaction.user.id)]['items'].setdefault(item_data, 0)
-                        await interaction.response.send_message(embed=items[item].describe(embed_color, owned))  # Send the response
+                        await interaction.response.send_message(embed=items[item].describe(embed_color, owned, target.avatar.url))  # Send the response
                     # else:
                     #     await interaction.response.send_message("This is not your inventory!", ephemeral=True)
 
@@ -1793,7 +1794,7 @@ class Currency(commands.Cog):
                 else:
                     embed_color = 0xffd000
                 owned = global_profiles[str(ctx.author.id)]['items'].setdefault(item, 0)
-                await ctx.reply(embed=items[item].describe(embed_color, owned))  # Send the response
+                await ctx.reply(embed=items[item].describe(embed_color, owned, ctx.author.avatar.url))  # Send the response
 
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
