@@ -2878,11 +2878,12 @@ class Currency(commands.Cog):
     @commands.command()
     async def loans(self, ctx):
         """
-        Displays your active loans
+        Displays your or someone else's active loans
         """
         global fetched_users
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
-        loans_found = False
+        loans_found1 = 0
+        loans_found2 = 0
         contents = ctx.message.content.split()[1:]
         if len(contents):
             user_in_question = convert_msg_to_user_id(contents)
@@ -2894,20 +2895,23 @@ class Currency(commands.Cog):
             user_id = str(user.id)
             make_sure_user_profile_exists(guild_id, user_id)
             answer = f"## {user.display_name}'s loans:\n"
-            for i in global_profiles[str(user_id)]['dict_1'].setdefault('out', []):
-                loans_found += 1
-                loanee_id = active_loans[i][1]
-                loanee = await self.get_user(loanee_id)
-
-                answer += f"{loans_found}. `#{i}` - **{loanee.display_name}** owes **{user.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
-            answer += '\n'
             for i in global_profiles[str(user_id)]['dict_1'].setdefault('in', []):
-                loans_found += 1
+                if not loans_found2:
+                    answer += '### Incoming:\n'
+                loans_found2 += 1
                 loanee_id = active_loans[i][0]
                 loanee = await self.get_user(loanee_id)
 
-                answer += f"{loans_found}. `#{i}` - **{user.display_name}** owes **{loanee.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
-            if loans_found:
+                answer += f"{loans_found2}. `#{i}` - **{user.display_name}** owes **{loanee.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+            for i in global_profiles[str(user_id)]['dict_1'].setdefault('out', []):
+                if not loans_found1:
+                    answer += '### Outgoing:\n'
+                loans_found1 += 1
+                loanee_id = active_loans[i][1]
+                loanee = await self.get_user(loanee_id)
+
+                answer += f"{loans_found1}. `#{i}` - **{loanee.display_name}** owes **{user.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+            if loans_found1 or loans_found2:
                 await ctx.reply(answer)
             else:
                 await ctx.reply(f"**{user.display_name}** has no active loans!")
