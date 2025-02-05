@@ -351,7 +351,7 @@ class UseItemView(discord.ui.View):
 
 
 items = {
-    'rigged_potion': Item('rigged_potion', "Rigged Potion", "Upon use, this potion doubles your balance.\nBe cautious when you use it!", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
+    'rigged_potion': Item('rigged_potion', "Rigged Potion", f"Upon use, this potion doubles your balance.\nBe cautious when you use it!\n\nHas a 5% chance to drop from a {treasure_chest} Treasure Chest\nAlso distributed by the bot developer as an exclusive reward", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
     'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion will prompt you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins ||{sunfire2}||\n\nDrops alongside Fool's Gold", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
     'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing it grants you 69k {coin}\n\nDrops when you get 69 coins from fishing", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
     'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
@@ -2311,7 +2311,10 @@ class Currency(commands.Cog):
         """
         Mine and get a small number of coins
         Choose random number from 1-625, 2*sqrt(number) is the payout
-        If number is 625 you to win 7,500 coins
+
+        If number is 625 you win 7,500 coins (Diamonds)
+        If number is 1 you get Fool's Gold and an Evil Potion
+
         Has a 2-minute cooldown
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -2363,7 +2366,7 @@ class Currency(commands.Cog):
                     num = add_coins_to_user(guild_id, author_id, mine_coins)  # save file
                     highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
                     command_count_increment(guild_id, author_id, 'mine', True, False)
-                    await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can mine again {get_timestamp(120)}")
+                    await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -2419,8 +2422,12 @@ class Currency(commands.Cog):
     async def fishinge(self, ctx):
         """
         Fish and get a random number of coins from 1 to 167
-        If the amount of coins chosen was 167, you get a random number of coins from 7,500 to 12,500
-        If the amount chosen was 12,500 you win 25,000,000 coins
+        If the amount of coins chosen was 167, you get a random number of coins from 7,500 to 12,500 (Treasure Chest)
+        If the amount chosen was 12,500 you win 25,000,000 coins (The Catch)
+
+        Getting 69 coins drops a Funny Item
+        Treasure Chests have a 5% chance to drop a Rigged Potion
+
         Has a 10-minute cooldown
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -2445,6 +2452,10 @@ class Currency(commands.Cog):
                 else:
                     fish_message = f'# You found a huge Treasure Chest!!! {treasure_chest}'
                     rare_finds_increment(guild_id, author_id, 'treasure_chest', False)
+                    if random.random() >= 0.95:
+                        n = add_item_to_user(guild_id, author_id, 'rigged_potion')
+                        item_msg = f"\n\n+1 {items['rigged_potion']} ({n:,} {rigged_potion} owned)"
+
                     ps_message = ''
                     if ctx.guild:
                         link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
@@ -2481,7 +2492,7 @@ class Currency(commands.Cog):
                     num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
                     highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
                     command_count_increment(guild_id, author_id, 'fishinge', True, False)
-                    await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
+                    await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
 
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
@@ -2504,6 +2515,7 @@ class Currency(commands.Cog):
         """
         Claim 1 Daily Item and a random number of daily coins from 140 to 260
         Multiply daily coins by sqrt of daily streak
+        Grants a Daily Item
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
@@ -2556,7 +2568,8 @@ class Currency(commands.Cog):
     @commands.command()
     async def weekly(self, ctx):
         """
-        Claim weekly coins
+        Claim a random number of weekly coins from 1500 to 2500
+        Grants a Weekly Item
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
