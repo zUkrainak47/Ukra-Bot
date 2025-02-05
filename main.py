@@ -49,6 +49,7 @@ client = commands.Bot(command_prefix="!", intents=intents)
 # EMOJIS
 rigged_potion = '<:rigged_potion:1336395108244787232>'
 evil_potion = '<:evil_potion:1336641208885186601>'
+funny_item = '<:funny_item:1336705286953635902>'
 daily_item = '<:daily_item:1336399274476306646>'
 weekly_item = '<:weekly_item:1336631591543373854>'
 
@@ -78,6 +79,8 @@ puppy = '<:puppy:1327588192282480670>'
 clueless = '<:clueless:1335599640279515167>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
 pupperrun = '<a:pupperrun:1336403935291773029>'
+
+coin = "<:fishingecoin:1324905329657643179>"
 
 rare_items_to_emoji = {'gold': gold_emoji, 'fool': '✨', 'diamonds': '💎', 'treasure_chest': treasure_chest, 'the_catch': The_Catch}
 slot_options = [yay, o7, peeposcheme, sunfire2, stare, HUH, wicked, deadge, teripoint, pepela]
@@ -318,6 +321,8 @@ class Item:
 class UseItemView(discord.ui.View):
     def __init__(self, ctx: commands.Context, author: discord.User, item: Item, btn_enabled=1, timeout: float = 60):
         super().__init__(timeout=timeout)
+        if item.real_name == 'funny_item':
+            btn_enabled = btn_enabled >= 69
         self.ctx = ctx
         self.author = author
         self.item = item
@@ -342,12 +347,13 @@ class UseItemView(discord.ui.View):
             return
 
         await interaction.response.defer()
-        await use(self.ctx, self.author, self.item, item_message=interaction.message, amount=1)
+        await use(self.ctx, self.author, self.item, item_message=interaction.message, amount=1 if self.item.real_name != 'funny_item' else 69)
 
 
 items = {
     'rigged_potion': Item('rigged_potion', "Rigged Potion", "Upon use, this potion doubles your balance.\nBe cautious when you use it!", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
     'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion will prompt you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins ||{sunfire2}||\n\nDrops alongside Fool's Gold", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
+    'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing it grants you 69k {coin}\n\nDrops when you get 69 coins from fishing", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
     'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
     'weekly_item': Item('weekly_item', "Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
 }
@@ -1239,7 +1245,6 @@ async def backshot(ctx):
 
 
 # CURRENCY
-coin = "<:fishingecoin:1324905329657643179>"
 active_pvp_requests = dict()
 active_loan_requests = set()
 
@@ -1615,13 +1620,13 @@ class ConfirmView(discord.ui.View):
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green, row=0)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
-        await interaction.response.edit_message(content=f"{self.author.display_name} confirmed the use of {self.amount} {self.item}", view=None)
+        await interaction.response.edit_message(content=f"{self.author.display_name} confirmed the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
         self.stop()  # Stop waiting for more button clicks
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, row=0)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = False
-        await interaction.response.edit_message(content=f"{self.author.display_name} cancelled the use of {self.amount} {self.item}", view=None)
+        await interaction.response.edit_message(content=f"{self.author.display_name} cancelled the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
         self.stop()
 
     async def on_timeout(self):
@@ -1642,7 +1647,7 @@ async def confirm_item(item_message, author: discord.User, item: Item, amount=1,
     #     bal = ''
     view = ConfirmView(author, item, amount)  # Create the view and pass the allowed author
     message = await item_message.reply(
-        f"## {author.display_name}, do you want to use **{amount} {item}**?{additional_msg}",
+        f"## {author.display_name}, do you want to use **{amount} {item}{'s' if amount != 1 else ''}**?{additional_msg}",
         view=view
     )
     # Save a reference to the sent message in the view so that we can edit it on timeout.
@@ -1655,14 +1660,14 @@ async def rigged_potion_func(message, castor, amount):
     guild_id = '' if not message.guild else str(message.guild.id)
     castor_id = str(castor.id)
     bal = get_user_balance(guild_id, castor_id)
-    add_coins_to_user(guild_id, castor_id, bal)
+    bal2 = add_coins_to_user(guild_id, castor_id, bal)
     await message.reply(
         f"# {items['rigged_potion']} has been used successfully\n"
         f"**{castor.display_name}**: +{bal:,} {coin}\n"
-        f"Balance: {bal*2:,} {coin}"
+        f"Balance: {bal2:,} {coin}"
     )
     global_profiles[castor_id]['items']['rigged_potion'] -= 1
-    highest_balance_check(guild_id, castor_id, bal*2, save=False, make_sure=False)
+    highest_balance_check(guild_id, castor_id, bal2, save=False, make_sure=False)
     save_profiles()
 
 
@@ -1681,9 +1686,28 @@ async def rigged_potion_func(message, castor, amount):
 #     save_profiles()
 
 
+async def funny_item_func(message, castor, amount):
+    guild_id = '' if not message.guild else str(message.guild.id)
+    castor_id = str(castor.id)
+    items_owned = global_profiles[castor_id]['items']['funny_item']
+    if items_owned < 69:
+        await message.reply(f'{castor.mention} come back when you have **69 {items['funny_item']}s**. You only own {items_owned} {funny_item}')
+    else:
+        bal = add_coins_to_user(guild_id, castor_id, 69000)
+        await message.reply(
+            f"# 69 {items['funny_item']}s have been used successfully\n"
+            f"**{castor.display_name}**: +{69000:,} {coin}\n"
+            f"Balance: {bal:,} {coin}"
+        )
+        global_profiles[castor_id]['items']['funny_item'] -= 69
+        highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
+        save_profiles()
+
+
 item_use_functions = {
     'rigged_potion': rigged_potion_func,
     # 'evil_potion': evil_potion_func
+    'funny_item': funny_item_func
 }
 
 
@@ -2404,6 +2428,7 @@ class Currency(commands.Cog):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             fish_coins = random.randint(1, 167)
+            item_msg = ''
             if fish_coins == 167:
                 fish_coins = random.randint(7500, 12500)
                 if fish_coins == 12500:
@@ -2428,6 +2453,9 @@ class Currency(commands.Cog):
 
                     await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest {treasure_chest} {link}")
             else:
+                if fish_coins == 69:
+                    n = add_item_to_user(guild_id, author_id, 'funny_item')
+                    item_msg = f"\n\n+1 {items['funny_item']} ({n:,} {funny_item} owned)"
                 cast_command = ctx.message.content.split()[0].lower().lstrip('!')
                 if cast_command in ('fish', 'f', 'а'):
                     cast_command = 'fishing'
@@ -2437,7 +2465,7 @@ class Currency(commands.Cog):
                 num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
                 highest_balance_check(guild_id, author_id, num, save=False, make_sure=fish_coins < 200)
                 command_count_increment(guild_id, author_id, 'fishinge', True, False)
-                await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
+                await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
             else:
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
