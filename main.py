@@ -347,21 +347,22 @@ class UseItemView(discord.ui.View):
             return
 
         await interaction.response.defer()
-        await use(self.ctx, self.author, self.item, item_message=interaction.message, amount=1 if self.item.real_name != 'funny_item' else 69)
+        await use_item(self.ctx, self.author, self.item, item_message=interaction.message, amount=1 if self.item.real_name != 'funny_item' else 69)
 
 
 items = {
-    'rigged_potion': Item('rigged_potion', "Rigged Potion", f"Upon use, this potion doubles your balance.\nBe cautious when you use it!\n\nHas a 5% chance to drop from a {treasure_chest} Treasure Chest\nAlso distributed by the bot developer as an exclusive reward", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
-    'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion will prompt you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins ||{sunfire2}||\n\nDrops alongside Fool's Gold", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
-    'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing it grants you 69k {coin}\n\nDrops when you get 69 coins from fishing", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
+    'rigged_potion': Item('rigged_potion', "Rigged Potion", f"Upon use, this potion doubles your balance.\nBe cautious when you use it!\n\nHas a 5% chance to drop from a Treasure Chest {treasure_chest}\nAlso distributed by the bot developer as an exclusive reward", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
+    'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion will prompt you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins ||{sunfire2}||\n\nDrops alongside Fool's Gold ✨", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
+    'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing it grants you 69k {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
+
     'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
     'weekly_item': Item('weekly_item', "Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
 }
-item_names = list(items.keys())
+sorted_items = {item: num for num, item in enumerate(items)}
 
 
 def find_closest_item(input_str):
-    match, score, _ = process.extractOne(input_str, item_names)
+    match, score, _ = process.extractOne(input_str, list(items.keys()))
     return match if score > 30 else None  # Adjust threshold
 
 
@@ -1551,7 +1552,7 @@ class PaginationView(discord.ui.View):
                 async def item_callback(interaction: discord.Interaction, *, item_data=item):
                     # if interaction.user.id == self.user_in_question:
                         # await interaction.response.defer()  # Acknowledge the interaction immediately
-                        # await use(self.ctx, item_data)  # Call the function to use the item
+                        # await use_item(self.ctx, item_data)  # Call the function to use the item
                         # await interaction.followup.send(f"This would have used 1 {items[item]} but using items is currently in development {pupperrun}", ephemeral=True)  # Send the response
                         if self.ctx.guild and self.ctx.guild.get_member(interaction.user.id):
                             target = self.ctx.guild.get_member(interaction.user.id)
@@ -1639,12 +1640,15 @@ class ConfirmView(discord.ui.View):
                 print("Failed to edit the message on timeout.")
 
 
-async def confirm_item(item_message, author: discord.User, item: Item, amount=1, additional_msg=''):
+async def confirm_item(item_message, author: discord.User, item: Item, amount=1, additional_context=[], additional_msg=''):
     """Sends a confirmation message with buttons and waits for the user's response."""
     # if item.real_name in ['rigged_potion']:
     #     bal = f"\nYour balance: {get_user_balance('', str(author.id)):,} {coin}\n‎"
     # else:
     #     bal = ''
+    if additional_context:
+        target, num = additional_context
+        additional_msg = f'\nThis will set back both {author.display_name} and {target.display_name} back {num:,} {coin}'
     view = ConfirmView(author, item, amount)  # Create the view and pass the allowed author
     message = await item_message.reply(
         f"## {author.display_name}, do you want to use **{amount} {item}{'s' if amount != 1 else ''}**?{additional_msg}",
@@ -1656,13 +1660,13 @@ async def confirm_item(item_message, author: discord.User, item: Item, amount=1,
     return view.value, message  # This is True if confirmed, False if cancelled, or None if timed out
 
 
-async def rigged_potion_func(message, castor, amount):
+async def rigged_potion_func(message, castor, amount, additional_context=[]):
     guild_id = '' if not message.guild else str(message.guild.id)
     castor_id = str(castor.id)
     bal = get_user_balance(guild_id, castor_id)
     bal2 = add_coins_to_user(guild_id, castor_id, bal)
     await message.reply(
-        f"# {items['rigged_potion']} has been used successfully\n"
+        f"# {items['rigged_potion']} used successfully\n"
         f"**{castor.display_name}**: +{bal:,} {coin}\n"
         f"Balance: {bal2:,} {coin}"
     )
@@ -1671,22 +1675,36 @@ async def rigged_potion_func(message, castor, amount):
     save_profiles()
 
 
-# async def evil_potion_func(message, castor, amount):
-#     guild_id = '' if not message.guild else str(message.guild.id)
-#     castor_id = str(castor.id)
-#     bal = get_user_balance(guild_id, castor_id)
-#     add_coins_to_user(guild_id, castor_id, bal)
-#     await message.reply(
-#         f"# {items['rigged_potion']} has been used successfully\n"
-#         f"**{castor.display_name}**: +{bal:,} {coin}\n"
-#         f"Balance: {bal*2:,} {coin}"
-#     )
-#     global_profiles[castor_id]['items']['rigged_potion'] -= 1
-#     highest_balance_check(guild_id, castor_id, bal*2, save=False, make_sure=False)
-#     save_profiles()
+async def evil_potion_func(message, castor, amount, additional_context=[]):
+    try:
+        guild_id = '' if not message.guild else str(message.guild.id)
+        castor_id = str(castor.id)
+        if additional_context:
+            target, num = additional_context
+        else:
+            await message.reply(f"`!use evil @user amount` to use this item")
+            return
+
+        target_id = str(target.id)
+        bal1 = get_user_balance(guild_id, castor_id), castor
+        bal2 = get_user_balance(guild_id, target_id), target
+        if bal1[0] < num or bal2[0] < num:
+            await message.reply(f"{min(bal1, bal2)[1].display_name} has less than {num:,} {coin}")
+            return
+        bal1 = remove_coins_from_user(guild_id, castor_id, num)
+        bal2 = remove_coins_from_user(guild_id, target_id, num)
+        await message.reply(
+            f"# {items['evil_potion']} used successfully\n"
+            f"**{castor.display_name}**: -{num:,} {coin}, balance: {bal1:,} {coin}\n"
+            f"**{target.display_name}**: -{num:,} {coin}, balance: {bal2:,} {coin}"
+        )
+        global_profiles[castor_id]['items']['evil_potion'] -= 1
+        save_profiles()
+    except Exception:
+        print(traceback.format_exc())
 
 
-async def funny_item_func(message, castor, amount):
+async def funny_item_func(message, castor, amount, additional_context=[]):
     guild_id = '' if not message.guild else str(message.guild.id)
     castor_id = str(castor.id)
     items_owned = global_profiles[castor_id]['items']['funny_item']
@@ -1706,20 +1724,29 @@ async def funny_item_func(message, castor, amount):
 
 item_use_functions = {
     'rigged_potion': rigged_potion_func,
-    # 'evil_potion': evil_potion_func
+    'evil_potion': evil_potion_func,
     'funny_item': funny_item_func
 }
 
 
-async def use(ctx: commands.Context, author: discord.User, item: Item, item_message, amount=1):
+async def use_item(ctx: commands.Context, author: discord.User, item: Item, item_message, amount=1, additional_context=[]):
     """
-    Uses an item of choice
+    Uses an item by a user
     """
     try:
-        if not global_profiles[str(author.id)]['items'][item.real_name]:
-            await item_message.reply(f"**{author.display_name}**, you have **0 {item}s** how are you gonna use one WAJAJA")
+        if global_profiles[str(author.id)]['items'].setdefault(item.real_name, 0) < amount:
+            await item_message.reply(f"**{author.display_name}**, you have **{global_profiles[str(author.id)]['items'][item.real_name]} {item}s** how are you gonna use {amount} WAJAJA")
             return
-        decision, msg = await confirm_item(item_message, author, item, amount)
+        if additional_context:
+            bal1 = get_user_balance('', str(additional_context[0].id)), additional_context[0]
+            bal2 = get_user_balance('', str(author.id)), author
+            if bal1[0] < additional_context[1] or bal2[0] < additional_context[1]:
+                await item_message.reply(f"{min(bal1, bal2)[1].display_name} has less than {additional_context[1]:,} {coin}")
+                return
+        elif item.real_name in ['evil_potion']:
+            await item_message.reply("`!use evil @user amount` to use this item")
+            return
+        decision, msg = await confirm_item(item_message, author, item, amount, additional_context)
         if decision is None:
             # await msg.reply("Decision timed out.")
             pass
@@ -1728,7 +1755,7 @@ async def use(ctx: commands.Context, author: discord.User, item: Item, item_mess
                 if not global_profiles[str(author.id)]['items'][item.real_name]:
                     await msg.reply(f"**{author.display_name}**, you have **0 {item}s** how are you gonna use one WAJAJA")
                     return
-                await item_use_functions[item.real_name](msg, author, amount)
+                await item_use_functions[item.real_name](msg, author, amount, additional_context)
             else:
                 await msg.reply(f"**{author.display_name}** would have used **{amount} {item}** if they were usable {pupperrun}")
         else:
@@ -1930,7 +1957,7 @@ class Currency(commands.Cog):
             user_id = str(user.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 make_sure_user_profile_exists(guild_id, user_id)
-                items = sorted([(item, global_profiles[user_id]["items"][item]) for item in global_profiles[user_id]["items"] if ((item != 'titles') and (global_profiles[user_id]["items"][item]))])
+                items = sorted([(item, global_profiles[user_id]["items"][item]) for item in global_profiles[user_id]["items"] if ((item != 'titles') and (global_profiles[user_id]["items"][item]))], key=lambda x: sorted_items[x[0]])
                 if not items:
                     await ctx.reply(f'**{user.display_name}** has no items yet :p')
                     return
@@ -1994,6 +2021,46 @@ class Currency(commands.Cog):
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 await ctx.reply('\n'.join([f'- {items[item]}' for item in items]))
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
+
+    @commands.command()
+    async def use(self, ctx):
+        """
+        Use item of choice
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            author_id = str(ctx.author.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                make_sure_user_profile_exists(guild_id, author_id)
+                content = ' '.join(ctx.message.content.split()[1:])
+                if not content:
+                    await ctx.reply("Please provide the name of the item you'd like to use!")
+                    return
+                item_name = find_closest_item(content)
+                context = []
+                amount = 1
+                if item_name in ['evil_potion']:
+                    if global_profiles[str(ctx.author.id)]['items'].setdefault(item_name, 0) < amount:
+                        await ctx.reply(f"**{ctx.author.display_name}**, you have **{global_profiles[str(ctx.author.id)]['items'][item_name]} {items[item_name]}s** how are you gonna use {amount} WAJAJA")
+                        return
+                    if mentions := ctx.message.mentions:
+                        target = mentions[0]
+                    else:
+                        await ctx.reply(f'Something went wrong when trying to use {items[item_name]}. Please make sure that the command has a user mention')
+                        return
+                    num, _, _ = convert_msg_to_number(ctx.message.content.split()[1:], '', author_id, ignored_sources=['%', 'all', 'half'])
+                    if num == -1:
+                        await ctx.reply(f"Something went wrong when trying to use {items[item_name]}. Make sure that the amount you're providing is an actual number")
+                        return
+                    context = [target, num]
+                elif item_name in ['funny_item']:
+                    amount = 69
+                item = items[item_name]
+                await use_item(ctx, ctx.author, item, ctx.message, amount=amount, additional_context=context)
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
