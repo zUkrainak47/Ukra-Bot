@@ -197,6 +197,14 @@ else:
     ignored_channels = []
 
 
+IGNORED_USERS = Path("dev", "ignored_users.json")
+if os.path.exists(IGNORED_USERS):
+    with open(IGNORED_USERS, "r") as file:
+        ignored_users = json.load(file)
+else:
+    ignored_users = []
+
+
 LOTTERY_FILE = Path("dev", "active_lottery.json")
 if os.path.exists(LOTTERY_FILE):
     with open(LOTTERY_FILE, "r") as file:
@@ -271,6 +279,11 @@ def save_ignored_channels():
         json.dump(ignored_channels, file, indent=4)
 
 
+def save_ignored_users():
+    with open(IGNORED_USERS, "w") as file:
+        json.dump(ignored_users, file, indent=4)
+
+
 def save_active_lottery():
     with open(LOTTERY_FILE, "w") as file:
         json.dump(active_lottery, file, indent=4)
@@ -292,6 +305,7 @@ def save_everything():
     save_distributed_backshots()
     save_active_giveaways()
     save_ignored_channels()
+    save_ignored_users()
     save_active_lottery()
     save_active_loans()
 
@@ -1003,6 +1017,40 @@ async def toggle_channel_currency(ctx):
         await ctx.send("Currency system is disabled in your server already. This command won't do anything")
 
 
+@client.command(aliases=['toggleusercurrency', 'tuc'])
+@commands.has_permissions(administrator=True)
+async def toggle_user_currency(ctx):
+    """
+    Starts ignoring the mentioned user
+    If user is already ignored, will stop ignoring them
+    Only usable by bot developer
+    """
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    make_sure_server_settings_exist(guild_id)
+    if ctx.author.id not in allowed_users:
+        await ctx.reply(f"You can't use this command due to lack of permissions :3")
+        return
+    target_id = convert_msg_to_user_id(ctx.message.content.split()[1:])
+    if target_id != -1 and target_id in fetched_users:
+        target = fetched_users.get(target_id)
+    else:
+        try:
+            target = await client.fetch_user(target_id)
+            fetched_users[target_id] = target
+        except discord.errors.NotFound:
+            target = None
+    if target is not None and target_id in ignored_users:
+        ignored_users.remove(target_id)
+        save_ignored_users()
+        await ctx.send(f"{bot_name} will no longer ignore {target.display_name}")
+    elif target is not None and target_id not in ignored_users:
+        ignored_users.append(target_id)
+        save_ignored_users()
+        await ctx.send(f"{bot_name} will now ignore {target.display_name}")
+    else:
+        await ctx.send(f"Couldn't find a user with ID `{target_id}`")
+
+
 @client.command(aliases=['allow'])
 @commands.has_permissions(administrator=True)
 async def enable(ctx):
@@ -1251,7 +1299,9 @@ active_loan_requests = set()
 
 
 def currency_allowed(context):
-    # guild_ = str(context.guild.id)
+    user_ = context.author.id
+    if user_ in ignored_users:
+        return False
     guild_ = '' if not context.guild else str(context.guild.id)
     make_sure_server_settings_exist(guild_)
     channel_ = 0 if not context.channel else context.channel.id
