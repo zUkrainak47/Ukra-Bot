@@ -316,29 +316,38 @@ class Item:
 
 
 class UseItemView(discord.ui.View):
-    def __init__(self, ctx: commands.Context, author: discord.User, item: Item, timeout: float = 30):
+    def __init__(self, ctx: commands.Context, author: discord.User, item: Item, btn_enabled=1, timeout: float = 60):
         super().__init__(timeout=timeout)
         self.ctx = ctx
         self.author = author
         self.item = item
+        self.btn_enabled = btn_enabled
 
-    @discord.ui.button(label="Use", style=discord.ButtonStyle.green, row=0)
-    async def use_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Create the "Use" button dynamically
+        use_button = discord.ui.Button(
+            label="Use",
+            style=discord.ButtonStyle.green,
+            row=0,
+            disabled=not btn_enabled  # if btn_enabled is False, then disabled=True
+        )
+        # Set the callback for the button
+        use_button.callback = self.use_button_callback
+        # Add the button to the view
+        self.add_item(use_button)
+
+    async def use_button_callback(self, interaction: discord.Interaction):
         # Restrict the button so that only the original author can use it.
         if interaction.user.id != self.author.id:
             await interaction.response.send_message("This is not your item view!! Open this item yourself to use it", ephemeral=True)
             return
 
-        # Call your use() function. This function will handle confirmation.
         await interaction.response.defer()
         await use(self.ctx, self.author, self.item, item_message=interaction.message, amount=1)
-        # Optionally, give some immediate feedback:
-        # await interaction.response.send_message("Processing item use...", ephemeral=True)
 
 
 items = {
     'rigged_potion': Item('rigged_potion', "Rigged Potion", "Upon use, this potion doubles your balance.\nBe cautious when you use it!", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
-    'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion will prompt you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins ||{sunfire2}||", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
+    'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion will prompt you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins ||{sunfire2}||\n\nDrops alongside Fool's Gold", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
     'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
     'weekly_item': Item('weekly_item', "Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
 }
@@ -1448,7 +1457,7 @@ class PaginationView(discord.ui.View):
         self.message = None
         self.page_size = 5 if (self.footer and self.footer_icon) else 8
 
-    async def send_embed(self, ctx):
+    async def send_embed(self):
         # Prepare the embed with the first page's data
         current_data = self.get_current_page_data()
         embed = self.create_embed(current_data)
@@ -1456,7 +1465,7 @@ class PaginationView(discord.ui.View):
         # If we are not in footer mode, update dynamic item buttons.
         if not (self.footer and self.footer_icon):
             self.update_item_buttons()
-        self.message = await ctx.reply(embed=embed, view=self)
+        self.message = await self.ctx.reply(embed=embed, view=self)
 
     def create_embed(self, data):
         # Use one embed style if footer and footer_icon are provided
@@ -1548,7 +1557,7 @@ class PaginationView(discord.ui.View):
                             target = interaction.user
                             embed_color = 0xffd000
                         owned = global_profiles[str(interaction.user.id)]['items'].setdefault(item_data, 0)
-                        view = UseItemView(self.ctx, target, items[item_data])
+                        view = UseItemView(self.ctx, target, items[item_data], owned)
                         await interaction.response.send_message(embed=items[item_data].describe(embed_color, owned, target.avatar.url), view=view)  # Send the response
                     # else:
                     #     await interaction.response.send_message("This is not your inventory!", ephemeral=True)
@@ -1584,10 +1593,13 @@ class PaginationView(discord.ui.View):
 
 
 class ConfirmView(discord.ui.View):
-    def __init__(self, author: discord.User, timeout: float = 30):
+    def __init__(self, author: discord.User, item: Item, amount: int = 1, timeout: float = 30):
         super().__init__(timeout=timeout)
         self.value = None  # This will store the user's decision
+        self.author = author
         self.author_id = author.id
+        self.amount = amount
+        self.item = item
         self.message = None  # We'll store the confirmation message here
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -1603,13 +1615,13 @@ class ConfirmView(discord.ui.View):
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green, row=0)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
-        await interaction.response.edit_message(content="Confirmed!", view=None)
+        await interaction.response.edit_message(content=f"{self.author.display_name} confirmed the use of {self.amount} {self.item}", view=None)
         self.stop()  # Stop waiting for more button clicks
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, row=0)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = False
-        await interaction.response.edit_message(content="Cancelled!", view=None)
+        await interaction.response.edit_message(content=f"{self.author.display_name} cancelled the use of {self.amount} {self.item}", view=None)
         self.stop()
 
     async def on_timeout(self):
@@ -1622,9 +1634,13 @@ class ConfirmView(discord.ui.View):
                 print("Failed to edit the message on timeout.")
 
 
-async def confirm_item(item_message, author: discord.User, item, amount=1, additional_msg=''):
+async def confirm_item(item_message, author: discord.User, item: Item, amount=1, additional_msg=''):
     """Sends a confirmation message with buttons and waits for the user's response."""
-    view = ConfirmView(author)  # Create the view and pass the allowed author
+    # if item.real_name in ['rigged_potion']:
+    #     bal = f"\nYour balance: {get_user_balance('', str(author.id)):,} {coin}\n‎"
+    # else:
+    #     bal = ''
+    view = ConfirmView(author, item, amount)  # Create the view and pass the allowed author
     message = await item_message.reply(
         f"## {author.display_name}, do you want to use **{amount} {item}**?{additional_msg}",
         view=view
@@ -1633,6 +1649,42 @@ async def confirm_item(item_message, author: discord.User, item, amount=1, addit
     view.message = message
     await view.wait()  # Wait until the view times out or is stopped by a button press
     return view.value, message  # This is True if confirmed, False if cancelled, or None if timed out
+
+
+async def rigged_potion_func(message, castor, amount):
+    guild_id = '' if not message.guild else str(message.guild.id)
+    castor_id = str(castor.id)
+    bal = get_user_balance(guild_id, castor_id)
+    add_coins_to_user(guild_id, castor_id, bal)
+    await message.reply(
+        f"# {items['rigged_potion']} has been used successfully\n"
+        f"**{castor.display_name}**: +{bal:,} {coin}\n"
+        f"Balance: {bal*2:,} {coin}"
+    )
+    global_profiles[castor_id]['items']['rigged_potion'] -= 1
+    highest_balance_check(guild_id, castor_id, bal*2, save=False, make_sure=False)
+    save_profiles()
+
+
+# async def evil_potion_func(message, castor, amount):
+#     guild_id = '' if not message.guild else str(message.guild.id)
+#     castor_id = str(castor.id)
+#     bal = get_user_balance(guild_id, castor_id)
+#     add_coins_to_user(guild_id, castor_id, bal)
+#     await message.reply(
+#         f"# {items['rigged_potion']} has been used successfully\n"
+#         f"**{castor.display_name}**: +{bal:,} {coin}\n"
+#         f"Balance: {bal*2:,} {coin}"
+#     )
+#     global_profiles[castor_id]['items']['rigged_potion'] -= 1
+#     highest_balance_check(guild_id, castor_id, bal*2, save=False, make_sure=False)
+#     save_profiles()
+
+
+item_use_functions = {
+    'rigged_potion': rigged_potion_func,
+    # 'evil_potion': evil_potion_func
+}
 
 
 async def use(ctx: commands.Context, author: discord.User, item: Item, item_message, amount=1):
@@ -1648,7 +1700,13 @@ async def use(ctx: commands.Context, author: discord.User, item: Item, item_mess
             # await msg.reply("Decision timed out.")
             pass
         elif decision:
-            await msg.reply(f"**{author.display_name}** would have used **{amount} {item}** but using items is currently in development {pupperrun}")
+            if item.real_name in item_use_functions:
+                if not global_profiles[str(author.id)]['items'][item.real_name]:
+                    await msg.reply(f"**{author.display_name}**, you have **0 {item}s** how are you gonna use one WAJAJA")
+                    return
+                await item_use_functions[item.real_name](msg, author, amount)
+            else:
+                await msg.reply(f"**{author.display_name}** would have used **{amount} {item}** if they were usable {pupperrun}")
         else:
             # Optionally, handle cancellation here
             pass
@@ -1863,7 +1921,7 @@ class Currency(commands.Cog):
                         embed_color = 0xffd000
 
                     pagination_view = PaginationView(items, title_=f"", author_=f"{user.display_name}'s Inventory", author_icon_=user.avatar.url, color_=embed_color, description_=desc, user_in_question_=user_in_question, ctx_=ctx)
-                    await pagination_view.send_embed(ctx)
+                    await pagination_view.send_embed()
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
@@ -1895,7 +1953,7 @@ class Currency(commands.Cog):
                 else:
                     embed_color = 0xffd000
                 owned = global_profiles[str(ctx.author.id)]['items'].setdefault(item, 0)
-                view = UseItemView(ctx, ctx.author, items[item])
+                view = UseItemView(ctx, ctx.author, items[item], owned)
                 await ctx.reply(embed=items[item].describe(embed_color, owned, ctx.author.avatar.url), view=view)  # Send the response
 
             elif currency_allowed(ctx):
@@ -1956,8 +2014,8 @@ class Currency(commands.Cog):
                         else:
                             embed_color = 0xffd000
 
-                        pagination_view = PaginationView(embed_data, title_='Titles', color_=embed_color, stickied_msg_=stickied_msg, footer_=[footer, ctx.author.avatar.url])
-                        await pagination_view.send_embed(ctx)
+                        pagination_view = PaginationView(embed_data, title_='Titles', color_=embed_color, stickied_msg_=stickied_msg, footer_=[footer, ctx.author.avatar.url], ctx_=ctx)
+                        await pagination_view.send_embed()
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
@@ -2238,6 +2296,7 @@ class Currency(commands.Cog):
             make_sure_user_has_currency(guild_id, author_id)
             t = random.randint(1, 625)
             mine_coins = int(t**0.5 * 2)
+            item_msg = ''
             if t == 625:
                 mine_coins = 7500
                 mine_message = f'# You found Diamonds! 💎'
@@ -2249,6 +2308,8 @@ class Currency(commands.Cog):
                 await rare_channel.send(f"**{ctx.author.mention}** found Diamonds 💎 {link}")
             elif t == 1:
                 mine_coins = 1
+                n = add_item_to_user(guild_id, author_id, 'evil_potion')
+                item_msg = f"\n\n+1 {items['evil_potion']} ({n:,} {evil_potion} owned)"
                 mine_message = f"# You struck Fool's Gold! ✨"
                 rare_finds_increment(guild_id, author_id, 'fool', False)
                 if ctx.guild:
@@ -2262,7 +2323,7 @@ class Currency(commands.Cog):
                 num = add_coins_to_user(guild_id, author_id, mine_coins)  # save file
                 highest_balance_check(guild_id, author_id, num, save=False, make_sure=True)
                 command_count_increment(guild_id, author_id, 'mine', True, False)
-                await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can mine again {get_timestamp(120)}")
+                await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
             else:
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
@@ -2442,8 +2503,7 @@ class Currency(commands.Cog):
             message = f"# Daily {coin} claimed! {streak_msg}\n"
 
             n = add_item_to_user(guild_id, author_id, 'daily_item', save=False, make_sure=False)
-            message += f'+1 {items['daily_item']} ({n:,} {daily_item} owned)\n'
-
+            item_msg = f'\n\n+1 {items['daily_item']} ({n:,} {daily_item} owned)'
             loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
             for loan_id in loans:
                 finalized, loaner_id, loan_size, today_coins_bonus, paid = await loan_payment(loan_id, today_coins_bonus)
@@ -2458,7 +2518,7 @@ class Currency(commands.Cog):
             num = add_coins_to_user(guild_id, author_id, today_coins + today_coins_bonus)  # save file
             highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
             save_profiles()
-            await ctx.reply(f"{message}**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{today_coins_bonus:,} {coin} streak bonus = {today_coins + today_coins_bonus:,} {coin})\nBalance: {num:,} {coin}\n\nYou can use this command again <t:{get_daily_reset_timestamp()}:R>")
+            await ctx.reply(f"{message}**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{today_coins_bonus:,} {coin} streak bonus = {today_coins + today_coins_bonus:,} {coin})\nBalance: {num:,} {coin}{item_msg}\n\nYou can use this command again <t:{get_daily_reset_timestamp()}:R>")
 
             user_last_used[author_id] = now
             save_last_used()
@@ -2495,11 +2555,11 @@ class Currency(commands.Cog):
             message = f"# Weekly {coin} claimed!\n"
 
             n = add_item_to_user(guild_id, author_id, 'weekly_item', save=True, make_sure=False)
-            message += f'+1 {items['weekly_item']} ({n:,} {weekly_item} owned)\n'
+            item_msg = f'\n\n+1 {items['weekly_item']} ({n:,} {weekly_item} owned)'
 
             # Send confirmation message
             reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
-            await ctx.reply(f"{message}**{ctx.author.display_name}:** +{weekly_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
+            await ctx.reply(f"{message}**{ctx.author.display_name}:** +{weekly_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can use this command again <t:{reset_timestamp}:R>")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
