@@ -48,6 +48,7 @@ client = commands.Bot(command_prefix="!", intents=intents)
 
 # EMOJIS
 rigged_potion = '<:rigged_potion:1336395108244787232>'
+evil_potion = '<:evil_potion:1336641208885186601>'
 daily_item = '<:daily_item:1336399274476306646>'
 weekly_item = '<:weekly_item:1336631591543373854>'
 
@@ -313,10 +314,9 @@ class Item:
             print(traceback.format_exc())
 
 
-# item_emojis = {'rigged_potion': rigged_potion, 'daily_item': daily_item}
-# item_names = {'rigged_potion': 'Rigged Potion', 'daily_item': 'Daily Item'}
 items = {
     'rigged_potion': Item("Rigged Potion", "Upon use, this potion doubles your balance.\nBe cautious when you use it!", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
+    'evil_potion': Item("Evil Potion", f"Using this potion will prompt you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins ||{sunfire2}||", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
     'daily_item': Item("Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
     'weekly_item': Item("Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
 }
