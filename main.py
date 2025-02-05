@@ -1752,8 +1752,8 @@ async def use_item(ctx: commands.Context, author: discord.User, item: Item, item
             pass
         elif decision:
             if item.real_name in item_use_functions:
-                if not global_profiles[str(author.id)]['items'][item.real_name]:
-                    await msg.reply(f"**{author.display_name}**, you have **0 {item}s** how are you gonna use one WAJAJA")
+                if global_profiles[str(author.id)]['items'][item.real_name] < amount:
+                    await msg.reply(f"**{author.display_name}**, you have **{global_profiles[str(author.id)]['items'][item.real_name]} {item}s** how are you gonna use {amount} WAJAJA")
                     return
                 await item_use_functions[item.real_name](msg, author, amount, additional_context)
             else:
