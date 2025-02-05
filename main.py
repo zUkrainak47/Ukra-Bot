@@ -49,6 +49,7 @@ client = commands.Bot(command_prefix="!", intents=intents)
 # EMOJIS
 rigged_potion = '<:rigged_potion:1336395108244787232>'
 daily_item = '<:daily_item:1336399274476306646>'
+weekly_item = '<:weekly_item:1336631591543373854>'
 
 gold_emoji = '<:gold:1325823946737713233>'
 treasure_chest = '<:treasure_chest:1325811472680620122>'
@@ -317,6 +318,7 @@ class Item:
 items = {
     'rigged_potion': Item("Rigged Potion", "Upon use, this potion doubles your balance.\nBe cautious when you use it!", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
     'daily_item': Item("Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
+    'weekly_item': Item("Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
 }
 item_names = list(items.keys())
 
@@ -1574,6 +1576,25 @@ async def use(ctx, item):
         print(traceback.format_exc())
 
 
+def add_item_to_user(guild_id: str, user_id: str, item: str, amount: int = 1, save=True, make_sure=True):
+    """
+    Adds an item to a user
+    Returns the amount they own of this item
+    """
+    if make_sure:
+        make_sure_user_profile_exists(guild_id, user_id)
+
+    if item in global_profiles[user_id]['items']:
+        global_profiles[user_id]['items'][item] += amount
+    else:
+        global_profiles[user_id]['items'][item] = amount
+
+    if save:
+        save_profiles()
+
+    return global_profiles[user_id]['items'][item]
+
+
 class Currency(commands.Cog):
     """Commands related to the currency system"""
 
@@ -2339,11 +2360,8 @@ class Currency(commands.Cog):
             today_coins_bonus = int(today_coins * (user_streak**0.5 - 1))
             message = f"# Daily {coin} claimed! {streak_msg}\n"
 
-            if 'daily_item' in global_profiles[author_id]['items']:
-                global_profiles[author_id]['items']['daily_item'] += 1
-            else:
-                global_profiles[author_id]['items']['daily_item'] = 1
-            message += f'+1 {daily_item} Daily Item ({global_profiles[author_id]['items']['daily_item']} {daily_item} owned)\n'
+            n = add_item_to_user(guild_id, author_id, 'daily_item', save=False, make_sure=False)
+            message += f'+1 {items['daily_item']} ({n:,} {daily_item} owned)\n'
 
             loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
             for loan_id in loans:
@@ -2374,7 +2392,7 @@ class Currency(commands.Cog):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)
+            make_sure_user_profile_exists(guild_id, author_id)
 
             now = datetime.now()
             # Get the last reset time
@@ -2390,13 +2408,17 @@ class Currency(commands.Cog):
 
             # Award coins and update settings
             weekly_coins = random.randint(1500, 2500)  # Adjust reward range as desired
-            add_coins_to_user(guild_id, author_id, weekly_coins)  # save file
+            num = add_coins_to_user(guild_id, author_id, weekly_coins)  # save file
             user_last_used_w[author_id] = now
             save_last_used_w()
+            message = f"# Weekly {coin} claimed!\n"
+
+            n = add_item_to_user(guild_id, author_id, 'weekly_item', save=True, make_sure=False)
+            message += f'+1 {items['weekly_item']} ({n:,} {weekly_item} owned)\n'
 
             # Send confirmation message
             reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
-            await ctx.reply(f"## Weekly {coin} claimed!\n**{ctx.author.display_name}:** +{weekly_coins:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
+            await ctx.reply(f"{message}**{ctx.author.display_name}:** +{weekly_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can use this command again <t:{reset_timestamp}:R>")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
