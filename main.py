@@ -1716,7 +1716,7 @@ class PaginationView(discord.ui.View):
 
 
 class ConfirmView(discord.ui.View):
-    def __init__(self, author: discord.User, item: Item, amount: int = 1, timeout: float = 30):
+    def __init__(self, author: discord.User, item=None, amount: int = 1, timeout: float = 30):
         super().__init__(timeout=timeout)
         self.value = None  # This will store the user's decision
         self.author = author
@@ -1738,13 +1738,19 @@ class ConfirmView(discord.ui.View):
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green, row=0)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
-        await interaction.response.edit_message(content=f"{self.author.display_name} confirmed the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
+        if self.item:
+            await interaction.response.edit_message(content=f"{self.author.display_name} confirmed the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
+        else:
+            await interaction.response.edit_message(view=None)
         self.stop()  # Stop waiting for more button clicks
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, row=0)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = False
-        await interaction.response.edit_message(content=f"{self.author.display_name} cancelled the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
+        if self.item:
+            await interaction.response.edit_message(content=f"{self.author.display_name} cancelled the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
+        else:
+            await interaction.response.edit_message(view=None)
         self.stop()
 
     async def on_timeout(self):
@@ -3436,101 +3442,95 @@ class Currency(commands.Cog):
                 active_loan_requests.add(mentions[0].id)
                 active_loan_requests.add(ctx.author.id)
                 try:
+                    async def confirm_loan(author: discord.User, message_content, to_reply=ctx):
+                        """Sends a confirmation message with buttons and waits for the user's response."""
+                        view = ConfirmView(author, timeout=150.0)
+                        message = await to_reply.reply(message_content, view=view)
+                        view.message = message
+                        await view.wait()
+                        return view.value, message
+
                     inter = ' with ' + f'{interest:,} {coin} as interest' if interest else ''
-                    react_to_1 = await ctx.reply(
-                        f'## {ctx.author.mention}, are you sure you would like to loan {mentions[0].display_name} {number:,} {coin}{inter}?\n' +
-                        f"This means that\n"
-                        f"- You pay **{number:,}** {coin} to {mentions[0].display_name} now\n"
-                        f"- They will need to pay you back **{number+interest:,}** {coin} in the future\n\n"
-                        f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
-                        f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
-                    await react_to_1.add_reaction('✅')
-                    await react_to_1.add_reaction('❌')
+                    message1 = (f"## {ctx.author.mention}, are you sure you would like to loan {mentions[0].display_name} {number:,} {coin}{inter}?\n"
+                                f"This means that\n"
+                                f"- You pay **{number:,}** {coin} to {mentions[0].display_name} now\n"
+                                f"- They will need to pay you back **{number+interest:,}** {coin} in the future\n\n"
+                                f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n"
+                                f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
+                    decision1, msg1 = await confirm_loan(ctx.author, message1)
 
-                    def check1(reaction, user):
-                        return ((user == ctx.author and str(reaction.emoji) in ['✅', '❌']) and
-                                (reaction.message.id == react_to_1.id))
+                    if decision1 is None:
+                        await msg1.reply(f"{ctx.author.display_name} did not respond in time")
+                        active_loan_requests.discard(mentions[0].id)
+                        active_loan_requests.discard(ctx.author.id)
+                        return
 
-                    try:
-                        reaction1, user1 = await self.bot.wait_for('reaction_add', timeout=150.0, check=check1)
-                        if str(reaction1.emoji) == '✅':
+                    elif decision1:
+                        if number > get_user_balance(guild_id, author_id):
+                            active_loan_requests.discard(mentions[0].id)
+                            active_loan_requests.discard(ctx.author.id)
+                            await msg1.reply(f"Loan failed! You don't own {number:,} {coin} {sadgebusiness}")
+                            return
 
+                        message2 = (f"## {mentions[0].mention}, do you accept the loan for {number + interest:,} {coin} from {ctx.author.display_name}?\n"
+                                    f"This means that\n"
+                                    f"- {ctx.author.display_name} gives you **{number:,}** {coin} now\n"
+                                    f"- You will need to pay them back **{number + interest:,}** {coin} in the future\n"
+                                    f"- Until your loan is paid out, __every rare drop you get__ ({gold_emoji}, ✨, 💎, {treasure_chest}, {The_Catch}) as well as __your `!daily` bonus__ will go towards paying back this loan. (`!help loan` for more info on this)\n\n"
+                                    f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
+                                    f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
+                        decision2, msg2 = await confirm_loan(mentions[0], message2, msg1)
+
+                        if decision2 is None:
+                            await msg2.reply(f"{mentions[0].display_name} did not respond in time")
+                            active_loan_requests.discard(mentions[0].id)
+                            active_loan_requests.discard(ctx.author.id)
+                            return
+
+                        elif decision2:
                             if number > get_user_balance(guild_id, author_id):
                                 active_loan_requests.discard(mentions[0].id)
                                 active_loan_requests.discard(ctx.author.id)
-                                await ctx.reply(f"Loan failed! You don't own {number:,} {coin} {sadgebusiness}")
+                                await msg2.reply(
+                                    f"Loan failed! {ctx.author.display_name} doesn't own {number:,} {coin} {sadgebusiness}")
                                 return
 
-                            react_to_2 = await ctx.reply(
-                                f'## {mentions[0].mention}, do you accept the loan for {number + interest:,} {coin} from {ctx.author.display_name}?\n' +
-                                f"This means that\n"
-                                f"- {ctx.author.display_name} gives you **{number:,}** {coin} now\n"
-                                f"- You will need to pay them back **{number + interest:,}** {coin} in the future\n"
-                                f"- Until your loan is paid out, __every rare drop you get__ ({gold_emoji}, ✨, 💎, {treasure_chest}, {The_Catch}) as well as __your !daily bonus__ will go towards paying back this loan. (`!help loan` for more info on this)\n\n"
-                                f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
-                                f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
-                            await react_to_2.add_reaction('✅')
-                            await react_to_2.add_reaction('❌')
+                            command_count_increment(guild_id, author_id, 'loan')
+                            author_bal = remove_coins_from_user(guild_id, author_id, number, save=False)
+                            target_bal = add_coins_to_user(guild_id, target_id, number, save=False)
+                            save_currency()  # save file
+                            highest_balance_check(guild_id, target_id, target_bal)
 
-                            def check2(reaction, user):
-                                return ((user == mentions[0] and str(reaction.emoji) in ['✅', '❌']) and
-                                        (reaction.message.id == react_to_2.id))
+                            for loan in global_profiles[author_id]['dict_1'].setdefault('out', []):
+                                if mentions[0].id in active_loans[loan]:
+                                    active_loans[loan][2] += number + interest
+                                    loan_info = loan, True
+                                    ps = f"**{mentions[0].display_name}** now owes **{ctx.author.display_name}** {number + interest:,} {coin} more\n(that's {active_loans[loan][3]:,}/{active_loans[loan][2]:,} {coin} total)"
+                                    break
+                            else:
+                                active_loans[str(msg2.id)] = [ctx.author.id, mentions[0].id, number + interest, 0]
+                                loan_info = msg2.id, False
+                                ps = f"**{mentions[0].display_name}** owes **{ctx.author.display_name}** {number + interest:,} {coin}"
+                                global_profiles[str(ctx.author.id)]['dict_1'].setdefault('out', []).append(str(msg2.id))
+                                global_profiles[str(mentions[0].id)]['dict_1'].setdefault('in', []).append(str(msg2.id))
+                                save_profiles()
 
-                            try:
-                                reaction2, user2 = await self.bot.wait_for('reaction_add', timeout=150.0, check=check2)
-                                if str(reaction2.emoji) == '✅':
-                                    if number > get_user_balance(guild_id, author_id):
-                                        active_loan_requests.discard(mentions[0].id)
-                                        active_loan_requests.discard(ctx.author.id)
-                                        await ctx.reply(f"Loan failed! {ctx.author.display_name} doesn't own {number:,} {coin} {sadgebusiness}")
-                                        return
+                            save_active_loans()
 
-                                    command_count_increment(guild_id, author_id, 'loan')
-                                    author_bal = remove_coins_from_user(guild_id, author_id, number, save=False)
-                                    target_bal = add_coins_to_user(guild_id, target_id, number, save=False)
-                                    save_currency()  # save file
-                                    highest_balance_check(guild_id, target_id, target_bal)
-
-                                    for loan in global_profiles[author_id]['dict_1'].setdefault('out', []):
-                                        if mentions[0].id in active_loans[loan]:
-                                            active_loans[loan][2] += number+interest
-                                            loan_info = loan, True
-                                            ps = f"**{mentions[0].display_name}** now owes **{ctx.author.display_name}** {number + interest:,} {coin} more\n(that's {active_loans[loan][3]:,}/{active_loans[loan][2]:,} {coin} total)"
-                                            break
-                                    else:
-                                        active_loans[str(react_to_2.id)] = [ctx.author.id, mentions[0].id, number+interest, 0]
-                                        loan_info = react_to_2.id, False
-                                        ps = f"**{mentions[0].display_name}** owes **{ctx.author.display_name}** {number+interest:,} {coin}"
-                                        global_profiles[str(ctx.author.id)]['dict_1'].setdefault('out', []).append(str(react_to_2.id))
-                                        global_profiles[str(mentions[0].id)]['dict_1'].setdefault('in', []).append(str(react_to_2.id))
-                                        save_profiles()
-
-                                    save_active_loans()
-
-                                    await ctx.reply(f"## Loan successful! - `#{loan_info[0]}`\n" +
-                                                    f"**{mentions[0].display_name}:** +{number:,} {coin}, balance: {target_bal:,} {coin}\n" +
-                                                    f"**{ctx.author.display_name}:** -{number:,} {coin}, balance: {author_bal:,} {coin}\n\n"
-                                                    f"{ps}")
-                                    active_loan_requests.discard(mentions[0].id)
-                                    active_loan_requests.discard(ctx.author.id)
-
-                                elif str(reaction2.emoji) == '❌':
-                                    await ctx.reply(f"{mentions[0].display_name} declined the Loan request")
-                                    active_loan_requests.discard(mentions[0].id)
-                                    active_loan_requests.discard(ctx.author.id)
-
-                            except asyncio.TimeoutError:
-                                await ctx.reply(f"{mentions[0].display_name} did not respond in time")
-                                active_loan_requests.discard(mentions[0].id)
-                                active_loan_requests.discard(ctx.author.id)
-
-                        elif str(reaction1.emoji) == '❌':
-                            await ctx.reply(f"{ctx.author.display_name} canceled the Loan request")
+                            await msg2.reply(f"## Loan successful! - `#{loan_info[0]}`\n" +
+                                            f"**{mentions[0].display_name}:** +{number:,} {coin}, balance: {target_bal:,} {coin}\n" +
+                                            f"**{ctx.author.display_name}:** -{number:,} {coin}, balance: {author_bal:,} {coin}\n\n"
+                                            f"{ps}")
                             active_loan_requests.discard(mentions[0].id)
                             active_loan_requests.discard(ctx.author.id)
 
-                    except asyncio.TimeoutError:
-                        await ctx.reply(f"{ctx.author.display_name} did not respond in time")
+                        else:
+                            await msg2.reply(f"{mentions[0].display_name} canceled the Loan request")
+                            active_loan_requests.discard(mentions[0].id)
+                            active_loan_requests.discard(ctx.author.id)
+
+                    else:
+                        await msg1.reply(f"{ctx.author.display_name} canceled the Loan request")
                         active_loan_requests.discard(mentions[0].id)
                         active_loan_requests.discard(ctx.author.id)
 
