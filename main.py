@@ -2508,9 +2508,10 @@ class Currency(commands.Cog):
                     command_count_increment(guild_id, author_id, 'dig', True, False)
                     await ctx.reply(
                         f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
-
-        elif currency_allowed(ctx):
-            await ctx.reply(f'{reason}, currency commands are disabled')
+        else:
+            if currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+            ctx.command.reset_cooldown(ctx)
 
     @dig.error
     async def dig_error(self, ctx, error):
@@ -2589,8 +2590,10 @@ class Currency(commands.Cog):
                     highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
                     command_count_increment(guild_id, author_id, 'mine', True, False)
                     await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
-        elif currency_allowed(ctx):
-            await ctx.reply(f'{reason}, currency commands are disabled')
+        else:
+            if currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+            ctx.command.reset_cooldown(ctx)
 
     @mine.error
     async def mine_error(self, ctx, error):
@@ -2623,8 +2626,10 @@ class Currency(commands.Cog):
             highest_balance_check(guild_id, author_id, num, False)
             command_count_increment(guild_id, author_id, 'work', True, False)
             await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {num:,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
-        elif currency_allowed(ctx):
-            await ctx.reply(f'{reason}, currency commands are disabled')
+        else:
+            if currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+            ctx.command.reset_cooldown(ctx)
 
     @work.error
     async def work_error(self, ctx, error):
@@ -2720,9 +2725,10 @@ class Currency(commands.Cog):
                     highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
                     command_count_increment(guild_id, author_id, 'fishinge', True, False)
                     await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
-
-        elif currency_allowed(ctx):
-            await ctx.reply(f'{reason}, currency commands are disabled')
+        else:
+            if currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+            ctx.command.reset_cooldown(ctx)
 
     @fishinge.error
     async def fishinge_error(self, ctx, error):
