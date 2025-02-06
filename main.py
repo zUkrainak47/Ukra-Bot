@@ -389,12 +389,19 @@ async def loan_payment(id_: str, payment: int, pay_loaner=True):
     how big the loan was,
     how much money is left for the loanee
     """
+    loaner_id = active_loans[id_][0]
+    loanee_id = active_loans[id_][1]
+
+    if loaner_id in ignored_users:
+        global_profiles[str(loaner_id)]['dict_1']['out'].remove(id_)
+        global_profiles[str(loanee_id)]['dict_1']['in'].remove(id_)
+        del active_loans[id_]
+        return False, loaner_id, False, False, False
+
     amount = active_loans[id_][2]
     to_be_paid = amount - active_loans[id_][3]
     paid = min(payment, to_be_paid)
     active_loans[id_][3] += paid
-    loaner_id = active_loans[id_][0]
-    loanee_id = active_loans[id_][1]
     if pay_loaner:
         add_coins_to_user('', str(loaner_id), paid)
     if active_loans[id_][3] == amount:
@@ -1077,7 +1084,6 @@ async def toggle_channel_currency(ctx):
 
 
 @client.command(aliases=['toggleusercurrency', 'tuc'])
-@commands.has_permissions(administrator=True)
 async def toggle_user_currency(ctx):
     """
     Starts ignoring the mentioned user
@@ -1102,10 +1108,12 @@ async def toggle_user_currency(ctx):
         ignored_users.remove(target_id)
         save_ignored_users()
         await ctx.send(f"{bot_name} will no longer ignore {target.display_name}")
+        await target.send("You have been unbanned from using Ukra Bot's currency system")
     elif target is not None and target_id not in ignored_users:
         ignored_users.append(target_id)
         save_ignored_users()
         await ctx.send(f"{bot_name} will now ignore {target.display_name}")
+        await target.send("You have been banned from using Ukra Bot's currency system")
     else:
         await ctx.send(f"Couldn't find a user with ID `{target_id}`")
 
@@ -1517,7 +1525,7 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
 
         reaction = discord.utils.get(message.reactions, emoji="🎉")
 
-        participants = [user async for user in reaction.users(limit=None) if not user.bot] if reaction else []
+        participants = [user async for user in reaction.users(limit=None) if (not user.bot and user.id not in ignored_users)] if reaction else []
 
         # Announce the winner or refund
         if participants:
@@ -2157,6 +2165,9 @@ class Currency(commands.Cog):
                         await ctx.reply(f"**{ctx.author.display_name}**, you can't use **{amount} {items[item_name]}{'s' if amount != 1 else ''}**\nYou own {global_profiles[str(ctx.author.id)]['items'][item_name]} {items[item_name].emoji}")
                         return
                     if mentions := ctx.message.mentions:
+                        if mentions[0].id in ignored_users:
+                            await ctx.reply(f"{mentions[0].display_name} is banned from Ukra Bot")
+                            return
                         target = mentions[0]
                     else:
                         await ctx.reply(f'Something went wrong when trying to use {items[item_name]}. Please make sure that the command has a user mention')
@@ -2269,6 +2280,11 @@ class Currency(commands.Cog):
                 return
 
             target_id = convert_msg_to_user_id(contents)
+            if target_id in ignored_users:
+                user = await self.get_user(target_id)
+                await ctx.reply(f"{user.display_name} is banned from Ukra Bot")
+                return
+
             if target_id == -1:
                 await ctx.reply("Something went wrong, please make sure that the command has a user mention or ID")
                 return
@@ -2452,6 +2468,9 @@ class Currency(commands.Cog):
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, dig_coins, paid = await loan_payment(loan_id, dig_coins)
+                    if not loan_size:
+                        dig_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        continue
 
                     if finalized:
                         dig_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
@@ -2531,6 +2550,9 @@ class Currency(commands.Cog):
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, mine_coins, paid = await loan_payment(loan_id, mine_coins)
+                    if not loan_size:
+                        mine_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        continue
 
                     if finalized:
                         mine_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
@@ -2628,7 +2650,9 @@ class Currency(commands.Cog):
                 else:
                     fish_message = f'# You found a huge Treasure Chest!!! {treasure_chest}'
                     rare_finds_increment(guild_id, author_id, 'treasure_chest', False)
-                    if random.random() >= 0.95:
+                    rig_chance = random.random()
+                    print(rig_chance)
+                    if rig_chance >= 0.95:
                         n = add_item_to_user(guild_id, author_id, 'rigged_potion')
                         item_msg = f"\n\n+1 {items['rigged_potion']} ({n:,} {rigged_potion} owned)"
 
@@ -2657,6 +2681,9 @@ class Currency(commands.Cog):
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, fish_coins, paid = await loan_payment(loan_id, fish_coins)
+                    if not loan_size:
+                        fish_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        continue
 
                     if finalized:
                         fish_message += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
@@ -2723,7 +2750,9 @@ class Currency(commands.Cog):
             loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
             for loan_id in loans:
                 finalized, loaner_id, loan_size, today_coins_bonus, paid = await loan_payment(loan_id, today_coins_bonus)
-
+                if not loan_size:
+                    message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                    continue
                 if finalized:
                     message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)\n'
                 else:
@@ -2797,6 +2826,9 @@ class Currency(commands.Cog):
                 return
 
             if mentions := ctx.message.mentions:
+                if mentions[0].id in ignored_users:
+                    await ctx.reply(f"{mentions[0].display_name} is banned from Ukra Bot")
+                    return
                 target_id = str(mentions[0].id)
                 if mentions[0].id == ctx.author.id:
                     await ctx.reply(f"You can't send {coin} to yourself, silly")
@@ -3188,6 +3220,9 @@ class Currency(commands.Cog):
                 await ctx.reply(f"You already have a pvp request pending")
                 return
             if mentions := ctx.message.mentions:
+                if mentions[0].id in ignored_users:
+                    await ctx.reply(f"{mentions[0].display_name} is banned from Ukra Bot")
+                    return
                 target_id = str(mentions[0].id)
                 if mentions[0].id == ctx.author.id:
                     await ctx.reply("You can't pvp yourself, silly")
@@ -3344,6 +3379,9 @@ class Currency(commands.Cog):
                     return
 
                 if mentions := ctx.message.mentions:
+                    if mentions[0].id in ignored_users:
+                        await ctx.reply(f"{mentions[0].display_name} is banned from Ukra Bot")
+                        return
                     target_id = str(mentions[0].id)
                     if mentions[0].id == ctx.author.id:
                         await ctx.reply("You can't loan to yourself, silly")
@@ -3512,43 +3550,55 @@ class Currency(commands.Cog):
         """
         Displays your or someone else's active loans
         """
-        guild_id = '' if not ctx.guild else str(ctx.guild.id)
-        loans_found1 = 0
-        loans_found2 = 0
-        contents = ctx.message.content.split()[1:]
-        if len(contents):
-            user_in_question = convert_msg_to_user_id(contents)
-        if not len(contents) or user_in_question == -1:
-            user_in_question = ctx.author.id
-        user = await self.get_user(user_in_question)
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            loans_found1 = 0
+            loans_found2 = 0
+            contents = ctx.message.content.split()[1:]
+            if len(contents):
+                user_in_question = convert_msg_to_user_id(contents)
+            if not len(contents) or user_in_question == -1:
+                user_in_question = ctx.author.id
+            user = await self.get_user(user_in_question)
 
-        if currency_allowed(ctx) and bot_down_check(guild_id):
-            user_id = str(user.id)
-            make_sure_user_profile_exists(guild_id, user_id)
-            answer = f"## {user.display_name}'s loans:\n"
-            for i in global_profiles[str(user_id)]['dict_1'].setdefault('in', []):
-                if not loans_found2:
-                    answer += '### Incoming:\n'
-                loans_found2 += 1
-                loanee_id = active_loans[i][0]
-                loanee = await self.get_user(loanee_id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                user_id = str(user.id)
+                make_sure_user_profile_exists(guild_id, user_id)
+                answer = f"## {user.display_name}'s loans:\n"
+                for i in global_profiles[str(user_id)]['dict_1'].setdefault('in', []):
+                    if not loans_found2:
+                        answer += '### Incoming:\n'
+                    loaner_id = active_loans[i][0]
+                    loaner = await self.get_user(loaner_id)
+                    if loaner_id in ignored_users:
+                        _, _, _, _, _ = await loan_payment(i, 0)
+                        await ctx.reply(f'Loan `#{i}` to <@{loaner_id}> has been closed. {loaner.display_name} is banned from Ukra Bot')
+                        continue
+                    loans_found2 += 1
 
-                answer += f"{loans_found2}. `#{i}` - **{user.display_name}** owes **{loanee.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
-            for i in global_profiles[str(user_id)]['dict_1'].setdefault('out', []):
-                if not loans_found1:
-                    answer += '### Outgoing:\n'
-                loans_found1 += 1
-                loanee_id = active_loans[i][1]
-                loanee = await self.get_user(loanee_id)
+                    answer += f"{loans_found2}. `#{i}` - **{user.display_name}** owes **{loaner.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+                for i in global_profiles[str(user_id)]['dict_1'].setdefault('out', []):
+                    if not loans_found1:
+                        answer += '### Outgoing:\n'
+                    loanee_id = active_loans[i][1]
+                    loanee = await self.get_user(loanee_id)
+                    if loanee_id in ignored_users:
+                        _, _, _, _, paid = await loan_payment(i, active_loans[i][2]-active_loans[i][3])
+                        await ctx.reply(f'Loan `#{i}` from <@{loanee_id}> has been closed. {loanee.display_name} is banned from Ukra Bot\n**{user.display_name}:** +{paid:,} {coin}, balance: {get_user_balance('', user_id)} {coin}')
+                        continue
+                    loans_found1 += 1
 
-                answer += f"{loans_found1}. `#{i}` - **{loanee.display_name}** owes **{user.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
-            if loans_found1 or loans_found2:
-                await ctx.reply(answer)
-            else:
-                await ctx.reply(f"**{user.display_name}** has no active loans!")
+                    answer += f"{loans_found1}. `#{i}` - **{loanee.display_name}** owes **{user.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+                if loans_found1 or loans_found2:
+                    await ctx.reply(answer)
+                else:
+                    await ctx.reply(f"**{user.display_name}** has no active loans!")
 
-        elif currency_allowed(ctx):
-            await ctx.reply(f'{reason}, currency commands are disabled')
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
+            await ctx.reply("Something went wrong!")
 
     @commands.command(aliases=['pb', 'payback'])
     async def pay_back(self, ctx):
@@ -3569,11 +3619,28 @@ class Currency(commands.Cog):
                     return
 
                 user_id = convert_msg_to_user_id(contents)
+                if user_id in ignored_users:
+                    user = await self.get_user(user_id)
+                    loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
+                    for loan_id in loans:
+                        if active_loans[loan_id][0] == user_id:
+                            global_profiles[str(user_id)]['dict_1']['out'].remove(loan_id)
+                            global_profiles[author_id]['dict_1']['in'].remove(loan_id)
+                            del active_loans[loan_id]
+                            await ctx.reply(f'Loan `#{loan_id}` from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
+                            return
+                    return
+
                 if user_id != -1:
                     loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                     for loan_id in loans:
                         if active_loans[loan_id][0] == user_id and get_user_balance(guild_id, author_id) >= (active_loans[loan_id][2] - active_loans[loan_id][3]):
+                            user = await self.get_user(user_id)
                             finalized, loaner_id, loan_size, _, paid = await loan_payment(loan_id, get_user_balance(guild_id, author_id))
+                            if not loan_size:
+                                await ctx.reply(f'Loan `#{loan_id}` from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
+                                return
+
                             num1 = remove_coins_from_user(guild_id, author_id, paid)
                             num2 = get_user_balance(guild_id, str(user_id))
                             f = '' if '<@' in contents[0] else f' from <@{user_id}>'
@@ -3594,9 +3661,14 @@ class Currency(commands.Cog):
                 if loan_id in active_loans:
                     if (active_loans[loan_id][1] == ctx.author.id) and (get_user_balance(guild_id, author_id) >= (active_loans[loan_id][2] - active_loans[loan_id][3])):
                         finalized, loaner_id, loan_size, _, paid = await loan_payment(loan_id, get_user_balance(guild_id, author_id))
+                        loaner = await self.get_user(loaner_id)
+
+                        if not loan_size:
+                            await ctx.reply(f'Loan `#{loan_id}` from <@{loaner_id}> has been closed. {loaner.display_name} is banned from Ukra Bot')
+                            return
+
                         num1 = remove_coins_from_user(guild_id, author_id, paid)
                         num2 = get_user_balance(guild_id, str(loaner_id))
-                        loaner = await self.get_user(loaner_id)
                         await ctx.reply(f'Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
                                         f'**{ctx.author.display_name}:** {num1:,} {coin}\n**{loaner.display_name}:** {num2:,} {coin}')
                         return
@@ -3841,6 +3913,9 @@ class Currency(commands.Cog):
                 return
 
             if mentions := ctx.message.mentions:
+                if mentions[0].id in ignored_users:
+                    await ctx.reply(f"{mentions[0].display_name} is banned from Ukra Bot")
+                    return
                 target_id = str(mentions[0].id)
                 contents = ctx.message.content.split()[1:]
                 if len(contents) != 2:
@@ -3885,6 +3960,9 @@ class Currency(commands.Cog):
                 await ctx.reply(f"You can't use this command due to lack of permissions :3")
                 return
             if mentions := ctx.message.mentions:
+                if mentions[0].id in ignored_users:
+                    await ctx.reply(f"{mentions[0].display_name} is banned from Ukra Bot")
+                    return
                 target_id = str(mentions[0].id)
                 contents = ctx.message.content.split()[1:]
                 if len(contents) != 2:
