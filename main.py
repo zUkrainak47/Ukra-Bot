@@ -1716,26 +1716,43 @@ class PaginationView(discord.ui.View):
 
 
 class ConfirmView(discord.ui.View):
-    def __init__(self, author: discord.User, item=None, amount: int = 1, timeout: float = 30):
+    def __init__(self, author: discord.User, allowed_to_cancel=None, item=None, amount: int = 1, timeout: float = 30):
         super().__init__(timeout=timeout)
         self.value = None  # This will store the user's decision
         self.author = author
         self.author_id = author.id
+        self.allowed_to_cancel = allowed_to_cancel
+        self.allowed_to_cancel_id = allowed_to_cancel.id if allowed_to_cancel is not None else None
         self.amount = amount
         self.item = item
         self.message = None  # We'll store the confirmation message here
+        self.cancel_pressed_by = None  # This will store the user who pressed the cancel button
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        # Only allow the user with the stored author_id to interact
-        if interaction.user.id != self.author_id:
-            await interaction.response.send_message(
-                "This is not your confirmation bucko",
-                ephemeral=True
-            )
-            return False
-        return True
+        # Identify which button was pressed from its custom_id
+        custom_id = interaction.data.get("custom_id")
 
-    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green, row=0)
+        if custom_id == "cancel_button":
+            # For the Cancel button, allow either the author or the allowed-to-cancel user
+            if interaction.user.id in {self.author_id, self.allowed_to_cancel_id}:
+                return True
+            else:
+                await interaction.response.send_message(
+                    "You are not allowed to cancel this action",
+                    ephemeral=True
+                )
+                return False
+        else:
+            # For any other interaction (e.g. the Confirm button), only allow the author
+            if interaction.user.id != self.author_id:
+                await interaction.response.send_message(
+                    "This is not your confirmation bucko",
+                    ephemeral=True
+                )
+                return False
+            return True
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green, row=0, custom_id="confirm_button")
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
         if self.item:
@@ -1744,9 +1761,10 @@ class ConfirmView(discord.ui.View):
             await interaction.response.edit_message(view=None)
         self.stop()  # Stop waiting for more button clicks
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, row=0)
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, row=0, custom_id="cancel_button")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = False
+        self.cancel_pressed_by = interaction.user  # Store the user who pressed the cancel button
         if self.item:
             await interaction.response.edit_message(content=f"{self.author.display_name} cancelled the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
         else:
@@ -1772,7 +1790,7 @@ async def confirm_item(item_message, author: discord.User, item: Item, amount=1,
     if additional_context:
         target, num = additional_context
         additional_msg = f'\nThis will set back both {author.display_name} and {target.display_name} back {num:,} {coin}'
-    view = ConfirmView(author, item, amount)  # Create the view and pass the allowed author
+    view = ConfirmView(author, item=item, amount=amount)  # Create the view and pass the allowed author
     message = await item_message.reply(
         f"## {author.display_name}, do you want to use **{amount} {item}{'s' if amount != 1 else ''}**?{additional_msg}",
         view=view
@@ -3442,13 +3460,13 @@ class Currency(commands.Cog):
                 active_loan_requests.add(mentions[0].id)
                 active_loan_requests.add(ctx.author.id)
                 try:
-                    async def confirm_loan(author: discord.User, message_content, to_reply=ctx):
+                    async def confirm_loan(author: discord.User, message_content, allow, to_reply=ctx):
                         """Sends a confirmation message with buttons and waits for the user's response."""
-                        view = ConfirmView(author, timeout=150.0)
+                        view = ConfirmView(author, allowed_to_cancel=allow, timeout=150.0)
                         message = await to_reply.reply(message_content, view=view)
                         view.message = message
                         await view.wait()
-                        return view.value, message
+                        return view.value, message, view.cancel_pressed_by
 
                     inter = ' with ' + f'{interest:,} {coin} as interest' if interest else ''
                     message1 = (f"## {ctx.author.mention}, are you sure you would like to loan {mentions[0].display_name} {number:,} {coin}{inter}?\n"
@@ -3457,7 +3475,7 @@ class Currency(commands.Cog):
                                 f"- They will need to pay you back **{number+interest:,}** {coin} in the future\n\n"
                                 f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n"
                                 f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
-                    decision1, msg1 = await confirm_loan(ctx.author, message1)
+                    decision1, msg1, canceled_by1 = await confirm_loan(ctx.author, message1, mentions[0])
 
                     if decision1 is None:
                         await msg1.reply(f"{ctx.author.display_name} did not respond in time")
@@ -3479,7 +3497,7 @@ class Currency(commands.Cog):
                                     f"- Until your loan is paid out, __every rare drop you get__ ({gold_emoji}, ✨, 💎, {treasure_chest}, {The_Catch}) as well as __your `!daily` bonus__ will go towards paying back this loan. (`!help loan` for more info on this)\n\n"
                                     f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
                                     f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
-                        decision2, msg2 = await confirm_loan(mentions[0], message2, msg1)
+                        decision2, msg2, canceled_by2 = await confirm_loan(mentions[0], message2, ctx.author, to_reply=msg1)
 
                         if decision2 is None:
                             await msg2.reply(f"{mentions[0].display_name} did not respond in time")
@@ -3525,12 +3543,12 @@ class Currency(commands.Cog):
                             active_loan_requests.discard(ctx.author.id)
 
                         else:
-                            await msg2.reply(f"{mentions[0].display_name} canceled the Loan request")
+                            await msg2.reply(f"{canceled_by2.display_name} canceled the Loan request")
                             active_loan_requests.discard(mentions[0].id)
                             active_loan_requests.discard(ctx.author.id)
 
                     else:
-                        await msg1.reply(f"{ctx.author.display_name} canceled the Loan request")
+                        await msg1.reply(f"{canceled_by1.display_name} canceled the Loan request")
                         active_loan_requests.discard(mentions[0].id)
                         active_loan_requests.discard(ctx.author.id)
 
