@@ -1,4 +1,5 @@
 # from typing import Final
+import shutil
 import traceback
 import asyncio
 import datetime
@@ -878,6 +879,64 @@ async def botdown(ctx):
         bot_down = True
         reason = f"{bot_name} is shutting down"
         save_everything()
+
+
+@client.command(aliases=['notafk'])
+async def notdown(ctx):
+    """
+    Sends message announcing the bot is not actually shutting down
+    Only usable by bot developer
+    """
+    if ctx.author.id not in allowed_users:
+        await ctx.send("You can't use this command, silly")
+    else:
+        await ctx.send(f"Ukra Bot is no longer going down {yay}")
+        global bot_down, reason
+        bot_down = False
+        reason = f'{bot_name} is in Development Mode'
+        save_everything()
+
+
+@client.command()
+async def save(ctx):
+    """
+    Saves everything
+    Only usable by bot developer
+    """
+    if ctx.author.id not in allowed_users:
+        await ctx.send("You can't use this command, silly")
+    else:
+        save_everything()
+        await ctx.message.add_reaction('✅')
+        await ctx.author.send(f"Saving complete")
+
+
+@client.command()
+async def backup(ctx):
+    """
+    Backs up all data
+    Only usable by bot developer
+    """
+    if ctx.author.id not in allowed_users:
+        await ctx.send("You can't use this command, silly")
+    else:
+        save_everything()
+        source = "dev"
+        destination = "dev_backup"
+
+        if not os.path.exists(source):
+            raise FileNotFoundError(f"The source directory '{source}' does not exist.")
+
+        if os.path.exists(destination):
+            shutil.rmtree(destination)
+
+        ignore_func = shutil.ignore_patterns("assets")
+
+        shutil.copytree(source, destination, ignore=ignore_func)
+        print(f"Copied '{source}' to '{destination}' successfully")
+
+        await ctx.message.add_reaction('✅')
+        await ctx.author.send(f"Backup complete")
 
 
 @client.command()
@@ -1785,7 +1844,7 @@ async def use_item(ctx: commands.Context, author: discord.User, item: Item, item
     """
     try:
         if global_profiles[str(author.id)]['items'].setdefault(item.real_name, 0) < amount:
-            await item_message.reply(f"**{author.display_name}**, you have **{global_profiles[str(author.id)]['items'][item.real_name]} {item}s** how are you gonna use {amount} WAJAJA")
+            await item_message.reply(f"**{author.display_name}**, you can't use **{amount} {item}{'s' if amount != 1 else ''}**\nYou own {global_profiles[str(author.id)]['items'][item.real_name]} {item.emoji}")
             return
         if additional_context:
             bal1 = get_user_balance('', str(additional_context[0].id)), additional_context[0]
@@ -1803,7 +1862,7 @@ async def use_item(ctx: commands.Context, author: discord.User, item: Item, item
         elif decision:
             if item.real_name in item_use_functions:
                 if global_profiles[str(author.id)]['items'][item.real_name] < amount:
-                    await msg.reply(f"**{author.display_name}**, you have **{global_profiles[str(author.id)]['items'][item.real_name]} {item}s** how are you gonna use {amount} WAJAJA")
+                    await msg.reply(f"**{author.display_name}**, you can't use **{amount} {item}{'s' if amount != 1 else ''}**\nYou own {global_profiles[str(author.id)]['items'][item.real_name]} {item.emoji}")
                     return
                 await item_use_functions[item.real_name](msg, author, amount, additional_context)
             else:
@@ -2095,7 +2154,7 @@ class Currency(commands.Cog):
                 amount = 1
                 if item_name in ['evil_potion']:
                     if global_profiles[str(ctx.author.id)]['items'].setdefault(item_name, 0) < amount:
-                        await ctx.reply(f"**{ctx.author.display_name}**, you have **{global_profiles[str(ctx.author.id)]['items'][item_name]} {items[item_name]}s** how are you gonna use {amount} WAJAJA")
+                        await ctx.reply(f"**{ctx.author.display_name}**, you can't use **{amount} {items[item_name]}{'s' if amount != 1 else ''}**\nYou own {global_profiles[str(ctx.author.id)]['items'][item_name]} {items[item_name].emoji}")
                         return
                     if mentions := ctx.message.mentions:
                         target = mentions[0]
