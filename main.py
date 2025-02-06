@@ -1835,12 +1835,12 @@ async def evil_potion_func(message, castor, amount, additional_context=[]):
         bal1 = remove_coins_from_user(guild_id, castor_id, num)
         bal2 = remove_coins_from_user(guild_id, target_id, num)
         global_profiles[castor_id]['items']['evil_potion'] -= 1
-        await message.reply(
+        to_link = await message.reply(
             f"# {items['evil_potion']} used successfully\n"
             f"**{castor.display_name}**: -{num:,} {coin}, balance: {bal1:,} {coin}\n"
             f"**{target.display_name}**: -{num:,} {coin}, balance: {bal2:,} {coin}"
         )
-        await target.send(f"**{castor.name}** used an **{items['evil_potion']}** on you https://discord.com/channels/{message.guild.id}/{message.channel.id}/{message.id}\n"
+        await target.send(f"**{castor.name}** used an **{items['evil_potion']}** on you https://discord.com/channels/{to_link.guild.id}/{to_link.channel.id}/{to_link.id}\n"
                           f"**{target.name}**: -{num:,} {coin}, balance: {bal2:,} {coin}")
         save_profiles()
     except Exception:
@@ -1924,7 +1924,7 @@ def add_item_to_user(guild_id: str, user_id: str, item: str, amount: int = 1, sa
     if save:
         save_profiles()
 
-    return global_profiles[user_id]['items'][item]
+    return f"\n\n**+{amount:,} {items[item]}**\nOwned: {global_profiles[user_id]['items'][item]:,} {items[item].emoji}"
 
 
 class Currency(commands.Cog):
@@ -2560,8 +2560,7 @@ class Currency(commands.Cog):
                 await rare_channel.send(f"**{ctx.author.mention}** found Diamonds 💎 {link}")
             elif t == 1:
                 mine_coins = 1
-                n = add_item_to_user(guild_id, author_id, 'evil_potion')
-                item_msg = f"\n\n+1 {items['evil_potion']}\nOwned: {n:,} {evil_potion}"
+                item_msg = add_item_to_user(guild_id, author_id, 'evil_potion')
                 mine_message = f"# You struck Fool's Gold! ✨"
                 rare_finds_increment(guild_id, author_id, 'fool', False)
                 if ctx.guild:
@@ -2687,20 +2686,20 @@ class Currency(commands.Cog):
                     rig_chance = random.random()
                     print(rig_chance)
                     if rig_chance >= 0.95:
-                        n = add_item_to_user(guild_id, author_id, 'rigged_potion')
-                        item_msg = f"\n\n+1 {items['rigged_potion']}\nOwned: {n:,} {rigged_potion}"
-
+                        item_msg = add_item_to_user(guild_id, author_id, 'rigged_potion')
+                        rig = f' - **AND A {rigged_potion} RIGGED POTION**'
+                    else:
+                        rig = ''
                     ps_message = ''
                     if ctx.guild:
                         link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
                     else:
                         link = '(in DMs)'
 
-                    await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest {treasure_chest} {link}")
+                    await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest {treasure_chest}{rig} {link}")
             else:
                 if fish_coins == 69:
-                    n = add_item_to_user(guild_id, author_id, 'funny_item')
-                    item_msg = f"\n\n+1 {items['funny_item']}\nOwned: {n:,} {funny_item}"
+                    item_msg = add_item_to_user(guild_id, author_id, 'funny_item')
                 cast_command = ctx.message.content.split()[0].lower().lstrip('!')
                 if cast_command in ('fish', 'f', 'а'):
                     cast_command = 'fishing'
@@ -2780,8 +2779,7 @@ class Currency(commands.Cog):
             today_coins_bonus = int(today_coins * (user_streak**0.5 - 1))
             message = f"# Daily {coin} claimed! {streak_msg}\n"
 
-            n = add_item_to_user(guild_id, author_id, 'daily_item', save=False, make_sure=False)
-            item_msg = f'\n\n+1 {items['daily_item']}\nOwned: {n:,} {daily_item}'
+            item_msg = add_item_to_user(guild_id, author_id, 'daily_item', save=False, make_sure=False)
             loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
             for loan_id in loans:
                 finalized, loaner_id, loan_size, today_coins_bonus, paid = await loan_payment(loan_id, today_coins_bonus)
@@ -2835,8 +2833,7 @@ class Currency(commands.Cog):
             save_last_used_w()
             message = f"# Weekly {coin} claimed!\n"
 
-            n = add_item_to_user(guild_id, author_id, 'weekly_item', save=True, make_sure=False)
-            item_msg = f'\n\n+1 {items['weekly_item']}\nOwned: {n:,} {weekly_item}'
+            item_msg = add_item_to_user(guild_id, author_id, 'weekly_item', save=True, make_sure=False)
 
             # Send confirmation message
             reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
