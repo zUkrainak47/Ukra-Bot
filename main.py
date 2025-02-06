@@ -50,6 +50,7 @@ client = commands.Bot(command_prefix="!", intents=intents)
 # EMOJIS
 rigged_potion = '<:rigged_potion:1336395108244787232>'
 evil_potion = '<:evil_potion:1336641208885186601>'
+twisted_orb = '<:twisted_orb:1337165700309061715>'
 funny_item = '<:funny_item:1336705286953635902>'
 daily_item = '<:daily_item:1336399274476306646>'
 weekly_item = '<:weekly_item:1336631591543373854>'
@@ -338,6 +339,8 @@ class UseItemView(discord.ui.View):
         super().__init__(timeout=timeout)
         if item.real_name == 'funny_item':
             btn_enabled = btn_enabled >= 69
+        if item.real_name not in item_use_functions:
+            btn_enabled = False
         self.ctx = ctx
         self.author = author
         self.item = item
@@ -367,11 +370,13 @@ class UseItemView(discord.ui.View):
 
 items = {
     'rigged_potion': Item('rigged_potion', "Rigged Potion", f"Upon use, this potion doubles your balance.\nBe cautious when you use it!\n\nHas a 5% chance to drop from a Treasure Chest {treasure_chest}\nAlso distributed by the bot developer as an exclusive reward", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
-    'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion will prompt you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins ||{sunfire2}||\n\nDrops alongside Fool's Gold ✨", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
-    'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing it grants you 69k {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
+    'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion requires you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins\n\nDrops alongside Fool's Gold ✨", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
+    'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing it grants you 69,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
+    'twisted_orb': Item('twisted_orb', "Twisted Orb", f"Using this orb has a 50% chance to 4x your balance and a 50% chance for you to lose all coins and owe Ukra Bot twice your current balance +10% interest\n\nWill be purchasable in the shop for 3 {daily_item} once the shop is made (price STC)", twisted_orb, "https://cdn.discordapp.com/attachments/696842659989291130/1337165843359993926/twisted_orb.png?ex=67a6743c&is=67a522bc&hm=161c5d30fd3de60d086db3d4d09c325cb0768a89cfa46804c7db0d55db2beac5&"),
 
     'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
     'weekly_item': Item('weekly_item', "Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
+    'the_catch': Item('the_catch', "The Catch", f"Rarest item in the bot\nUsing it grants you 25,000,000 {coin}\n\nObtainable in 1 of 5000 Treasure Chests {treasure_chest}", The_Catch, "https://cdn.discordapp.com/attachments/696842659989291130/1337170886373146634/The_Catch.png?ex=67a678ee&is=67a5276e&hm=3ae6739e718213ac63952faeefdcc64cc878d953da52ccb318628fb11371db2d&"),
 }
 sorted_items = {item: num for num, item in enumerate(items)}
 
@@ -1756,7 +1761,8 @@ class ConfirmView(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
         if self.item:
-            await interaction.response.edit_message(content=f"{self.author.display_name} confirmed the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
+            # await interaction.response.edit_message(content=f"{self.author.display_name} confirmed the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
+            await interaction.response.edit_message(content="Confirmed", view=None)
         else:
             await interaction.response.edit_message(view=None)
         self.stop()  # Stop waiting for more button clicks
@@ -1766,7 +1772,8 @@ class ConfirmView(discord.ui.View):
         self.value = False
         self.cancel_pressed_by = interaction.user  # Store the user who pressed the cancel button
         if self.item:
-            await interaction.response.edit_message(content=f"{self.author.display_name} cancelled the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
+            # await interaction.response.edit_message(content=f"{self.author.display_name} canceled the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
+            await interaction.response.edit_message(content="Canceled", view=None)
         else:
             await interaction.response.edit_message(view=None)
         self.stop()
@@ -1798,7 +1805,7 @@ async def confirm_item(item_message, author: discord.User, item: Item, amount=1,
     # Save a reference to the sent message in the view so that we can edit it on timeout.
     view.message = message
     await view.wait()  # Wait until the view times out or is stopped by a button press
-    return view.value, message  # This is True if confirmed, False if cancelled, or None if timed out
+    return view.value, message  # This is True if confirmed, False if canceled, or None if timed out
 
 
 async def rigged_potion_func(message, castor, amount, additional_context=[]):
@@ -1865,10 +1872,25 @@ async def funny_item_func(message, castor, amount, additional_context=[]):
         save_profiles()
 
 
+async def the_catch_func(message, castor, amount, additional_context=[]):
+    guild_id = '' if not message.guild else str(message.guild.id)
+    castor_id = str(castor.id)
+    bal = add_coins_to_user(guild_id, castor_id, 25000000)
+    await message.reply(
+        f"# {items['the_catch']} used successfully\n"
+        f"**{castor.display_name}**: +{25000000:,} {coin}\n"
+        f"Balance: {bal:,} {coin}"
+    )
+    global_profiles[castor_id]['items']['the_catch'] -= 1
+    highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
+    save_profiles()
+
+
 item_use_functions = {
     'rigged_potion': rigged_potion_func,
     'evil_potion': evil_potion_func,
-    'funny_item': funny_item_func
+    'funny_item': funny_item_func,
+    'the_catch': the_catch_func
 }
 
 
@@ -1878,7 +1900,7 @@ async def use_item(ctx: commands.Context, author: discord.User, item: Item, item
     """
     try:
         if global_profiles[str(author.id)]['items'].setdefault(item.real_name, 0) < amount:
-            await item_message.reply(f"**{author.display_name}**, you can't use **{amount} {item}{'s' if amount != 1 else ''}**\nYou own {global_profiles[str(author.id)]['items'][item.real_name]} {item.emoji}")
+            await item_message.reply(f"**{author.display_name}**, you can't use **{amount:,} {item}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(author.id)]['items'][item.real_name]:,} {item.emoji}")
             return
         if additional_context:
             bal1 = get_user_balance('', str(additional_context[0].id)), additional_context[0]
@@ -1896,11 +1918,11 @@ async def use_item(ctx: commands.Context, author: discord.User, item: Item, item
         elif decision:
             if item.real_name in item_use_functions:
                 if global_profiles[str(author.id)]['items'][item.real_name] < amount:
-                    await msg.reply(f"**{author.display_name}**, you can't use **{amount} {item}{'s' if amount != 1 else ''}**\nYou own {global_profiles[str(author.id)]['items'][item.real_name]} {item.emoji}")
+                    await msg.reply(f"**{author.display_name}**, you can't use **{amount:,} {item}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(author.id)]['items'][item.real_name]:,} {item.emoji}")
                     return
                 await item_use_functions[item.real_name](msg, author, amount, additional_context)
             else:
-                await msg.reply(f"**{author.display_name}** would have used **{amount} {item}** if they were usable {pupperrun}")
+                await msg.reply(f"**{author.display_name}** would have used **{amount:,} {item}** if they were usable {pupperrun}")
         else:
             # Optionally, handle cancellation here
             pass
@@ -2191,7 +2213,7 @@ class Currency(commands.Cog):
                 amount = 1
                 if item_name in ['evil_potion']:
                     if global_profiles[str(ctx.author.id)]['items'].setdefault(item_name, 0) < amount:
-                        await ctx.reply(f"**{ctx.author.display_name}**, you can't use **{amount} {items[item_name]}{'s' if amount != 1 else ''}**\nYou own {global_profiles[str(ctx.author.id)]['items'][item_name]} {items[item_name].emoji}")
+                        await ctx.reply(f"**{ctx.author.display_name}**, you can't use **{amount:,} {items[item_name]}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(ctx.author.id)]['items'][item_name]:,} {items[item_name].emoji}")
                         return
                     if mentions := ctx.message.mentions:
                         if mentions[0].id in ignored_users:
@@ -2670,7 +2692,7 @@ class Currency(commands.Cog):
             if fish_coins == 167:
                 fish_coins = random.randint(7500, 12500)
                 if fish_coins == 12500:
-                    fish_coins = 25000000
+                    item_msg = add_item_to_user(guild_id, author_id, 'the_catch')
                     fish_message = f"# You found *The Catch*{The_Catch}\n"
                     rare_finds_increment(guild_id, author_id, 'the_catch', False)
                     ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag to your friends'
