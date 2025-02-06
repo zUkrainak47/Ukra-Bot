@@ -313,12 +313,13 @@ def save_everything():
 
 
 class Item:
-    def __init__(self, real_name, name, description, emoji, emoji_url):
+    def __init__(self, real_name, name, description, emoji, emoji_url, price=None):
         self.real_name = real_name
         self.name = name
         self.description = description
         self.emoji = emoji
         self.emoji_url = emoji_url
+        self.price = price
 
     def __str__(self):
         return f"{self.emoji} {self.name}"
@@ -358,6 +359,26 @@ class UseItemView(discord.ui.View):
         # Add the button to the view
         self.add_item(use_button)
 
+        # Create the "Use" button dynamically
+        if self.item.price:
+            buy_button = discord.ui.Button(
+                label="Buy",
+                style=discord.ButtonStyle.primary,
+                row=0
+            )
+            # Set the callback for the button
+            buy_button.callback = self.buy_button_callback
+            # Add the button to the view
+            self.add_item(buy_button)
+
+    async def buy_button_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("This is not your item view!! Open this item yourself to buy it", ephemeral=True)
+            return
+
+        await interaction.response.defer()
+        await buy_item(self.ctx, self.author, self.item, item_message=interaction.message, amount=1)
+
     async def use_button_callback(self, interaction: discord.Interaction):
         # Restrict the button so that only the original author can use it.
         if interaction.user.id != self.author.id:
@@ -369,14 +390,14 @@ class UseItemView(discord.ui.View):
 
 
 items = {
+    'the_catch': Item('the_catch', "The Catch", f"Rarest item in the bot\nUsing it grants you 25,000,000 {coin}\n\nObtainable in 1 of 5000 Treasure Chests {treasure_chest}", The_Catch, "https://cdn.discordapp.com/attachments/696842659989291130/1337170886373146634/The_Catch.png?ex=67a678ee&is=67a5276e&hm=3ae6739e718213ac63952faeefdcc64cc878d953da52ccb318628fb11371db2d&"),
     'rigged_potion': Item('rigged_potion', "Rigged Potion", f"Upon use, this potion doubles your balance.\nBe cautious when you use it!\n\nHas a 5% chance to drop from a Treasure Chest {treasure_chest}\nAlso distributed by the bot developer as an exclusive reward", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
     'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion requires you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins\n\nDrops alongside Fool's Gold ✨", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
     'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing it grants you 69,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
-    'twisted_orb': Item('twisted_orb', "Twisted Orb", f"Using this orb has a 50% chance to 4x your balance and a 50% chance for you to lose all coins and owe Ukra Bot twice your current balance +10% interest\n\nWill be purchasable in the shop for 3 {daily_item} once the shop is made (price STC)", twisted_orb, "https://cdn.discordapp.com/attachments/696842659989291130/1337165843359993926/twisted_orb.png?ex=67a6743c&is=67a522bc&hm=161c5d30fd3de60d086db3d4d09c325cb0768a89cfa46804c7db0d55db2beac5&"),
+    'twisted_orb': Item('twisted_orb', "Twisted Orb", f"Using this orb has a 50% chance to 5x your balance and a 50% chance for you to lose all coins and owe Ukra Bot 3x your current balance\n\nPurchasable for 3 {daily_item}", twisted_orb, "https://cdn.discordapp.com/attachments/696842659989291130/1337165843359993926/twisted_orb.png?ex=67a6743c&is=67a522bc&hm=161c5d30fd3de60d086db3d4d09c325cb0768a89cfa46804c7db0d55db2beac5&", [3, 'daily_item']),
 
-    'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
+    'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future\nUsed as shop currency", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
     'weekly_item': Item('weekly_item', "Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
-    'the_catch': Item('the_catch', "The Catch", f"Rarest item in the bot\nUsing it grants you 25,000,000 {coin}\n\nObtainable in 1 of 5000 Treasure Chests {treasure_chest}", The_Catch, "https://cdn.discordapp.com/attachments/696842659989291130/1337170886373146634/The_Catch.png?ex=67a678ee&is=67a5276e&hm=3ae6739e718213ac63952faeefdcc64cc878d953da52ccb318628fb11371db2d&"),
 }
 sorted_items = {item: num for num, item in enumerate(items)}
 
@@ -1808,6 +1829,18 @@ async def confirm_item(item_message, author: discord.User, item: Item, amount=1,
     return view.value, message  # This is True if confirmed, False if canceled, or None if timed out
 
 
+async def confirm_purchase(item_message, author: discord.User, item: Item, amount=1, additional_msg=''):
+    """Sends a confirmation message with buttons and waits for the user's response."""
+    view = ConfirmView(author, item=item, amount=amount)  # Create the view and pass the allowed author
+    message = await item_message.reply(
+        f"## {author.display_name}, do you want to buy **{amount} {item}{'s' if amount != 1 else ''}**?{additional_msg}",
+        view=view
+    )
+    view.message = message
+    await view.wait()
+    return view.value, message
+
+
 async def rigged_potion_func(message, castor, amount, additional_context=[]):
     guild_id = '' if not message.guild else str(message.guild.id)
     castor_id = str(castor.id)
@@ -1872,6 +1905,56 @@ async def funny_item_func(message, castor, amount, additional_context=[]):
         save_profiles()
 
 
+async def twisted_orb_func(message, castor, amount, additional_context=[]):
+    try:
+        guild_id = '' if not message.guild else str(message.guild.id)
+        castor_id = str(castor.id)
+        win_chance = random.random()
+        bal = get_user_balance(guild_id, castor_id)
+
+        if win_chance >= 0.5:
+            bal2 = add_coins_to_user(guild_id, castor_id, bal * 4)
+            await message.reply(
+                f"# {items['twisted_orb']} used successfully\n"
+                f"## You win - `{win_chance}` {yay}\n"
+                f"\n"
+                f"**{castor.display_name}**: +{bal * 4:,} {coin}\n"
+                f"Balance: {bal2:,} {coin}"
+            )
+            highest_balance_check(guild_id, castor_id, bal2, save=False, make_sure=False)
+
+        else:
+            for loan in global_profiles[str(bot_id)]['dict_1'].setdefault('out', []):
+                if castor.id in active_loans[loan]:
+                    active_loans[loan][2] += bal * 3
+                    ps = f"You now owe **Ukra Bot** {bal * 3:,} {coin} more - `#{loan}`\n(that's {active_loans[loan][3]:,}/{active_loans[loan][2]:,} {coin} total)"
+                    break
+            else:
+                active_loans[str(message.id)] = [bot_id, castor.id, bal * 3, 0]
+                ps = f"You owe **Ukra Bot** {bal * 3:,} {coin} - `#{message.id}`\nFind it in `!loans`"
+                global_profiles[str(bot_id)]['dict_1'].setdefault('out', []).append(str(message.id))
+                global_profiles[str(castor.id)]['dict_1'].setdefault('in', []).append(str(message.id))
+                save_profiles()
+
+            save_active_loans()
+
+            bal2 = remove_coins_from_user(guild_id, castor_id, bal)
+            await message.reply(
+                f"# {items['twisted_orb']} used successfully\n"
+                f"## You lose - `{win_chance}` {o7}\n"
+                f"\n"
+                f"**{castor.display_name}**: -{bal:,} {coin}\n"
+                f"Balance: {bal2:,} {coin}\n"
+                f"\n"
+                f"{ps}"
+            )
+
+        global_profiles[castor_id]['items']['twisted_orb'] -= 1
+        save_profiles()
+    except Exception:
+        print(traceback.format_exc())
+
+
 async def the_catch_func(message, castor, amount, additional_context=[]):
     guild_id = '' if not message.guild else str(message.guild.id)
     castor_id = str(castor.id)
@@ -1890,6 +1973,7 @@ item_use_functions = {
     'rigged_potion': rigged_potion_func,
     'evil_potion': evil_potion_func,
     'funny_item': funny_item_func,
+    'twisted_orb': twisted_orb_func,
     'the_catch': the_catch_func
 }
 
@@ -1897,6 +1981,7 @@ item_use_functions = {
 async def use_item(ctx: commands.Context, author: discord.User, item: Item, item_message, amount=1, additional_context=[]):
     """
     Uses an item by a user
+    Additional context = [target, number] for Evil Potion
     """
     try:
         if global_profiles[str(author.id)]['items'].setdefault(item.real_name, 0) < amount:
@@ -1923,6 +2008,55 @@ async def use_item(ctx: commands.Context, author: discord.User, item: Item, item
                 await item_use_functions[item.real_name](msg, author, amount, additional_context)
             else:
                 await msg.reply(f"**{author.display_name}** would have used **{amount:,} {item}** if they were usable {pupperrun}")
+        else:
+            # Optionally, handle cancellation here
+            pass
+    except Exception:
+        print(traceback.format_exc())
+
+
+async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item_message, amount=1):
+    """
+    Buys an item by a user
+    """
+    try:
+        price = item.price
+        if price[1] in items:
+            price[1] = items[price[1]]
+        author_id = str(author.id)
+        if isinstance(price[1], Item) and global_profiles[author_id]['items'].setdefault(price[1].real_name, 0) < price[0] * amount:
+            await item_message.reply(f"**{author.display_name}**, you don't have enough {price[1]}s to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\nOwned: {global_profiles[str(author.id)]['items'][price[1].real_name]:,} {price[1].emoji}\nNeeded: {price[0] * amount} {price[1].emoji}")
+            return
+        elif price[1] == 'coin' and get_user_balance('', author_id) < price[0] * amount:
+            await item_message.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\nBalance: {get_user_balance('', str(author.id)):,} {coin}\nNeeded: {price[0] * amount} {coin}")
+            return
+
+        decision, msg = await confirm_purchase(item_message, author, item, amount)
+        if decision is None:
+            # await msg.reply("Decision timed out.")
+            pass
+        elif decision:
+            if isinstance(price[1], Item) and global_profiles[author_id]['items'][price[1].real_name] < price[0] * amount:
+                await item_message.reply(f"**{author.display_name}**, you don't have enough {price[1]}s to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\nOwned: {global_profiles[str(author.id)]['items'][price[1].real_name]:,} {price[1].emoji}\nNeeded: {price[0] * amount} {price[1].emoji}")
+                return
+            elif price[1] == 'coin' and get_user_balance('', author_id) < price[0] * amount:
+                await item_message.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\nBalance: {get_user_balance('', str(author.id)):,} {coin}\nNeeded: {price[0] * amount} {coin}")
+                return
+
+            global_profiles[author_id]['items'][item.real_name] += amount
+            if isinstance(price[1], Item):
+                global_profiles[author_id]['items'][price[1].real_name] -= price[0] * amount
+                last_line = f"Owned: {global_profiles[author_id]['items'][price[1].real_name]:,} {price[1].emoji}"
+            else:  # price[1] == 'coin'
+                bal = remove_coins_from_user(str(ctx.guild.id), author_id, price[0] * amount)
+                last_line = f"Balance: {bal:,} {coin}"
+            save_profiles()
+            await item_message.reply(f"## Purchase successful\n"
+                                     f"**+{amount:,} {item}**\n"
+                                     f"Owned: {global_profiles[author_id]['items'][item.real_name]:,} {item.emoji}\n"
+                                     f"\n"
+                                     f"**-{price[0] * amount:,} {coin if price[1] == 'coin' else price[1]}**\n"
+                                     f"{last_line}")
         else:
             # Optionally, handle cancellation here
             pass
@@ -2122,8 +2256,8 @@ class Currency(commands.Cog):
             user_id = str(user.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 make_sure_user_profile_exists(guild_id, user_id)
-                items = sorted([(item, global_profiles[user_id]["items"][item]) for item in global_profiles[user_id]["items"] if ((item != 'titles') and (global_profiles[user_id]["items"][item]))], key=lambda x: sorted_items[x[0]])
-                if not items:
+                user_items = sorted([(item, global_profiles[user_id]["items"][item]) for item in global_profiles[user_id]["items"] if ((item != 'titles') and (global_profiles[user_id]["items"][item]))], key=lambda x: sorted_items[x[0]])
+                if not user_items:
                     await ctx.reply(f'**{user.display_name}** has no items yet :p')
                     return
                 else:
@@ -2136,7 +2270,7 @@ class Currency(commands.Cog):
                     else:
                         embed_color = 0xffd000
 
-                    pagination_view = PaginationView(items, title_=f"", author_=f"{user.display_name}'s Inventory", author_icon_=user.avatar.url, color_=embed_color, description_=desc, user_in_question_=user_in_question, ctx_=ctx)
+                    pagination_view = PaginationView(user_items, title_=f"", author_=f"{user.display_name}'s Inventory", author_icon_=user.avatar.url, color_=embed_color, description_=desc, user_in_question_=user_in_question, ctx_=ctx)
                     await pagination_view.send_embed()
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
@@ -3561,9 +3695,9 @@ class Currency(commands.Cog):
                             save_active_loans()
 
                             await msg2.reply(f"## Loan successful! - `#{loan_info[0]}`\n" +
-                                            f"**{mentions[0].display_name}:** +{number:,} {coin}, balance: {target_bal:,} {coin}\n" +
-                                            f"**{ctx.author.display_name}:** -{number:,} {coin}, balance: {author_bal:,} {coin}\n\n"
-                                            f"{ps}")
+                                             f"**{mentions[0].display_name}:** +{number:,} {coin}, balance: {target_bal:,} {coin}\n" +
+                                             f"**{ctx.author.display_name}:** -{number:,} {coin}, balance: {author_bal:,} {coin}\n\n"
+                                             f"{ps}")
                             active_loan_requests.discard(mentions[0].id)
                             active_loan_requests.discard(ctx.author.id)
 
