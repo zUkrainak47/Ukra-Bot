@@ -403,10 +403,11 @@ items = {
 }
 sorted_items = {item: num for num, item in enumerate(items)}
 shop_items = [(items[item].real_name, items[item].price) for item in items if (items[item].price is not None)]
+all_items = list(items.keys())
 
 
 def find_closest_item(input_str):
-    match, score, _ = process.extractOne(input_str, list(items.keys()))
+    match, score, _ = process.extractOne(input_str, all_items)
     return match if score > 30 else None  # Adjust threshold
 
 
@@ -1635,12 +1636,18 @@ class PaginationView(discord.ui.View):
         else:
             # Otherwise use a description-style embed.
             desc = ''
-            for item, num in data:
-                emoji, name = items[item].emoji, items[item].name
-                if self.user_in_question:
-                    desc += f'{emoji} **{name}** ─ {num:,}\n'
-                else:
+            for item in data:
+                if self.author == "Item List":
+                    emoji, name = items[item].emoji, items[item].name
+                    desc += f'{emoji} **{name}**\n'
+                elif self.author == "Item Shop":
+                    item, num = item
+                    emoji, name = items[item].emoji, items[item].name
                     desc += f'{emoji} **{name}** ─ {num[0]:,} {coin if num[1] == 'coin' else items[num[1]].emoji}\n'
+                else:
+                    item, num = item
+                    emoji, name = items[item].emoji, items[item].name
+                    desc += f'{emoji} **{name}** ─ {num:,}\n'
 
             embed = discord.Embed(title="", color=self.color, description=desc)
 
@@ -1688,13 +1695,17 @@ class PaginationView(discord.ui.View):
         # Add a new button for each item on the current page.
         # This only happens when NOT using the footer/footer_icon mode.
         if not (self.footer and self.footer_icon):
-            for item, num in self.get_current_page_data():
+            count = 0
+            for item in self.get_current_page_data():
                 # Assuming that in this mode each item is a tuple or dict.
                 # Adjust the key/index as necessary.
+                if not isinstance(item, str):
+                    item, _ = item
                 if item in items:
-                    button = discord.ui.Button(emoji=items[item].emoji, style=discord.ButtonStyle.secondary, row=1)
+                    button = discord.ui.Button(emoji=items[item].emoji, style=discord.ButtonStyle.secondary, row=1 + count//4)
                 else:
-                    button = discord.ui.Button(label=item, style=discord.ButtonStyle.secondary, row=1)
+                    button = discord.ui.Button(label=item, style=discord.ButtonStyle.secondary, row=1 + count//4)
+                count += 1
                 # Mark this button as dynamic so we can remove it later.
                 button.is_item_button = True
 
@@ -2059,10 +2070,10 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
             pass
         elif decision:
             if isinstance(price[1], Item) and global_profiles[author_id]['items'][price[1].real_name] < price[0] * amount:
-                await item_message.reply(f"**{author.display_name}**, you don't have enough {price[1]}s to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\n**Owned:** {global_profiles[str(author.id)]['items'][price[1].real_name]:,} {price[1].emoji}\n**Needed:** {price[0] * amount:,} {price[1].emoji}")
+                await msg.reply(f"**{author.display_name}**, you don't have enough {price[1]}s to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\n**Owned:** {global_profiles[str(author.id)]['items'][price[1].real_name]:,} {price[1].emoji}\n**Needed:** {price[0] * amount:,} {price[1].emoji}")
                 return
             elif price[1] == 'coin' and get_user_balance('', author_id) < price[0] * amount:
-                await item_message.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\n**Balance:** {get_user_balance('', str(author.id)):,} {coin}\n**Needed:** {price[0] * amount:,} {coin}")
+                await msg.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\n**Balance:** {get_user_balance('', str(author.id)):,} {coin}\n**Needed:** {price[0] * amount:,} {coin}")
                 return
 
             global_profiles[author_id]['items'][item.real_name] += amount
@@ -2073,7 +2084,7 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
                 bal = remove_coins_from_user(str(ctx.guild.id), author_id, price[0] * amount)
                 last_line = f"Balance: {bal:,} {coin}"
             save_profiles()
-            await item_message.reply(f"## Purchase successful\n"
+            await msg.reply(f"## Purchase successful\n"
                                      f"**+{amount:,} {item}{'s' if amount != 1 else ''}**\n"
                                      f"Owned: {global_profiles[author_id]['items'][item.real_name]:,} {item.emoji}\n"
                                      f"\n"
@@ -2299,7 +2310,7 @@ class Currency(commands.Cog):
         except Exception:
             print(traceback.format_exc())
 
-    @commands.command()
+    @commands.command(aliases=['store'])
     async def shop(self, ctx):
         """
         Item shop!
@@ -2351,6 +2362,20 @@ class Currency(commands.Cog):
         except Exception:
             print(traceback.format_exc())
 
+    # @commands.command()
+    # async def items(self, ctx):
+    #     """
+    #     Lists all items in the bot
+    #     """
+    #     try:
+    #         guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    #         if currency_allowed(ctx) and bot_down_check(guild_id):
+    #             await ctx.reply('\n'.join([f'- {items[item]}' for item in items]))
+    #         elif currency_allowed(ctx):
+    #             await ctx.reply(f'{reason}, currency commands are disabled')
+    #     except Exception:
+    #         print(traceback.format_exc())
+
     @commands.command()
     async def items(self, ctx):
         """
@@ -2359,7 +2384,11 @@ class Currency(commands.Cog):
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
-                await ctx.reply('\n'.join([f'- {items[item]}' for item in items]))
+                desc = ''
+                embed_color = 0xffd000
+
+                pagination_view = PaginationView(all_items, color_=embed_color, description_=desc, ctx_=ctx, title_=f"", author_="Item List", author_icon_='https://cdn.discordapp.com/attachments/1326949216953831504/1337220343391195167/sunfire2_100x100.png?ex=67a6a6fe&is=67a5557e&hm=0c2ea7425d7b5f2a41842ba2f073601801717a99a358b859d176580348556944&')
+                await pagination_view.send_embed()
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
