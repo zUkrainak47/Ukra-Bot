@@ -1760,7 +1760,7 @@ class PaginationView(discord.ui.View):
 
 
 class ConfirmView(discord.ui.View):
-    def __init__(self, author: discord.User, allowed_to_cancel=None, item=None, amount: int = 1, timeout: float = 30):
+    def __init__(self, author: discord.User, allowed_to_cancel=None, item=None, amount: int = 1, type_="", timeout: float = 30):
         super().__init__(timeout=timeout)
         self.value = None  # This will store the user's decision
         self.author = author
@@ -1769,6 +1769,7 @@ class ConfirmView(discord.ui.View):
         self.allowed_to_cancel_id = allowed_to_cancel.id if allowed_to_cancel is not None else None
         self.amount = amount
         self.item = item
+        self.type_ = type_
         self.message = None  # We'll store the confirmation message here
         self.cancel_pressed_by = None  # This will store the user who pressed the cancel button
 
@@ -1801,7 +1802,7 @@ class ConfirmView(discord.ui.View):
         self.value = True
         if self.item:
             # await interaction.response.edit_message(content=f"{self.author.display_name} confirmed the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
-            await interaction.response.edit_message(content="Confirmed", view=None)
+            await interaction.response.edit_message(content=f"{self.type_} confirmed", view=None)
         else:
             await interaction.response.edit_message(view=None)
         self.stop()  # Stop waiting for more button clicks
@@ -1812,7 +1813,7 @@ class ConfirmView(discord.ui.View):
         self.cancel_pressed_by = interaction.user  # Store the user who pressed the cancel button
         if self.item:
             # await interaction.response.edit_message(content=f"{self.author.display_name} canceled the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
-            await interaction.response.edit_message(content="Canceled", view=None)
+            await interaction.response.edit_message(content=f"{self.type_} canceled", view=None)
         else:
             await interaction.response.edit_message(view=None)
         self.stop()
@@ -1836,7 +1837,7 @@ async def confirm_item(item_message, author: discord.User, item: Item, amount=1,
     if additional_context:
         target, num = additional_context
         additional_msg = f'\nThis will set back both {author.display_name} and {target.display_name} back {num:,} {coin}'
-    view = ConfirmView(author, item=item, amount=amount)  # Create the view and pass the allowed author
+    view = ConfirmView(author, item=item, amount=amount, type_=f"{item.name} usage")  # Create the view and pass the allowed author
     message = await item_message.reply(
         f"## {author.display_name}, do you want to use **{amount} {item}{'s' if amount != 1 else ''}**?{additional_msg}",
         view=view
@@ -1849,7 +1850,7 @@ async def confirm_item(item_message, author: discord.User, item: Item, amount=1,
 
 async def confirm_purchase(item_message, author: discord.User, item: Item, amount=1, additional_msg=''):
     """Sends a confirmation message with buttons and waits for the user's response."""
-    view = ConfirmView(author, item=item, amount=amount)  # Create the view and pass the allowed author
+    view = ConfirmView(author, item=item, amount=amount, type_=f"{item.name} purchase")  # Create the view and pass the allowed author
     message = await item_message.reply(
         f"## {author.display_name}, do you want to buy **{amount} {item}{'s' if amount != 1 else ''} for {item.price[0] * amount:,} {coin if item.price[1] == 'coin' else item.price[1]}{'s' if (item.price[0] * amount != 1 and item.price[1] != 'coin') else ''}**?{additional_msg}",
         view=view
@@ -2398,6 +2399,7 @@ class Currency(commands.Cog):
     async def use(self, ctx):
         """
         Use item of choice
+        Accepts a number as a parameter for some items where it makes sense, so you can use those in bulk
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -2448,6 +2450,7 @@ class Currency(commands.Cog):
     async def buy(self, ctx):
         """
         Buy item of choice
+        Accepts a number as a parameter, so you can buy in bulk
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
