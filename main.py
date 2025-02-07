@@ -3661,8 +3661,9 @@ class Currency(commands.Cog):
     async def twodice_error(self, ctx, error):
         pass
 
-    @commands.command()
-    async def pvp(self, ctx):
+    @commands.hybrid_command(name="pvp", description="Takes a user mention and a bet, one of the users wins")
+    @app_commands.describe(user="The member you want to PVP", number="How many coins you're betting")
+    async def pvp(self, ctx, user: discord.Member, number: str = '0'):
         """
         Takes a user mention and a bet, one of the users wins
         !pvp @user number
@@ -3673,60 +3674,47 @@ class Currency(commands.Cog):
             active_pvp_requests.setdefault(guild_id, set())
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-            example = 'Example: `!pvp @user 2.5k` means both you and @user put 2.5k coins on the line and a winner is chosen randomly - the winner walks away with 5k coins, the loser walks away with nothing'
-            contents = ctx.message.content.split()[1:]
-            if not contents:
-                await ctx.reply("This command is used to PVP another user for coins!\n" + example)
-                return
 
             if ctx.author.id in active_pvp_requests.get(guild_id):
                 await ctx.reply(f"You already have a pvp request pending")
                 return
-            if mentions := ctx.message.mentions:
-                if mentions[0].id in ignored_users:
-                    await ctx.reply(f"{mentions[0].display_name} is banned from Ukra Bot")
-                    return
-                target_id = str(mentions[0].id)
-                if mentions[0].id == ctx.author.id:
-                    await ctx.reply("You can't pvp yourself, silly")
-                    return
-                if mentions[0].id in active_pvp_requests.get(guild_id):
-                    await ctx.reply(f"**{mentions[0].display_name}** already has a pvp request pending")
-                    return
-
-                if len(contents) > 2:
-                    await ctx.reply(f"!pvp takes at most 2 arguments - a user mention and a bet\n({len(contents)} arguments were passed)\n\n{example}")
-                    return
-
-                make_sure_user_has_currency(guild_id, target_id)
-                number, source, msg = convert_msg_to_number(contents, guild_id, author_id)
-                if source == '%':
-                    number = int(min(get_user_balance(guild_id, author_id),
-                                     get_user_balance(guild_id, target_id)) * float(msg.rstrip('%')) / 100)
-                elif source == 'all':
-                    number = min(get_user_balance(guild_id, author_id),
-                                 get_user_balance(guild_id, target_id))
-                elif source == 'half':
-                    number = min(get_user_balance(guild_id, author_id),
-                                 get_user_balance(guild_id, target_id)) // 2
-                elif number == -1:
-                    number = 0
-            else:
-                await ctx.reply(f"Something went wrong, please make sure that the command has a user mention\n\n{example}")
+            if user.id in ignored_users:
+                await ctx.reply(f"{user.display_name} is banned from Ukra Bot")
                 return
+            target_id = str(user.id)
+            if user.id == ctx.author.id:
+                await ctx.reply("You can't pvp yourself, silly")
+                return
+            if user.id in active_pvp_requests.get(guild_id):
+                await ctx.reply(f"**{user.display_name}** already has a pvp request pending")
+                return
+
+            make_sure_user_has_currency(guild_id, target_id)
+            number, source, msg = convert_msg_to_number([number], guild_id, author_id)
+            if source == '%':
+                number = int(min(get_user_balance(guild_id, author_id),
+                                 get_user_balance(guild_id, target_id)) * float(msg.rstrip('%')) / 100)
+            elif source == 'all':
+                number = min(get_user_balance(guild_id, author_id),
+                             get_user_balance(guild_id, target_id))
+            elif source == 'half':
+                number = min(get_user_balance(guild_id, author_id),
+                             get_user_balance(guild_id, target_id)) // 2
+            elif number == -1:
+                number = 0
 
             if number > get_user_balance(guild_id, author_id):
                 await ctx.reply(f"PVP failed! **{ctx.author.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
                 return
             if number > get_user_balance(guild_id, target_id):
-                await ctx.reply(f"PVP failed! **{mentions[0].display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
+                await ctx.reply(f"PVP failed! **{user.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
                 return
 
-            active_pvp_requests.get(guild_id).add(mentions[0].id)
+            active_pvp_requests.get(guild_id).add(user.id)
             active_pvp_requests.get(guild_id).add(ctx.author.id)
 
             try:
-                if mentions[0].id == bot_id:
+                if user.id == bot_id:
                     bot_challenged = True
                 elif number in (0, -1):
                     bot_challenged = False
@@ -3741,26 +3729,26 @@ class Currency(commands.Cog):
                         await view.wait()
                         return view.value, message, view.cancel_pressed_by
 
-                    message1 = (f'## {mentions[0].display_name}, do you accept the PVP for {number:,} {coin}?\n' +
-                                f"**{mentions[0].display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
+                    message1 = (f'## {user.display_name}, do you accept the PVP for {number:,} {coin}?\n' +
+                                f"**{user.display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
                                 f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
 
-                    decision, msg, canceled_by = await confirm_pvp(mentions[0], message1, ctx.author)
+                    decision, msg, canceled_by = await confirm_pvp(user, message1, ctx.author)
 
                 if bot_challenged or (number in (0, -1)) or decision:
                     if number > get_user_balance(guild_id, author_id):
-                        active_pvp_requests.get(guild_id).discard(mentions[0].id)
+                        active_pvp_requests.get(guild_id).discard(user.id)
                         active_pvp_requests.get(guild_id).discard(ctx.author.id)
                         await ctx.reply(f"PVP failed! **{ctx.author.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
                         return
                     if number > get_user_balance(guild_id, target_id):
-                        active_pvp_requests.get(guild_id).discard(mentions[0].id)
+                        active_pvp_requests.get(guild_id).discard(user.id)
                         active_pvp_requests.get(guild_id).discard(ctx.author.id)
-                        await ctx.reply(f"PVP failed! **{mentions[0].display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
+                        await ctx.reply(f"PVP failed! **{user.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
                         return
                     result = random.choice(results)
-                    winner = ctx.author if result == 1 else mentions[0]
-                    loser = ctx.author if result == -1 else mentions[0]
+                    winner = ctx.author if result == 1 else user
+                    loser = ctx.author if result == -1 else user
                     for_author = number * result
                     for_target = -number * result
                     add_coins_to_user(guild_id, author_id, for_author, save=False)
@@ -3776,18 +3764,18 @@ class Currency(commands.Cog):
                         f"**{winner.display_name}:** +{number:,} {coin}, balance: {num1:,} {coin}\n" * (number > 0) +
                         f"**{loser.display_name}:** -{number:,} {coin}, balance: {num2:,} {coin}" * (number > 0)
                     )
-                    active_pvp_requests.get(guild_id).discard(mentions[0].id)
+                    active_pvp_requests.get(guild_id).discard(user.id)
                     active_pvp_requests.get(guild_id).discard(ctx.author.id)
 
                 elif decision is None:
-                    await msg.reply(f"{mentions[0].display_name} did not respond in time")
-                    active_pvp_requests.get(guild_id).discard(mentions[0].id)
+                    await msg.reply(f"{user.display_name} did not respond in time")
+                    active_pvp_requests.get(guild_id).discard(user.id)
                     active_pvp_requests.get(guild_id).discard(ctx.author.id)
                     return
 
                 else:
                     await ctx.reply(f"{canceled_by.display_name} canceled the PVP request")
-                    active_pvp_requests.get(guild_id).discard(mentions[0].id)
+                    active_pvp_requests.get(guild_id).discard(user.id)
                     active_pvp_requests.get(guild_id).discard(ctx.author.id)
 
             except Exception:
@@ -3799,15 +3787,25 @@ class Currency(commands.Cog):
 
         else:
             if mentions := ctx.message.mentions:
-                if mentions[0].id == ctx.author.id:
+                if user.id == ctx.author.id:
                     await ctx.reply("You can't pvp yourself, silly")
                     return
                 result = random.choice(results)
-                winner = ctx.author if result == 1 else mentions[0]
+                winner = ctx.author if result == 1 else user
                 await ctx.reply(f"## PVP winner is **{winner.display_name}**!")
             else:
                 await ctx.reply("Something went wrong, please make sure that the command has a user mention")
                 return
+
+    @pvp.error
+    async def pvp_error(self, ctx, error):
+        example = 'Example: `pvp @user 2.5k` means both you and @user put 2.5k coins on the line and a winner is chosen randomly - the winner walks away with 5k coins, the loser walks away with nothing'
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply(f"You need to provide a user mention and a number of coins\n{example}")
+        elif isinstance(error, commands.BadArgument):
+            await ctx.reply(f"Invalid input!\n{example}")
+        else:
+            print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.hybrid_command(name="loan", description="Loan someone coins with optional interest", aliases=['lend'])
     @app_commands.describe(user="Who you'd like to loan", number='How much would you like to loan', interest='Optional - how much do you want on top')
