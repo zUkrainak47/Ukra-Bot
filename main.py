@@ -2145,27 +2145,30 @@ class Currency(commands.Cog):
             except discord.errors.NotFound:
                 return None
 
-    async def get_user_profile(self, ctx, full_info=False):
+    async def get_user_profile(self, ctx, target, not_slash, full_info=False):
         """
         Returns embed for profile or info
         """
         global fetched_users
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
-            contents = ctx.message.content.split()[1:]
-            target_id = convert_msg_to_user_id(contents)
+            if target is None:
+                if not_slash:
+                    contents = ctx.message.content.split()[1:]
+                    target_id = convert_msg_to_user_id(contents)
 
-            if target_id == -1:  # if no id or mention was passed
-                target = ctx.author
-                target_id = ctx.author.id
-            else:
-                try:  # if ID or mention was found
-                    target = await self.get_user(target_id)
+                    if target_id == -1:  # if no id or mention was passed
+                        target = ctx.author
+                    else:
+                        try:  # if ID or mention was found
+                            target = await self.get_user(target_id)
 
-                except discord.errors.NotFound:
-                    await ctx.reply(f'User with ID "{target_id}" does not exist')
-                    return
-
+                        except discord.errors.NotFound:
+                            await ctx.reply(f'User with ID "{target_id}" does not exist')
+                            return
+                else:
+                    target = ctx.author
+            target_id = target.id
             if ctx.guild and ctx.guild.get_member(target_id):
                 target = ctx.guild.get_member(target_id)
                 embed_color = target.color
@@ -2256,21 +2259,22 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['p'])
-    async def profile(self, ctx):
+    @commands.hybrid_command(name="profile", description="Check your or someone else's profile", aliases=['p'])
+    async def profile(self, ctx, *, user: discord.User = None):
         """
         Check your or someone else's profile (stats being collected since 12 Jan 2025)
         """
-        await self.get_user_profile(ctx, False)
 
-    @commands.command()
-    async def info(self, ctx):
+        await self.get_user_profile(ctx, user, getattr(ctx, "interaction", None) is None, False)
+
+    @commands.hybrid_command(name="info", description="Check your or someone else's info")
+    async def info(self, ctx, *, user: discord.User = None):
         """
         Check your or someone else's info (stats being collected since 12 Jan 2025)
         """
-        await self.get_user_profile(ctx, True)
+        await self.get_user_profile(ctx, user, getattr(ctx, "interaction", None) is None, True)
 
-    @commands.command()
+    @commands.hybrid_command(name="request", description="DMs you all data the bot collected about you")
     async def request(self, ctx):
         """
         DMs you all data the bot collected about you
@@ -2282,7 +2286,7 @@ class Currency(commands.Cog):
                               "```\n\n"
                               "`dict_1` - loans, `list_1` - used codes, `num_1` - total funded giveaways")
         if guild_id:
-            await ctx.reply('Check your DMs')
+            await ctx.reply('Check your DMs', ephemeral=True)
 
     @commands.command(aliases=['inv'])
     async def inventory(self, ctx):
@@ -2471,11 +2475,11 @@ class Currency(commands.Cog):
         except Exception:
             print(traceback.format_exc())
 
-    @commands.hybrid_command(name="buy", description="Buy item of choice")
+    @commands.hybrid_command(name="buy", description="Purchase item of choice", aliases=['purchase'])
     @app_commands.describe(item="The name of the item", amount="How many you want to buy")
     async def buy(self, ctx, *, item: str, amount: int = 1):
         """
-        Buy item of choice
+        Purchase item of choice
         Accepts a number as a parameter, so you can buy in bulk
         """
         try:
@@ -3231,8 +3235,9 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['lb'])
-    async def leaderboard(self, ctx):
+    @commands.hybrid_command(name="lb", description="View the leaderboard of the 10 richest users in this server", aliases=['leaderboard'])
+    @app_commands.describe(page="Leaderboard page")
+    async def leaderboard(self, ctx, *, page: int = 1):
         """
         View the top 10 richest users of the server (optionally accepts a page)
         Also shows your rank
@@ -3250,13 +3255,19 @@ class Currency(commands.Cog):
             top_users = []
             c = 0
             found_author = False
-            contents = ctx.message.content.split()[1:]
-            if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
-                page = min(int(contents[0]), math.ceil(len(sorted_members)/10))
-                page_msg = f' - page #{page}'
-            else:
-                page = 1
+            if getattr(ctx, "interaction", None) is None:
+                contents = ctx.message.content.split()[1:]
+                if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
+                    page = int(contents[0])
+                else:
+                    page = 1
+            page = min(int(page), math.ceil(len(sorted_members)/10))
+
+            if page == 1:
                 page_msg = ''
+            else:
+                page_msg = f' - page #{page}'
+
             page -= 1
             for member_id in sorted_members[page*10:]:
                 coins = get_user_balance(guild_id, member_id)
@@ -3287,8 +3298,9 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
-    @commands.command(aliases=['glb'])
-    async def global_leaderboard(self, ctx):
+    @commands.hybrid_command(name="glb", description="View the global leaderboard of the 10 richest users of the bot", aliases=['global_leaderboard'])
+    @app_commands.describe(page="Leaderboard page")
+    async def global_leaderboard(self, ctx, *, page: int = 1):
         """
         View the top 10 richest users of the bot globally (optionally accepts a page)
         Also shows your global rank
@@ -3302,13 +3314,19 @@ class Currency(commands.Cog):
             #  FIXME probably not the best approach
             top_users = []
             found_author = False
-            contents = ctx.message.content.split()[1:]
-            if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
-                page = min(int(contents[0]), math.ceil(len(sorted_members)/10))
-                page_msg = f' - page #{page}'
-            else:
-                page = 1
+            if getattr(ctx, "interaction", None) is None:
+                contents = ctx.message.content.split()[1:]
+                if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
+                    page = contents[0]
+                else:
+                    page = 1
+            page = min(int(page), math.ceil(len(sorted_members)/10))
+
+            if page == 1:
                 page_msg = ''
+            else:
+                page_msg = f' - page #{page}'
+
             page -= 1
             c = 0
             for user_id, coins in sorted_members[page*10:page*10+10]:
