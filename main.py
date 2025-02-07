@@ -1608,7 +1608,7 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
 class PaginationView(discord.ui.View):
     current_page: int = 1
 
-    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', user_in_question_: int = 0, ctx_=None):
+    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', ctx_=None):
         super().__init__()
         self.data = data_
         self.title = title_
@@ -1618,7 +1618,6 @@ class PaginationView(discord.ui.View):
         self.description = description_
         self.author = author_
         self.author_icon = author_icon_
-        self.user_in_question = user_in_question_
         self.ctx = ctx_
         self.message = None
         self.page_size = 5 if (self.footer and self.footer_icon) else 8
@@ -1724,24 +1723,17 @@ class PaginationView(discord.ui.View):
 
                 # Define the callback function with a default parameter to capture the current item.
                 async def item_callback(interaction: discord.Interaction, *, item_data=item):
-                    # if interaction.user.id == self.user_in_question:
-                        # await interaction.response.defer()  # Acknowledge the interaction immediately
-                        # await use_item(self.ctx, item_data)  # Call the function to use the item
-                        # await interaction.followup.send(f"This would have used 1 {items[item]} but using items is currently in development {pupperrun}", ephemeral=True)  # Send the response
-                        if self.ctx.guild and self.ctx.guild.get_member(interaction.user.id):
-                            target = self.ctx.guild.get_member(interaction.user.id)
-                            embed_color = target.color
-                            if embed_color == discord.Colour.default():
-                                embed_color = 0xffd000
-                        else:
-                            target = interaction.user
+                    if self.ctx.guild and self.ctx.guild.get_member(interaction.user.id):
+                        target = self.ctx.guild.get_member(interaction.user.id)
+                        embed_color = target.color
+                        if embed_color == discord.Colour.default():
                             embed_color = 0xffd000
-                        owned = global_profiles[str(interaction.user.id)]['items'].setdefault(item_data, 0)
-                        view = UseItemView(self.ctx, target, items[item_data], owned)
-                        await interaction.response.send_message(embed=items[item_data].describe(embed_color, owned, target.avatar.url), view=view)  # Send the response
-                    # else:
-                    #     await interaction.response.send_message("This is not your inventory!", ephemeral=True)
-
+                    else:
+                        target = interaction.user
+                        embed_color = 0xffd000
+                    owned = global_profiles[str(interaction.user.id)]['items'].setdefault(item_data, 0)
+                    view = UseItemView(self.ctx, target, items[item_data], owned)
+                    await interaction.response.send_message(embed=items[item_data].describe(embed_color, owned, target.avatar.url), view=view)  # Send the response
                 button.callback = item_callback
 
                 # Add the button to the view.
@@ -2318,7 +2310,7 @@ class Currency(commands.Cog):
         if user is None:
             user = ctx.author
         await self.get_user_profile(ctx, user, True)
-        
+
     @info.error
     async def info_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
@@ -2366,7 +2358,7 @@ class Currency(commands.Cog):
                     else:
                         embed_color = 0xffd000
 
-                    pagination_view = PaginationView(user_items, title_=f"", author_=f"{user.display_name}'s Inventory", author_icon_=user.avatar.url, color_=embed_color, description_=desc, user_in_question_=user_in_question, ctx_=ctx)
+                    pagination_view = PaginationView(user_items, title_=f"", author_=f"{user.display_name}'s Inventory", author_icon_=user.avatar.url, color_=embed_color, description_=desc, ctx_=ctx)
                     await pagination_view.send_embed()
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
