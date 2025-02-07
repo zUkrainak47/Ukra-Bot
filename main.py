@@ -407,6 +407,7 @@ sorted_items = {item: num for num, item in enumerate(items)}
 shop_items = [(items[item].real_name, items[item].price) for item in items if (items[item].price is not None)]
 all_items = list(items.keys())
 all_item_names = [items[item].name for item in all_items]
+shop_item_names = [items[item].name for item in all_items if (items[item].price is not None)]
 
 
 def find_closest_item(input_str):
@@ -2347,27 +2348,21 @@ class Currency(commands.Cog):
         For prefix commands, the item name is parsed from the message content.
         """
         try:
-            # Determine if this was a slash command or a prefix command.
-            if getattr(ctx, "interaction", None) is None:
-                # This is a prefix command; we need to extract the input from the message.
-                if not item:
-                    # Extract the item name from the message content if not provided as an argument.
-                    # (This is usually not needed with hybrid commands that have proper parameters.)
-                    content_parts = ctx.message.content.split()
-                    if len(content_parts) < 2:
-                        await ctx.reply("You need to provide the item name!\nExample: `!item rigged`\nRun `!items` for the list of all items")
-                        return
-                    item = " ".join(content_parts[1:])
-            else:
-                # This is a slash command; item_input should come from the slash command option.
-                # You can also use autocompletion or choices here if you wish.
-                if not item:
-                    await ctx.reply("You need to provide the item name!", ephemeral=True)
-                    return
-
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             author_id = str(ctx.author.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
+                # Determine if this was a slash command or a prefix command.
+                if getattr(ctx, "interaction", None) is None:
+                    # This is a prefix command; we need to extract the input from the message.
+                    if not item:
+                        # Extract the item name from the message content if not provided as an argument.
+                        # (This is usually not needed with hybrid commands that have proper parameters.)
+                        content_parts = ctx.message.content.split()
+                        if len(content_parts) < 2:
+                            await ctx.reply(
+                                "You need to provide the item name!\nExample: `!item rigged`\nRun `!items` for the list of all items")
+                            return
+                        item = " ".join(content_parts[1:])
                 make_sure_user_profile_exists(guild_id, author_id)
                 # Find the closest matching item using your existing function
                 found_item = find_closest_item(item)
@@ -2403,20 +2398,6 @@ class Currency(commands.Cog):
             if current.lower() in item_name.lower()
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
-
-    # @commands.command()
-    # async def items(self, ctx):
-    #     """
-    #     Lists all items in the bot
-    #     """
-    #     try:
-    #         guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    #         if currency_allowed(ctx) and bot_down_check(guild_id):
-    #             await ctx.reply('\n'.join([f'- {items[item]}' for item in items]))
-    #         elif currency_allowed(ctx):
-    #             await ctx.reply(f'{reason}, currency commands are disabled')
-    #     except Exception:
-    #         print(traceback.format_exc())
 
     @commands.hybrid_command(name="items", description="Lists all items in the bot")
     async def items(self, ctx):
@@ -2490,8 +2471,9 @@ class Currency(commands.Cog):
         except Exception:
             print(traceback.format_exc())
 
-    @commands.command()
-    async def buy(self, ctx):
+    @commands.hybrid_command(name="buy", description="Buy item of choice")
+    @app_commands.describe(item="The name of the item", amount="How many you want to buy")
+    async def buy(self, ctx, *, item: str, amount: int = 1):
         """
         Buy item of choice
         Accepts a number as a parameter, so you can buy in bulk
@@ -2500,15 +2482,27 @@ class Currency(commands.Cog):
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             author_id = str(ctx.author.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
-                make_sure_user_profile_exists(guild_id, author_id)
-                content = ' '.join(ctx.message.content.split()[1:])
-                if not content:
-                    await ctx.reply("Please provide the name of the item you'd like to buy!")
+                item_message = ctx
+                if getattr(ctx, "interaction", None) is None:
+                    if not item:
+                        item = ' '.join(ctx.message.content.split()[1:])
+                        if not item:
+                            await ctx.reply("Please provide the name of the item you'd like to buy!")
+                            return
+                    if amount == 1:
+                        amount, _, _ = convert_msg_to_number(ctx.message.content.split()[1:], '', author_id, ignored_sources=['%', 'all', 'half'])
+                        if amount == -1:
+                            amount = 1
+                    item_message = ctx.message
+                if amount < 1:
+                    await ctx.reply(f"You can't buy {amount} items {icant}")
                     return
 
-                item_name = find_closest_item(content)
+                make_sure_user_profile_exists(guild_id, author_id)
+
+                item_name = find_closest_item(item)
                 if item_name is None:
-                    await ctx.reply(f"Couldn't find an item from the following description: `{content}`")
+                    await ctx.reply(f"Couldn't find an item from the following description: `{item}`")
                     return
 
                 item = items[item_name]
@@ -2516,15 +2510,25 @@ class Currency(commands.Cog):
                     await ctx.reply(f"{item} is not purchasable!")
                     return
 
-                amount, _, _ = convert_msg_to_number(ctx.message.content.split()[1:], '', author_id,
-                                                     ignored_sources=['%', 'all', 'half'])
-                if amount == -1:
-                    amount = 1
-                await buy_item(ctx, ctx.author, item, item_message=ctx.message, amount=amount)
+                await buy_item(ctx, ctx.author, item, item_message=item_message, amount=amount)
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
             print(traceback.format_exc())
+
+    @buy.autocomplete("item")
+    async def item_input_autocomplete(self, interaction: discord.Interaction, current: str):
+        """
+        Autocomplete callback for the item_input parameter.
+        Returns a list of up to 25 app_commands.Choice objects.
+        """
+        # Filter the available item names based on the current input (case-insensitive)
+        choices = [
+            app_commands.Choice(name=item_name, value=item_name)
+            for item_name in shop_item_names
+            if current.lower() in item_name.lower()
+        ]
+        return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.command(aliases=['titles_'])
     async def title_(self, ctx):
