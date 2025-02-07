@@ -362,7 +362,7 @@ class UseItemView(discord.ui.View):
         # Add the button to the view
         self.add_item(use_button)
 
-        # Create the "Use" button dynamically
+        # Create the "Buy" button dynamically
         if self.item.price:
             buy_button = discord.ui.Button(
                 label="Buy",
@@ -1881,6 +1881,39 @@ class ConfirmView(discord.ui.View):
             print("Failed to edit the message on timeout.")
 
 
+class LottoView(discord.ui.View):
+    def __init__(self, s, ctx, enterbutton, entrance_price, ukra_bot_fee, payout, timeout: float = 90):
+        super().__init__(timeout=timeout)
+        self.ctx = ctx
+        self.author = ctx.author
+        self.author_id = ctx.author.id
+        self.entrance_price = entrance_price
+        self.ukra_bot_fee = ukra_bot_fee
+        self.payout = payout
+        self.enterbutton = enterbutton
+        self.s = s
+
+        if self.enterbutton:
+            enter_button = discord.ui.Button(
+                label="Enter",
+                style=discord.ButtonStyle.green,
+                row=0
+            )
+            enter_button.callback = self.enter_button_callback
+            self.add_item(enter_button)
+
+    async def enter_button_callback(self, interaction: discord.Interaction):
+        try:
+            if interaction.user.id != self.author.id:
+                await interaction.response.send_message("This is not your lotto view!! Use the lottery command yourself to enter", ephemeral=True)
+                return
+
+            await interaction.response.defer()
+            await self.s.enter_lotto(self.ctx, self.entrance_price, self.ukra_bot_fee, self.payout)
+        except:
+            print(traceback.format_exc())
+
+
 async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, additional_context=[], additional_msg='', interaction=None):
     """Sends a confirmation message with buttons and waits for the user's response."""
     # if item.real_name in ['rigged_potion']:
@@ -2502,7 +2535,7 @@ class Currency(commands.Cog):
                 context = []
                 if item_name in ['evil_potion']:
                     if global_profiles[str(interaction.user.id)]['items'].setdefault(item_name, 0) < amount:
-                        await interaction.response.send_message(f"**{interaction.user.display_name}**, you can't use **{amount:,} {items[item_name]}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(ctx.author.id)]['items'][item_name]:,} {items[item_name].emoji}")
+                        await interaction.response.send_message(f"**{interaction.user.display_name}**, you can't use **{amount:,} {items[item_name]}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(interaction.user.id)]['items'][item_name]:,} {items[item_name].emoji}")
                         return
                     if not target:
                         await interaction.response.send_message(f'Something went wrong when trying to use {items[item_name]}. Please make sure you pass a target', ephemeral=True)
@@ -3547,35 +3580,38 @@ class Currency(commands.Cog):
         There is a 1-second cooldown
         !1d number
         """
-        dice_roll = random.choice(range(1, 7))
-        result = (dice_roll == 6)
-        guild_id = '' if not ctx.guild else str(ctx.guild.id)
-        if currency_allowed(ctx) and bot_down_check(guild_id):
-            author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)
-            contents = number.split()
-            if len(contents) > 1:
-                await ctx.reply(f"dice takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
-                return
+        try:
+            dice_roll = random.choice(range(1, 7))
+            result = (dice_roll == 6)
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                author_id = str(ctx.author.id)
+                make_sure_user_has_currency(guild_id, author_id)
+                contents = number.split()
+                if len(contents) > 1:
+                    await ctx.reply(f"dice takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
+                    return
 
-            number, _, _ = convert_msg_to_number([number], guild_id, author_id)
-            if number == -1:
-                number = 0
-            try:
-                if number <= get_user_balance(guild_id, author_id):
-                    delta = number * 5 * result - number * (not result)
-                    add_coins_to_user(guild_id, author_id, delta)  # save file
-                    num = get_user_balance(guild_id, author_id)
-                    profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
-                    command_count_increment(guild_id, author_id, 'dice', True, False)
-                    messages_dict = {1: f"You win! The dice rolled `{dice_roll}` {yay}", 0: f"You lose! The dice rolled `{dice_roll}` {o7}"}
-                    await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
-                else:
-                    await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
-            except:
-                await ctx.reply("Gambling failed!")
-        elif currency_allowed(ctx):
-            await ctx.reply(f'{reason}, currency commands are disabled')
+                number, _, _ = convert_msg_to_number([number], guild_id, author_id)
+                if number == -1:
+                    number = 0
+                try:
+                    if number <= get_user_balance(guild_id, author_id):
+                        delta = number * 5 * result - number * (not result)
+                        add_coins_to_user(guild_id, author_id, delta)  # save file
+                        num = get_user_balance(guild_id, author_id)
+                        profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
+                        command_count_increment(guild_id, author_id, 'dice', True, False)
+                        messages_dict = {1: f"You win! The dice rolled `{dice_roll}` {yay}", 0: f"You lose! The dice rolled `{dice_roll}` {o7}"}
+                        await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
+                    else:
+                        await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
+                except:
+                    await ctx.reply("Gambling failed!")
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
 
     @dice.error
     async def dice_error(self, ctx, error):
@@ -4164,8 +4200,62 @@ class Currency(commands.Cog):
     async def slots_error(self, ctx, error):
         pass
 
-    @commands.command(aliases=['lotto'])
-    async def lottery(self, ctx):
+    async def finalize_lotto(self, ctx, today_date, payout):
+        """Pays out a winner of a lottery and starts a new one"""
+        global active_lottery
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        announce_msg = '' if (ctx.guild and ctx.guild.id == official_server_id) \
+            else "\nJoin the official Ukra Bot Server for the results! (`!server`)"
+        await ctx.send(f"Thanks for triggering the lottery payout {puppy}" + announce_msg)
+        last_lottery_date = next(iter(active_lottery))
+        lottery_participants = active_lottery[last_lottery_date]
+        active_lottery = {today_date: []}
+        save_active_lottery()
+        winner = await self.bot.fetch_user(random.choice(lottery_participants))
+        winnings = len(lottery_participants) * payout
+        add_coins_to_user(guild_id, str(winner.id), winnings)
+        highest_balance_check(guild_id, str(ctx.author.id), 0, False)
+        global_profiles[str(winner.id)]['lotteries_won'] += 1
+        if 'Lottery Winner' not in global_profiles[str(winner.id)]['items'].setdefault('titles', []):
+            global_profiles[str(winner.id)]['items']['titles'].append('Lottery Winner')
+            await winner.send("You've unlocked the *Lottery Winner* Title!\nRun `!title` to change it!")
+        save_profiles()
+        lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
+                           f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
+                           f"Participants: {len(lottery_participants)}")
+        await lottery_channel.send(lottery_message)
+
+    async def enter_lotto(self, ctx: commands.Context, entrance_price, ukra_bot_fee, payout):
+        """Enters lotto for a user"""
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            author_id = str(ctx.author.id)
+            today_date = datetime.now().date().isoformat()
+            global active_lottery
+            if today_date not in active_lottery:
+                await self.finalize_lotto(ctx, today_date, payout)
+
+            join_server_msg = f'\n*Results will be announced in <#1326949510336872458>*' \
+                if ctx.guild and ctx.guild.id == official_server_id \
+                else "\n*Join the official Ukra Bot Server for the results!* (`!server`)"
+            if ctx.author.id not in active_lottery[today_date]:
+                if make_sure_user_has_currency(guild_id, author_id) < entrance_price:
+                    await ctx.reply(f"You don't own {entrance_price} {coin} {sadgebusiness}")
+                    return
+                remove_coins_from_user(guild_id, author_id, entrance_price)
+                active_lottery[today_date].append(ctx.author.id)
+                save_active_lottery()
+                add_coins_to_user(guild_id, str(bot_id), ukra_bot_fee)
+                await ctx.reply(
+                    f"**Successfully entered lottery** {yay}\nYour balance: {get_user_balance(guild_id, author_id):,} {coin}" + join_server_msg)
+            else:
+                await ctx.reply(f"You've already joined today's lottery {peepositbusiness}" + join_server_msg)
+
+        except Exception:
+            print(traceback.format_exc())
+
+    @commands.hybrid_command(name="lotto", description="Lottery!", aliases=['lottery'])
+    async def lotto(self, ctx):
         """
         Lottery!
         Feeds Ukra Bot an entrance fee, the rest is added to the pool which is paid out to the winner of the lottery
@@ -4178,53 +4268,26 @@ class Currency(commands.Cog):
             today_date = datetime.now().date().isoformat()
             global active_lottery
             if today_date not in active_lottery:
-                announce_msg = '' if (ctx.guild and ctx.guild.id == official_server_id) \
-                    else "\nJoin the official Ukra Bot Server for the results! (`!server`)"
-                await ctx.send(f"Thanks for triggering the lottery payout {puppy}" + announce_msg)
-                last_lottery_date = next(iter(active_lottery))
-                lottery_participants = active_lottery[last_lottery_date]
-                active_lottery = {today_date: []}
-                save_active_lottery()
-                winner = await self.bot.fetch_user(random.choice(lottery_participants))
-                winnings = len(lottery_participants) * payout
-                add_coins_to_user(guild_id, str(winner.id), winnings)
-                highest_balance_check(guild_id, str(ctx.author.id), 0, False)
-                global_profiles[str(winner.id)]['lotteries_won'] += 1
-                if 'Lottery Winner' not in global_profiles[str(winner.id)]['items'].setdefault('titles', []):
-                    global_profiles[str(winner.id)]['items']['titles'].append('Lottery Winner')
-                    await winner.send("You've unlocked the *Lottery Winner* Title!\nRun `!title` to change it!")
-                save_profiles()
-                lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
-                                   f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
-                                   f"Participants: {len(lottery_participants)}")
-                await lottery_channel.send(lottery_message)
+                await self.finalize_lotto(ctx, today_date, payout)
             contents = ctx.message.content.split()[1:]
             not_joined = ctx.author.id not in active_lottery[today_date]
+            join_server_msg = f'\n*Results will be announced in <#1326949510336872458>*' \
+                if ctx.guild and ctx.guild.id == official_server_id \
+                else "\n*Join the official Ukra Bot Server for the results!* (`!server`)"
+
             if len(contents) == 1 and contents[0] == 'enter':
-                author_id = str(ctx.author.id)
-                join_server_msg = f'\n*Results will be announced in <#1326949510336872458>*' \
-                    if ctx.guild and ctx.guild.id == official_server_id \
-                    else "\n*Join the official Ukra Bot Server for the results!* (`!server`)"
-                if not_joined:
-                    if make_sure_user_has_currency(guild_id, author_id) < entrance_price:
-                        await ctx.reply(f"You don't own {entrance_price} {coin} {sadgebusiness}")
-                        return
-                    remove_coins_from_user(guild_id, author_id, entrance_price)
-                    active_lottery[today_date].append(ctx.author.id)
-                    save_active_lottery()
-                    add_coins_to_user(guild_id, str(bot_id), ukra_bot_fee)
-                    await ctx.reply(f"**Successfully entered lottery** {yay}\nYour balance: {get_user_balance(guild_id, author_id):,} {coin}" + join_server_msg)
-                else:
-                    await ctx.reply(f"You've already joined today's lottery {peepositbusiness}" + join_server_msg)
+                await self.enter_lotto(ctx, entrance_price, ukra_bot_fee, payout)
+
             else:
+                view = LottoView(self, ctx, enterbutton=not_joined, entrance_price=entrance_price, ukra_bot_fee=ukra_bot_fee, payout=payout)
                 await ctx.send(f'# {peepositbusiness} Lottery\n'
                                '### Current lottery:\n'
                                f'- **{len(active_lottery[today_date])}** participant{'s' if len(active_lottery[today_date]) != 1 else ''}\n'
                                f'- **{len(active_lottery[today_date]) * payout:,}** {coin} in pool\n'
                                f'- Participation price: {entrance_price} {coin}\n'
                                f'- Ends <t:{get_daily_reset_timestamp()}:R>\n' +
-                               f'**If you want to participate, run** `!lottery enter`' * not_joined +
-                               f"*You've joined today's lottery* {yay}" * (not not_joined))
+                               # f'**If you want to participate, run** `!lottery enter`' * not_joined +
+                               f"You've joined today's lottery {yay} {join_server_msg}" * (not not_joined), view=view)
 
     async def run_giveaway(self, ctx, admin=False):
         """
