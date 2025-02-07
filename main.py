@@ -625,57 +625,73 @@ async def print_reset_time(r, ctx, custom_message=''):
 
 @client.event
 async def on_ready():
-    await client.tree.sync()
-    global log_channel, rare_channel, lottery_channel
-    log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
-    rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
-    lottery_channel = client.get_guild(696311992973131796).get_channel(1326949510336872458)
-    await log_channel.send(f'{yay} {bot_name} has connected to Discord!')
-    role_dict = {'backshots_role': distributed_backshots,
-                 'segs_role': distributed_segs}
-    save_dict = {'backshots_role': save_distributed_backshots,
-                 'segs_role': save_distributed_segs}
+    try:
+        client.add_command(rng)
+        client.add_command(dnd)
+        client.add_command(choose)
+        client.add_command(compliment)
+        client.add_command(backup)
+        client.add_command(save)
+        client.add_command(source)
+        client.add_command(server)
+        client.add_command(uptime)
+        client.add_command(ping)
+        client.add_command(tcc)
+        client.add_command(tuc)
+        await client.tree.sync()
+        global log_channel, rare_channel, lottery_channel
+        log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
+        rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
+        lottery_channel = client.get_guild(696311992973131796).get_channel(1326949510336872458)
+        await log_channel.send(f'{yay} {bot_name} has connected to Discord!')
+        print('Bot is up!')
+        role_dict = {'backshots_role': distributed_backshots,
+                     'segs_role': distributed_segs}
+        save_dict = {'backshots_role': save_distributed_backshots,
+                     'segs_role': save_distributed_segs}
 
-    async def remove_all_roles(role_name):
-        for guild_id in role_dict[role_name]:
-            guild = await client.fetch_guild(int(guild_id))
-            if not guild:
-                continue
-            # react_to = await log_channel.send(f"`===== {guild.name} - {guild_id} - {role_name} =====`")
-            role = guild.get_role(server_settings.get(guild_id, {}).get(role_name))
-            if not role:
-                role_dict[role_name][guild_id].clear()
-                # await log_channel.send(f"✅❓ {guild.name} doesn't have a {role_name}")
-                if role_name in server_settings[guild_id]:
-                    server_settings[guild_id].pop(role_name)
-                save_settings()
-                continue
+        async def remove_all_roles(role_name):
+            for guild_id in role_dict[role_name]:
+                guild = await client.fetch_guild(int(guild_id))
+                if not guild:
+                    continue
+                # react_to = await log_channel.send(f"`===== {guild.name} - {guild_id} - {role_name} =====`")
+                role = guild.get_role(server_settings.get(guild_id, {}).get(role_name))
+                if not role:
+                    role_dict[role_name][guild_id].clear()
+                    # await log_channel.send(f"✅❓ {guild.name} doesn't have a {role_name}")
+                    if role_name in server_settings[guild_id]:
+                        server_settings[guild_id].pop(role_name)
+                    save_settings()
+                    continue
 
-            for member_id in list(role_dict[role_name][guild_id]):
-                member = await guild.fetch_member(member_id)
-                print(guild, guild.id, type(guild), member_id, type(member_id), member, type(member))
-                try:
-                    if role in member.roles:
-                        await member.remove_roles(role)
-                        await log_channel.send(f"✅ Removed `@{role.name}` from {member.mention}")
+                for member_id in list(role_dict[role_name][guild_id]):
+                    member = await guild.fetch_member(member_id)
+                    print(guild, guild.id, type(guild), member_id, type(member_id), member, type(member))
+                    try:
+                        if role in member.roles:
+                            await member.remove_roles(role)
+                            await log_channel.send(f"✅ Removed `@{role.name}` from {member.mention}")
+                            role_dict[role_name][guild_id].remove(member_id)
+                        else:
+                            await log_channel.send(f"👍 `@{role.name}` was removed manually from {member.mention}")
+                            role_dict[role_name][guild_id].remove(member_id)
+                    except discord.Forbidden:
+                        # In case the bot doesn't have permission to remove the role
+                        await log_channel.send(f"❌ Failed to remove `@{role.name}` from {member.mention} (permission error)")
                         role_dict[role_name][guild_id].remove(member_id)
-                    else:
-                        await log_channel.send(f"👍 `@{role.name}` was removed manually from {member.mention}")
+                    except discord.NotFound:
+                        # Handle case where the member is not found in the guild
+                        await log_channel.send(f"❌ Member {member.mention} not found in {guild.name}")
                         role_dict[role_name][guild_id].remove(member_id)
-                except discord.Forbidden:
-                    # In case the bot doesn't have permission to remove the role
-                    await log_channel.send(f"❌ Failed to remove `@{role.name}` from {member.mention} (permission error)")
-                    role_dict[role_name][guild_id].remove(member_id)
-                except discord.NotFound:
-                    # Handle case where the member is not found in the guild
-                    await log_channel.send(f"❌ Member {member.mention} not found in {guild.name}")
-                    role_dict[role_name][guild_id].remove(member_id)
-                except discord.HTTPException as e:
-                    # Handle potential HTTP errors
-                    await log_channel.send(f"❓ Failed to remove `@{role.name}` from {member.mention}: {e}")
-            # message = await log_channel.fetch_message(react_to.id)
-            # await message.add_reaction('✅')
-    print('Bot is up!')
+                    except discord.HTTPException as e:
+                        # Handle potential HTTP errors
+                        await log_channel.send(f"❓ Failed to remove `@{role.name}` from {member.mention}: {e}")
+                # message = await log_channel.fetch_message(react_to.id)
+                # await message.add_reaction('✅')
+        print("reached end of on_ready()")
+    except Exception:
+        print(traceback.format_exc())
 
     async def resume_giveaway(message_id):
         try:
@@ -756,7 +772,7 @@ async def ignore(ctx):
     return
 
 
-@client.command()
+@commands.hybrid_command(name="ping", description="Pong")
 async def ping(ctx):
     """pong"""
     await ctx.send(f"Pong! {round(client.latency * 1000)}ms")
@@ -774,7 +790,7 @@ async def ping(ctx):
 #     await ctx.send(msg)
 
 
-@client.command()
+@commands.hybrid_command(name="uptime", description="Check how long the bot has been running for")
 async def uptime(ctx):
     """Check how long the bot has been running for"""
     end = time.perf_counter()
@@ -788,20 +804,31 @@ async def uptime(ctx):
     await ctx.send(msg)
 
 
-@client.command()
-async def rng(ctx):
+@commands.hybrid_command(name="rng", description="Choose a random number from n1 to n2")
+@app_commands.describe(n1="Lower bound", n2="Upper bound")
+async def rng(ctx, n1: int, n2: int):
     """
     Returns a random number between n1 and n2
-    !rng <n1> <n2>
+    rng n1 n2
     """
-    contents = ctx.message.content.split()
-    if len(contents) == 3 and contents[1].isdecimal() and contents[2].isdecimal() and int(contents[1]) < int(contents[2]):
-        await ctx.reply(f"{random.randint(int(contents[1]), int(contents[2]))}")
+    if n1 >= n2:
+        await ctx.reply("Usage: `rng n1 n2` where n1 and n2 are numbers, n1 < n2")
+        return
+
+    await ctx.reply(random.randint(n1, n2))
+
+
+@rng.error
+async def rng_error(ctx: commands.Context, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.reply("You need to provide two numbers! Example: `!rng 1 50`")
+    elif isinstance(error, commands.BadArgument):
+        await ctx.reply("Invalid input! Please enter numbers. Example: `!rng 1 50`")
     else:
-        await ctx.reply("Usage: `!rng n1 n2` where n1 and n2 are numbers, n1 < n2")
+        print(f"Unexpected error: {error}")  # Log other errors for debugging
 
 
-@client.command()
+@commands.hybrid_command(name="source", description="Sends the GitHub link to this bot's repo")
 async def source(ctx):
     """
     Sends the GitHub link to this bot's repo
@@ -809,7 +836,7 @@ async def source(ctx):
     await ctx.reply("https://github.com/zUkrainak47/Ukra-Bot")
 
 
-@client.command(aliases=['invite'])
+@commands.hybrid_command(name="server", description="DM's the sender a link to Ukra Bot Server", aliases=['invite'])
 async def server(ctx):
     """
     You should write this command for exclusive giveaways :3
@@ -820,25 +847,27 @@ async def server(ctx):
     await ctx.author.send("discord.gg/n24Bbdjg43")
 
 
-@client.command(aliases=['choice'])
-async def choose(ctx):
+@commands.hybrid_command(name="choose", description="Chooses from multiple options separated by |", aliases=['choice'])
+async def choose(ctx, *, contents: str):
     """
     Chooses from provided options, separated by |
-    Example: !choice option | option 2 | another option
-    !choice <choice1> | <choice2> ...
+    Example: choice option | option 2 | another option
+    choice <choice1> | <choice2> ...
     """
-    contents = ' '.join(ctx.message.content.split()[1:])
-    if [s for s in contents if s not in '! ']:
-        if len(contents.split('|')) == 1:
-            await ctx.reply(f"Separate options with `|`")
+    print(contents)
+    options = [s for s in contents.split('|') if s != '']
+    if options:
+        if len(options) == 1:
+            await ctx.reply(f"Separate options with `|`\nYou only gave me one option to choose from!")
             return
-        await ctx.reply(f"{random.choice(contents.split('|'))}")
+        await ctx.reply(random.choice(options))
     else:
         await ctx.reply("Example usage: `!choice option | option 2 | another option`")
 
 
-@client.command(aliases=['roll'])
-async def dnd(ctx):
+@commands.hybrid_command(name="dnd", description="Rolls dnd dice using DND dice notation", aliases=['roll'])
+@app_commands.describe(dice="DND notation")
+async def dnd(ctx, *, dice: str = ''):
     """
     Rolls n1 DND dice of size n2 (!roll <n1>d<n1>)
     Rolls 1d6 if no argument passed
@@ -849,7 +878,7 @@ async def dnd(ctx):
 
     make_sure_server_settings_exist(guild_id)
     if 'dnd' in server_settings.get(guild_id).get('allowed_commands'):
-        contents = ''.join(ctx.message.content.split()[1:])
+        contents = dice.replace(' ', '')
         if not len(contents):
             await ctx.reply(f"Rolling **1d6**: `{random.choice(range(1, 7))}`")
         elif 'd' in contents and contents.split('d')[1]:  # !dnd 5d20
@@ -907,60 +936,65 @@ async def botpp(ctx):
         await ctx.send("Can't use PP here :P")
 
 
-@client.command(aliases=['botafk'])
-async def botdown(ctx):
+@commands.hybrid_command(name="botafk", description="Toggles currency commands globally", aliases=['botdown'])
+async def botafk(ctx):
     """
-    Sends message announcing the bot is shutting down
+    Toggles currency commands globally
     Only usable by bot developer
     """
     if ctx.author.id not in allowed_users:
         await ctx.send("You can't use this command, silly")
     else:
-        await ctx.send(f"Ukra Bot is going down {o7}")
         global bot_down, reason
-        bot_down = True
-        reason = f"{bot_name} is shutting down"
-        save_everything()
+        if not bot_down:
+            await ctx.send(f"Ukra Bot is going down {o7}")
+            bot_down = True
+            reason = f"{bot_name} is shutting down"
+            save_everything()
+        else:
+            await ctx.send(f"Ukra Bot is no longer going down {yay}")
+            bot_down = False
+            reason = f'{bot_name} is in Development Mode'
+            save_everything()
 
 
-@client.command(aliases=['notafk', 'unafk'])
-async def notdown(ctx):
-    """
-    Sends message announcing the bot is not actually shutting down
-    Only usable by bot developer
-    """
-    if ctx.author.id not in allowed_users:
-        await ctx.send("You can't use this command, silly")
-    else:
-        await ctx.send(f"Ukra Bot is no longer going down {yay}")
-        global bot_down, reason
-        bot_down = False
-        reason = f'{bot_name} is in Development Mode'
-        save_everything()
+# @client.command(aliases=['notafk', 'unafk'])
+# async def notdown(ctx):
+#     """
+#     Sends message announcing the bot is not actually shutting down
+#     Only usable by bot developer
+#     """
+#     if ctx.author.id not in allowed_users:
+#         await ctx.send("You can't use this command, silly")
+#     else:
+#         await ctx.send(f"Ukra Bot is no longer going down {yay}")
+#         global bot_down, reason
+#         bot_down = False
+#         reason = f'{bot_name} is in Development Mode'
+#         save_everything()
 
 
-@client.command()
+@commands.hybrid_command(name="save", description="Saves everything")
 async def save(ctx):
     """
     Saves everything
     Only usable by bot developer
     """
     if ctx.author.id not in allowed_users:
-        await ctx.send("You can't use this command, silly")
+        await ctx.send("You can't use this command, silly", ephemeral=True)
     else:
         save_everything()
-        await ctx.message.add_reaction('✅')
-        await ctx.author.send(f"Saving complete")
+        await ctx.send("Saving complete", ephemeral=True)
 
 
-@client.command()
+@commands.hybrid_command(name="backup", description="Backs up all data")
 async def backup(ctx):
     """
     Backs up all data
     Only usable by bot developer
     """
     if ctx.author.id not in allowed_users:
-        await ctx.send("You can't use this command, silly")
+        await ctx.send("You can't use this command, silly", ephemeral=True)
     else:
         save_everything()
         source = "dev"
@@ -977,12 +1011,12 @@ async def backup(ctx):
         shutil.copytree(source, destination, ignore=ignore_func)
         print(f"Copied '{source}' to '{destination}' successfully")
 
-        await ctx.message.add_reaction('✅')
-        await ctx.author.send(f"Backup complete")
+        await ctx.send("Backup complete", ephemeral=True)
 
 
-@client.command()
-async def compliment(ctx):
+@commands.hybrid_command(name="compliment", description="Compliments user based on 3x100 most popular compliments")
+@app_commands.describe(user='The user you want to compliment (optional)')
+async def compliment(ctx, *, user: discord.User = None):
     """
     Compliments user based on 3x100 most popular compliments lmfaoooooo
     !compliment @user
@@ -993,8 +1027,8 @@ async def compliment(ctx):
         with open(Path('dev', 'compliments.txt')) as fp:
             compliment_ = random.choice(fp.readlines())
             fp.close()
-        if mentions := ctx.message.mentions:
-            await ctx.send(f"{mentions[0].mention}, {compliment_[0].lower()}{compliment_[1:]}")
+        if user:
+            await ctx.send(f"{user.mention}, {compliment_[0].lower()}{compliment_[1:]}")
         else:
             await ctx.send(compliment_)
         # await log_channel.send(f'✅ {ctx.author.mention} casted a compliment in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
@@ -1092,9 +1126,9 @@ toggleable_commands = ['segs', 'backshot', 'compliment', 'dnd', 'currency_system
 default_allowed_commands = ['compliment', 'dnd', 'currency_system']
 
 
-@client.command(aliases=['togglechannelcurrency', 'tcc'])
+@commands.hybrid_command(name="tcc", description="Toggle Channel Currency", aliases=['toggle_channel_currency'])
 @commands.has_permissions(administrator=True)
-async def toggle_channel_currency(ctx):
+async def tcc(ctx):
     """
     If currency system is enabled in a server, starts ignoring the channel this command was sent in
     If channel is already ignored, will stop ignoring it
@@ -1118,8 +1152,8 @@ async def toggle_channel_currency(ctx):
         await ctx.send("Currency system is disabled in your server already. This command won't do anything")
 
 
-@client.command(aliases=['toggleusercurrency', 'tuc'])
-async def toggle_user_currency(ctx):
+@commands.hybrid_command(name="tuc", description="Ban user from using the bot", aliases=['toggle_user_currency'])
+async def tuc(ctx, *, target: discord.User):
     """
     Starts ignoring the mentioned user
     If user is already ignored, will stop ignoring them
@@ -1127,12 +1161,13 @@ async def toggle_user_currency(ctx):
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
+    target_id = target.id
     if ctx.author.id not in allowed_users:
         await ctx.reply(f"You can't use this command due to lack of permissions :3")
         return
-    target_id = convert_msg_to_user_id(ctx.message.content.split()[1:])
-    if target_id != -1 and target_id in fetched_users:
-        target = fetched_users.get(target_id)
+    # target_id = convert_msg_to_user_id(ctx.message.content.split()[1:])
+    # if target_id != -1 and target_id in fetched_users:
+    #     target = fetched_users.get(target_id)
     else:
         try:
             target = await client.fetch_user(target_id)
