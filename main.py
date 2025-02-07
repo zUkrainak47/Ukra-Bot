@@ -62,6 +62,7 @@ The_Catch = '<:TheCatch:1325812275172347915>'
 
 yay = '<:yay:1322721331896389702>'
 o7 = '<:o7:1323425011234639942>'
+
 peeposcheme = '<:peeposcheme:1322225542027804722>'
 sunfire2 = '<:sunfire2:1324080466223169609>'
 sunfire2stonks = '<:sunfire2stonks:1326950812207022151>'
@@ -79,6 +80,7 @@ stopbeingmean = '<:stopbeingmean:1326525905199435837>'
 peepositbusiness = '<:peepositbusiness:1327594898844684288>'
 shovel = '<:shovel:1325823488216268801>'
 puppy = '<:puppy:1327588192282480670>'
+icant = '<:ICANT:1337236086941941762>'
 clueless = '<:clueless:1335599640279515167>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
 pupperrun = '<a:pupperrun:1336403935291773029>'
@@ -1852,7 +1854,7 @@ async def confirm_purchase(item_message, author: discord.User, item: Item, amoun
     """Sends a confirmation message with buttons and waits for the user's response."""
     view = ConfirmView(author, item=item, amount=amount, type_=f"{item.name} purchase")  # Create the view and pass the allowed author
     message = await item_message.reply(
-        f"## {author.display_name}, do you want to buy **{amount} {item}{'s' if amount != 1 else ''} for {item.price[0] * amount:,} {coin if item.price[1] == 'coin' else item.price[1]}{'s' if (item.price[0] * amount != 1 and item.price[1] != 'coin') else ''}**?{additional_msg}",
+        f"## {author.display_name}, do you want to buy **{amount} {item}{'s' if amount != 1 else ''} for {item.price[0] * amount:,} {coin if item.price[1] == 'coin' else items[item.price[1]].emoji}{'s' if (item.price[0] * amount != 1 and item.price[1] != 'coin') else ''}**?{additional_msg}",
         view=view
     )
     view.message = message
@@ -2030,7 +2032,7 @@ async def use_item(ctx: commands.Context, author: discord.User, item: Item, item
         elif item.real_name in ['evil_potion']:
             await item_message.reply("`!use evil @user amount` to use this item")
             return
-        decision, msg = await confirm_item(item_message, author, item, amount, additional_context)
+        decision, msg = await confirm_item(item_message, author, item, amount, additional_context, f"\n> {item.description.split('\n\n')[0].replace('\n', '\n> ')}")
         if decision is None:
             # await msg.reply("Decision timed out.")
             pass
@@ -2054,7 +2056,7 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
     Buys an item by a user
     """
     try:
-        price = item.price
+        price = item.price.copy()
         if price[1] in items:
             price[1] = items[price[1]]
         author_id = str(author.id)
@@ -2065,7 +2067,7 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
             await item_message.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\n**Balance:** {get_user_balance('', str(author.id)):,} {coin}\n**Needed:** {price[0] * amount:,} {coin}")
             return
 
-        decision, msg = await confirm_purchase(item_message, author, item, amount)
+        decision, msg = await confirm_purchase(item_message, author, item, amount, f"\n> {item.description.split('\n\n')[0].replace('\n', '\n> ')}")
         if decision is None:
             # await msg.reply("Decision timed out.")
             pass
@@ -2077,7 +2079,11 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
                 await msg.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\n**Balance:** {get_user_balance('', str(author.id)):,} {coin}\n**Needed:** {price[0] * amount:,} {coin}")
                 return
 
-            global_profiles[author_id]['items'][item.real_name] += amount
+            if item.real_name in global_profiles[author_id]['items']:
+                global_profiles[author_id]['items'][item.real_name] += amount
+            else:
+                global_profiles[author_id]['items'][item.real_name] = amount
+
             if isinstance(price[1], Item):
                 global_profiles[author_id]['items'][price[1].real_name] -= price[0] * amount
                 last_line = f"Owned: {global_profiles[author_id]['items'][price[1].real_name]:,} {price[1].emoji}"
@@ -2114,7 +2120,8 @@ def add_item_to_user(guild_id: str, user_id: str, item: str, amount: int = 1, sa
     if save:
         save_profiles()
 
-    return f"\n\n**+{amount:,} {items[item]}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[user_id]['items'][item]:,} {items[item].emoji}"
+    return (f"\n\n**+{amount:,} {items[item]}{'s' if amount != 1 else ''}**\n"
+            f"Owned: {global_profiles[user_id]['items'][item]:,} {items[item].emoji}")
 
 
 class Currency(commands.Cog):
@@ -2423,6 +2430,9 @@ class Currency(commands.Cog):
                     if mentions := ctx.message.mentions:
                         if mentions[0].id in ignored_users:
                             await ctx.reply(f"{mentions[0].display_name} is banned from Ukra Bot")
+                            return
+                        if mentions[0].id == ctx.author.id:
+                            await ctx.reply(f"Pick someone else please {icant}")
                             return
                         target = mentions[0]
                     else:
