@@ -50,8 +50,9 @@ client = commands.Bot(command_prefix="!", intents=intents)
 # EMOJIS
 rigged_potion = '<:rigged_potion:1336395108244787232>'
 evil_potion = '<:evil_potion:1336641208885186601>'
-twisted_orb = '<:twisted_orb:1337165700309061715>'
 funny_item = '<:funny_item:1336705286953635902>'
+twisted_orb = '<:twisted_orb:1337165700309061715>'
+laundry_machine = '<:laundry_machine:1337205545471315992>'
 daily_item = '<:daily_item:1336399274476306646>'
 weekly_item = '<:weekly_item:1336631591543373854>'
 
@@ -395,6 +396,7 @@ items = {
     'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion requires you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins\n\nDrops alongside Fool's Gold ✨", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
     'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing it grants you 69,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
     'twisted_orb': Item('twisted_orb', "Twisted Orb", f"Using this orb has a 50% chance to 5x your balance and a 50% chance for you to lose all coins and owe Ukra Bot 3x your current balance\n\nPurchasable for 3 {daily_item}", twisted_orb, "https://cdn.discordapp.com/attachments/696842659989291130/1337165843359993926/twisted_orb.png?ex=67a6743c&is=67a522bc&hm=161c5d30fd3de60d086db3d4d09c325cb0768a89cfa46804c7db0d55db2beac5&", [3, 'daily_item']),
+    'laundry_machine': Item('laundry_machine', "Laundry Machine", f"It's what you think it is.\nUsing this item grants you 10,000 {coin}\n\nPurchasable for 10,000 {coin}", laundry_machine, "https://cdn.discordapp.com/attachments/696842659989291130/1337206253784535101/laundry_machine.png?ex=67a699de&is=67a5485e&hm=3e7dd2b88acaee2d9c82d86285bcde8d40a809006f7945c9112e610e6afc5f38&", [10000, 'coin']),
 
     'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future\nUsed as shop currency", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
     'weekly_item': Item('weekly_item', "Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
@@ -1905,6 +1907,20 @@ async def funny_item_func(message, castor, amount, additional_context=[]):
         save_profiles()
 
 
+async def laundry_machine_func(message, castor, amount, additional_context=[]):
+    guild_id = '' if not message.guild else str(message.guild.id)
+    castor_id = str(castor.id)
+    bal = add_coins_to_user(guild_id, castor_id, 10000 * amount)
+    await message.reply(
+        f"# {amount} {items['laundry_machine']}{'s' if amount != 1 else ''} used successfully\n"
+        f"**{castor.display_name}**: +{10000 * amount:,} {coin}\n"
+        f"Balance: {bal:,} {coin}"
+    )
+    global_profiles[castor_id]['items']['laundry_machine'] -= amount
+    highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
+    save_profiles()
+
+
 async def twisted_orb_func(message, castor, amount, additional_context=[]):
     try:
         guild_id = '' if not message.guild else str(message.guild.id)
@@ -1973,6 +1989,7 @@ item_use_functions = {
     'rigged_potion': rigged_potion_func,
     'evil_potion': evil_potion_func,
     'funny_item': funny_item_func,
+    'laundry_machine': laundry_machine_func,
     'twisted_orb': twisted_orb_func,
     'the_catch': the_catch_func
 }
@@ -2025,10 +2042,10 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
             price[1] = items[price[1]]
         author_id = str(author.id)
         if isinstance(price[1], Item) and global_profiles[author_id]['items'].setdefault(price[1].real_name, 0) < price[0] * amount:
-            await item_message.reply(f"**{author.display_name}**, you don't have enough {price[1]}s to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\nOwned: {global_profiles[str(author.id)]['items'][price[1].real_name]:,} {price[1].emoji}\nNeeded: {price[0] * amount} {price[1].emoji}")
+            await item_message.reply(f"**{author.display_name}**, you don't have enough {price[1]}s to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\n**Owned:** {global_profiles[str(author.id)]['items'][price[1].real_name]:,} {price[1].emoji}\n**Needed:** {price[0] * amount:,} {price[1].emoji}")
             return
         elif price[1] == 'coin' and get_user_balance('', author_id) < price[0] * amount:
-            await item_message.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\nBalance: {get_user_balance('', str(author.id)):,} {coin}\nNeeded: {price[0] * amount} {coin}")
+            await item_message.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\n**Balance:** {get_user_balance('', str(author.id)):,} {coin}\n**Needed:** {price[0] * amount:,} {coin}")
             return
 
         decision, msg = await confirm_purchase(item_message, author, item, amount)
@@ -2037,10 +2054,10 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
             pass
         elif decision:
             if isinstance(price[1], Item) and global_profiles[author_id]['items'][price[1].real_name] < price[0] * amount:
-                await item_message.reply(f"**{author.display_name}**, you don't have enough {price[1]}s to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\nOwned: {global_profiles[str(author.id)]['items'][price[1].real_name]:,} {price[1].emoji}\nNeeded: {price[0] * amount} {price[1].emoji}")
+                await item_message.reply(f"**{author.display_name}**, you don't have enough {price[1]}s to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\n**Owned:** {global_profiles[str(author.id)]['items'][price[1].real_name]:,} {price[1].emoji}\n**Needed:** {price[0] * amount:,} {price[1].emoji}")
                 return
             elif price[1] == 'coin' and get_user_balance('', author_id) < price[0] * amount:
-                await item_message.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\nBalance: {get_user_balance('', str(author.id)):,} {coin}\nNeeded: {price[0] * amount} {coin}")
+                await item_message.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} {item}{'s' if amount != 1 else ''}**\n\n**Balance:** {get_user_balance('', str(author.id)):,} {coin}\n**Needed:** {price[0] * amount:,} {coin}")
                 return
 
             global_profiles[author_id]['items'][item.real_name] += amount
@@ -2364,8 +2381,47 @@ class Currency(commands.Cog):
                     context = [target, num]
                 elif item_name in ['funny_item']:
                     amount = 69
+                elif item_name in ['laundry_machine']:
+                    amount, _, _ = convert_msg_to_number(ctx.message.content.split()[1:], '', author_id, ignored_sources=['%', 'all', 'half'])
+                    if amount == -1:
+                        amount = 1
                 item = items[item_name]
                 await use_item(ctx, ctx.author, item, ctx.message, amount=amount, additional_context=context)
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
+
+    @commands.command()
+    async def buy(self, ctx):
+        """
+        Buy item of choice
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            author_id = str(ctx.author.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                make_sure_user_profile_exists(guild_id, author_id)
+                content = ' '.join(ctx.message.content.split()[1:])
+                if not content:
+                    await ctx.reply("Please provide the name of the item you'd like to buy!")
+                    return
+
+                item_name = find_closest_item(content)
+                if item_name is None:
+                    await ctx.reply(f"Couldn't find an item from the following description: `{content}`")
+                    return
+
+                item = items[item_name]
+                if item.price is None:
+                    await ctx.reply(f"{item} is not purchasable!")
+                    return
+
+                amount, _, _ = convert_msg_to_number(ctx.message.content.split()[1:], '', author_id,
+                                                     ignored_sources=['%', 'all', 'half'])
+                if amount == -1:
+                    amount = 1
+                await buy_item(ctx, ctx.author, item, item_message=ctx.message, amount=amount)
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
