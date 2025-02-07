@@ -1835,7 +1835,7 @@ async def confirm_purchase(item_message, author: discord.User, item: Item, amoun
     """Sends a confirmation message with buttons and waits for the user's response."""
     view = ConfirmView(author, item=item, amount=amount)  # Create the view and pass the allowed author
     message = await item_message.reply(
-        f"## {author.display_name}, do you want to buy **{amount} {item}{'s' if amount != 1 else ''}**?{additional_msg}",
+        f"## {author.display_name}, do you want to buy **{amount} {item}{'s' if amount != 1 else ''} for {item.price[0] * amount:,} {coin if item.price[1] == 'coin' else item.price[1]}**?{additional_msg}",
         view=view
     )
     view.message = message
