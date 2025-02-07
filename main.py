@@ -389,7 +389,7 @@ class UseItemView(discord.ui.View):
             return
 
         await interaction.response.defer()
-        await use_item(self.ctx, self.author, self.item, item_message=interaction.message, amount=1 if self.item.real_name != 'funny_item' else 69)
+        await use_item(self.author, self.item, item_message=interaction.message, reply_func=interaction.message.reply, amount=1 if self.item.real_name != 'funny_item' else 69)
 
 
 items = {
@@ -869,10 +869,10 @@ async def choose(ctx, *, contents: str):
 @app_commands.describe(dice="DND notation")
 async def dnd(ctx, *, dice: str = ''):
     """
-    Rolls n1 DND dice of size n2 (!roll <n1>d<n1>)
+    Rolls n1 DND dice of size n2 (roll <n1>d<n1>)
     Rolls 1d6 if no argument passed
     Examples: !dnd 2d6, !dnd d20, !dnd 5, !dnd
-    !roll <n1>d<n1> where n1 and n2 are numbers, d is a separator, 0 < n1 <= 100, 0 < n2 <= 1000
+    roll <n1>d<n1> where n1 and n2 are numbers, d is a separator, 0 < n1 <= 100, 0 < n2 <= 1000
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
 
@@ -909,7 +909,7 @@ async def dnd(ctx, *, dice: str = ''):
                     await ctx.reply(f"Rolling **1d{dice_size}**: `{random.choice(range(1, dice_size + 1))}`")
 
             else:
-                await ctx.reply("Example usage: `!roll 2d6`")
+                await ctx.reply("Example usage: `dnd 2d6`")
 
         elif 'd' not in contents and contents.lstrip("-").isdecimal():  # !dnd 10  =  !dnd 10d6
             if int(contents) < 0:
@@ -921,7 +921,7 @@ async def dnd(ctx, *, dice: str = ''):
                 await ctx.reply(f"Rolling **{contents}d6**: `{str(result)[1:-1]}`\nTotal: `{sum(result)}`")
 
         else:
-            await ctx.reply("Example usage: `!roll 2d6`")
+            await ctx.reply("Example usage: `dnd 2d6`")
 
 
 @client.command()
@@ -1445,6 +1445,16 @@ def currency_allowed(context):
     return 'currency_system' in server_settings.get(guild_).get('allowed_commands') and channel_ not in ignored_channels
 
 
+def currency_allowed_slash(interaction):
+    user_ = interaction.user.id
+    if user_ in ignored_users:
+        return False
+    guild_ = '' if not interaction.guild else str(interaction.guild.id)
+    make_sure_server_settings_exist(guild_)
+    channel_ = 0 if not interaction.channel else interaction.channel.id
+    return 'currency_system' in server_settings.get(guild_).get('allowed_commands') and channel_ not in ignored_channels
+
+
 def bot_down_check(guild_: str):
     """
     Returns True if (bot_down is False) or (bot_down is True and guild_id is allowed)
@@ -1868,7 +1878,7 @@ class ConfirmView(discord.ui.View):
                 print("Failed to edit the message on timeout.")
 
 
-async def confirm_item(item_message, author: discord.User, item: Item, amount=1, additional_context=[], additional_msg=''):
+async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, additional_context=[], additional_msg=''):
     """Sends a confirmation message with buttons and waits for the user's response."""
     # if item.real_name in ['rigged_potion']:
     #     bal = f"\nYour balance: {get_user_balance('', str(author.id)):,} {coin}\n‎"
@@ -1878,7 +1888,7 @@ async def confirm_item(item_message, author: discord.User, item: Item, amount=1,
         target, num = additional_context
         additional_msg = f'\nThis will set back both {author.display_name} and {target.display_name} back {num:,} {coin}'
     view = ConfirmView(author, item=item, amount=amount, type_=f"{item.name} usage")  # Create the view and pass the allowed author
-    message = await item_message.reply(
+    message = await reply_func(
         f"## {author.display_name}, do you want to use **{amount} {item}{'s' if amount != 1 else ''}**?{additional_msg}",
         view=view
     )
@@ -1922,7 +1932,7 @@ async def evil_potion_func(message, castor, amount, additional_context=[]):
         if additional_context:
             target, num = additional_context
         else:
-            await message.reply(f"`!use evil @user amount` to use this item")
+            await message.reply(f"`/use evil @user amount` to use this item")
             return
 
         target_id = str(target.id)
@@ -2051,37 +2061,43 @@ item_use_functions = {
     'the_catch': the_catch_func
 }
 
+usable_items = [items[item].name for item in item_use_functions.keys()]
 
-async def use_item(ctx: commands.Context, author: discord.User, item: Item, item_message, amount=1, additional_context=[]):
+
+async def use_item(author: discord.User, item: Item, item_message, reply_func, amount=1, additional_context=[]):
     """
     Uses an item by a user
     Additional context = [target, number] for Evil Potion
     """
     try:
         if global_profiles[str(author.id)]['items'].setdefault(item.real_name, 0) < amount:
-            await item_message.reply(f"**{author.display_name}**, you can't use **{amount:,} {item}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(author.id)]['items'][item.real_name]:,} {item.emoji}")
+            await reply_func(f"**{author.display_name}**, you can't use **{amount:,} {item}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(author.id)]['items'][item.real_name]:,} {item.emoji}")
             return
         if additional_context:
             bal1 = get_user_balance('', str(additional_context[0].id)), additional_context[0]
             bal2 = get_user_balance('', str(author.id)), author
             if bal1[0] < additional_context[1] or bal2[0] < additional_context[1]:
-                await item_message.reply(f"{min(bal1, bal2)[1].display_name} has less than {additional_context[1]:,} {coin}")
+                await reply_func(f"{min(bal1, bal2)[1].display_name} has less than {additional_context[1]:,} {coin}")
                 return
         elif item.real_name in ['evil_potion']:
-            await item_message.reply("`!use evil @user amount` to use this item")
+            await reply_func("`/use evil @user amount` to use this item")
             return
-        decision, msg = await confirm_item(item_message, author, item, amount, additional_context, f"\n> {item.description.split('\n\n')[0].replace('\n', '\n> ')}")
+        decision, msg = await confirm_item(reply_func, author, item, amount, additional_context, f"\n> {item.description.split('\n\n')[0].replace('\n', '\n> ')}")
+        if msg is not None:
+            reply_func = msg.reply
+        else:
+            reply_func = item_message.followup.send
         if decision is None:
             # await msg.reply("Decision timed out.")
             pass
         elif decision:
             if item.real_name in item_use_functions:
                 if global_profiles[str(author.id)]['items'][item.real_name] < amount:
-                    await msg.reply(f"**{author.display_name}**, you can't use **{amount:,} {item}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(author.id)]['items'][item.real_name]:,} {item.emoji}")
+                    await reply_func(f"**{author.display_name}**, you can't use **{amount:,} {item}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(author.id)]['items'][item.real_name]:,} {item.emoji}")
                     return
                 await item_use_functions[item.real_name](msg, author, amount, additional_context)
             else:
-                await msg.reply(f"**{author.display_name}** would have used **{amount:,} {item}** if they were usable {pupperrun}")
+                await reply_func(f"**{author.display_name}** would have used **{amount:,} {item}** if they were usable {pupperrun}")
         else:
             # Optionally, handle cancellation here
             pass
@@ -2456,59 +2472,72 @@ class Currency(commands.Cog):
         except Exception:
             print(traceback.format_exc())
 
-    @commands.command()
-    async def use(self, ctx):
+    @app_commands.command(name="use", description="Use item of choice")
+    @app_commands.describe(item="The name of the item", amount="How many you want to use. Only used for some items", target="For items that are used on someone else", number="For items that are used on someone else")
+    async def use(self, interaction, item: str, amount: int = 1, target: discord.Member = None, number: str = '0'):
         """
         Use item of choice
         Accepts a number as a parameter for some items where it makes sense, so you can use those in bulk
         """
         try:
-            guild_id = '' if not ctx.guild else str(ctx.guild.id)
-            author_id = str(ctx.author.id)
-            if currency_allowed(ctx) and bot_down_check(guild_id):
+            guild_id = '' if not interaction.guild else str(interaction.guild.id)
+            author_id = str(interaction.user.id)
+            if currency_allowed_slash(interaction) and bot_down_check(guild_id):
                 make_sure_user_profile_exists(guild_id, author_id)
-                content = ' '.join(ctx.message.content.split()[1:])
-                if not content:
-                    await ctx.reply("Please provide the name of the item you'd like to use!")
-                    return
-                item_name = find_closest_item(content)
+                item_name = find_closest_item(item)
                 if item_name is None:
-                    await ctx.reply(f"Couldn't find an item from the following description: `{content}`")
+                    await interaction.response.send_message(f"Couldn't find an item from the following description: `{item}`", ephemeral=True)
                     return
+                if items[item_name].real_name not in item_use_functions:
+                    await interaction.response.send_message(f"{items[item_name]} is not usable", ephemeral=True)
+                    return
+
+                if amount < 1 or item_name not in ['laundry_machine', 'funny_item']:
+                    amount = 1
+
                 context = []
-                amount = 1
                 if item_name in ['evil_potion']:
-                    if global_profiles[str(ctx.author.id)]['items'].setdefault(item_name, 0) < amount:
-                        await ctx.reply(f"**{ctx.author.display_name}**, you can't use **{amount:,} {items[item_name]}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(ctx.author.id)]['items'][item_name]:,} {items[item_name].emoji}")
+                    if global_profiles[str(interaction.user.id)]['items'].setdefault(item_name, 0) < amount:
+                        await interaction.response.send_message(f"**{interaction.user.display_name}**, you can't use **{amount:,} {items[item_name]}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(ctx.author.id)]['items'][item_name]:,} {items[item_name].emoji}")
                         return
-                    if mentions := ctx.message.mentions:
-                        if mentions[0].id in ignored_users:
-                            await ctx.reply(f"{mentions[0].display_name} is banned from Ukra Bot")
-                            return
-                        if mentions[0].id == ctx.author.id:
-                            await ctx.reply(f"Pick someone else please {icant}")
-                            return
-                        target = mentions[0]
-                    else:
-                        await ctx.reply(f'Something went wrong when trying to use {items[item_name]}. Please make sure that the command has a user mention')
+                    if not target:
+                        await interaction.response.send_message(f'Something went wrong when trying to use {items[item_name]}. Please make sure you pass a target', ephemeral=True)
                         return
-                    num, _, _ = convert_msg_to_number(ctx.message.content.split()[1:], '', author_id, ignored_sources=['%', 'all', 'half'])
-                    if num == -1:
-                        await ctx.reply(f"Something went wrong when trying to use {items[item_name]}. Make sure that the amount you're providing is an actual number")
+                    if target.id in ignored_users:
+                        await interaction.response.send_message(f"{target.display_name} is banned from Ukra Bot", ephemeral=True)
+                        return
+                    if target.id in (interaction.user.id, bot_id):
+                        await interaction.response.send_message(f"Pick someone else please {icant}", ephemeral=True)
+                        return
+                    num, _, _ = convert_msg_to_number([number], '', author_id, ignored_sources=['%', 'all', 'half'])
+                    if num < 1:
+                        await interaction.response.send_message("Make sure that the `number` you're providing is an actual, positive number", ephemeral=True)
                         return
                     context = [target, num]
                 elif item_name in ['funny_item']:
-                    amount = 69
-                elif item_name in ['laundry_machine']:
-                    amount, _, _ = convert_msg_to_number(ctx.message.content.split()[1:], '', author_id, ignored_sources=['%', 'all', 'half'])
-                    if amount == -1:
-                        amount = 1
+                    if amount != 69:
+                        # await interaction.response.send_message(f"You can only use 69 of these at a time", ephemeral=True)
+                        amount = 69
                 item = items[item_name]
-                await use_item(ctx, ctx.author, item, ctx.message, amount=amount, additional_context=context)
-            elif currency_allowed(ctx):
-                await ctx.reply(f'{reason}, currency commands are disabled')
+                await use_item(interaction.user, item, item_message=interaction, reply_func=interaction.response.send_message, amount=amount, additional_context=context)
+            elif currency_allowed_slash(interaction):
+                await interaction.response.send_message(f'{reason}, currency commands are disabled')
         except Exception:
             print(traceback.format_exc())
+
+    @use.autocomplete("item")
+    async def item_input_autocomplete(self, interaction: discord.Interaction, current: str):
+        """
+        Autocomplete callback for the item_input parameter.
+        Returns a list of up to 25 app_commands.Choice objects.
+        """
+        # Filter the available item names based on the current input (case-insensitive)
+        choices = [
+            app_commands.Choice(name=item_name, value=item_name)
+            for item_name in usable_items
+            if current.lower() in item_name.lower()
+        ]
+        return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.hybrid_command(name="buy", description="Purchase item of choice", aliases=['purchase'])
     @app_commands.describe(item="The name of the item", amount="How many you want to buy")
