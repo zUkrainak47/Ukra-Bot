@@ -345,6 +345,7 @@ class UseItemView(discord.ui.View):
             btn_enabled = btn_enabled >= 69
         if item.real_name not in item_use_functions:
             btn_enabled = False
+        self.message = None
         self.ctx = ctx
         self.author = author
         self.item = item
@@ -390,6 +391,16 @@ class UseItemView(discord.ui.View):
 
         await interaction.response.defer()
         await use_item(self.author, self.item, item_message=interaction.message, reply_func=interaction.message.reply, amount=1 if self.item.real_name != 'funny_item' else 69)
+
+    async def on_timeout(self):
+        # Disable all buttons in the view.
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+
+        # If the message was sent, update it to show the disabled buttons.
+        if self.message:
+            await self.message.edit(view=self)
 
 
 items = {
@@ -1608,8 +1619,8 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
 class PaginationView(discord.ui.View):
     current_page: int = 1
 
-    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', ctx_=None):
-        super().__init__()
+    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', ctx_=None, timeout: float = 120):
+        super().__init__(timeout=timeout)
         self.data = data_
         self.title = title_
         self.color = color_
@@ -1733,7 +1744,8 @@ class PaginationView(discord.ui.View):
                         embed_color = 0xffd000
                     owned = global_profiles[str(interaction.user.id)]['items'].setdefault(item_data, 0)
                     view = UseItemView(self.ctx, target, items[item_data], owned)
-                    await interaction.response.send_message(embed=items[item_data].describe(embed_color, owned, target.avatar.url), view=view)  # Send the response
+                    message = await interaction.response.send_message(embed=items[item_data].describe(embed_color, owned, target.avatar.url), view=view)  # Send the response
+                    view.message = message
                 button.callback = item_callback
 
                 # Add the button to the view.
@@ -1762,6 +1774,16 @@ class PaginationView(discord.ui.View):
         await interaction.response.defer()
         self.current_page = math.ceil(len(self.data) / self.page_size)
         await self.update_message(self.get_current_page_data())
+
+    async def on_timeout(self):
+        # Disable all buttons in the view.
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+
+        # If the message was sent, update it to show the disabled buttons.
+        if self.message:
+            await self.message.edit(view=self)
 
 
 class ConfirmView(discord.ui.View):
@@ -1839,6 +1861,7 @@ class ConfirmView(discord.ui.View):
 class LottoView(discord.ui.View):
     def __init__(self, s, ctx, enterbutton, entrance_price, ukra_bot_fee, payout, timeout: float = 90):
         super().__init__(timeout=timeout)
+        self.message = None
         self.ctx = ctx
         self.author = ctx.author
         self.author_id = ctx.author.id
@@ -1867,6 +1890,16 @@ class LottoView(discord.ui.View):
             await self.s.enter_lotto(self.ctx, self.entrance_price, self.ukra_bot_fee, self.payout)
         except:
             print(traceback.format_exc())
+
+    async def on_timeout(self):
+        # Disable all buttons in the view when the view times out.
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+
+        # If you have a reference to the sent message, update it to reflect that the buttons are now disabled.
+        if self.message:
+            await self.message.edit(view=self)
 
 
 async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, additional_context=[], additional_msg='', interaction=None):
@@ -2423,7 +2456,8 @@ class Currency(commands.Cog):
                     embed_color = 0xffd000
                 owned = global_profiles[author_id]['items'].setdefault(found_item, 0)
                 view = UseItemView(ctx, ctx.author, items[found_item], owned)
-                await ctx.reply(embed=items[found_item].describe(embed_color, owned, ctx.author.avatar.url), view=view)
+                message = await ctx.reply(embed=items[found_item].describe(embed_color, owned, ctx.author.avatar.url), view=view)
+                view.message = message
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
@@ -4231,14 +4265,16 @@ class Currency(commands.Cog):
 
             else:
                 view = LottoView(self, ctx, enterbutton=not_joined, entrance_price=entrance_price, ukra_bot_fee=ukra_bot_fee, payout=payout)
-                await ctx.send(f'# {peepositbusiness} Lottery\n'
-                               '### Current lottery:\n'
-                               f'- **{len(active_lottery[today_date])}** participant{'s' if len(active_lottery[today_date]) != 1 else ''}\n'
-                               f'- **{len(active_lottery[today_date]) * payout:,}** {coin} in pool\n'
-                               f'- Participation price: {entrance_price} {coin}\n'
-                               f'- Ends <t:{get_daily_reset_timestamp()}:R>\n' +
-                               # f'**If you want to participate, run** `!lottery enter`' * not_joined +
-                               f"You've joined today's lottery {yay} {join_server_msg}" * (not not_joined), view=view)
+                message = await ctx.send(
+                    f'# {peepositbusiness} Lottery\n'
+                    '### Current lottery:\n'
+                    f'- **{len(active_lottery[today_date])}** participant{'s' if len(active_lottery[today_date]) != 1 else ''}\n'
+                    f'- **{len(active_lottery[today_date]) * payout:,}** {coin} in pool\n'
+                    f'- Participation price: {entrance_price} {coin}\n'
+                    f'- Ends <t:{get_daily_reset_timestamp()}:R>\n' +
+                    # f'**If you want to participate, run** `!lottery enter`' * not_joined +
+                    f"You've joined today's lottery {yay} {join_server_msg}" * (not not_joined), view=view)
+                view.message = message
 
     async def run_giveaway(self, ctx, admin=False):
         """
