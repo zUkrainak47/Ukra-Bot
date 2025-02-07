@@ -400,7 +400,10 @@ class UseItemView(discord.ui.View):
 
         # If the message was sent, update it to show the disabled buttons.
         if self.message:
-            await self.message.edit(view=self)
+            try:
+                await self.message.edit(view=self)
+            except Exception as e:
+                print("Failed to update the message on timeout:", e)
 
 
 items = {
@@ -1745,7 +1748,7 @@ class PaginationView(discord.ui.View):
                     owned = global_profiles[str(interaction.user.id)]['items'].setdefault(item_data, 0)
                     view = UseItemView(self.ctx, target, items[item_data], owned)
                     message = await interaction.response.send_message(embed=items[item_data].describe(embed_color, owned, target.avatar.url), view=view)  # Send the response
-                    view.message = message
+                    view.message = await interaction.original_response()
                 button.callback = item_callback
 
                 # Add the button to the view.
@@ -1783,7 +1786,10 @@ class PaginationView(discord.ui.View):
 
         # If the message was sent, update it to show the disabled buttons.
         if self.message:
-            await self.message.edit(view=self)
+            try:
+                await self.message.edit(view=self)
+            except Exception as e:
+                print("Failed to update the message on timeout:", e)
 
 
 class ConfirmView(discord.ui.View):
@@ -1887,7 +1893,9 @@ class LottoView(discord.ui.View):
                 return
 
             await interaction.response.defer()
-            await self.s.enter_lotto(self.ctx, self.entrance_price, self.ukra_bot_fee, self.payout)
+            entered = await self.s.enter_lotto(self.ctx, self.entrance_price, self.ukra_bot_fee, self.payout)
+            if entered:
+                await self.on_timeout()
         except:
             print(traceback.format_exc())
 
@@ -1899,7 +1907,10 @@ class LottoView(discord.ui.View):
 
         # If you have a reference to the sent message, update it to reflect that the buttons are now disabled.
         if self.message:
-            await self.message.edit(view=self)
+            try:
+                await self.message.edit(view=self)
+            except Exception as e:
+                print("Failed to update the message on timeout:", e)
 
 
 async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, additional_context=[], additional_msg='', interaction=None):
@@ -2135,6 +2146,7 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
     Buys an item by a user
     """
     try:
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
         price = item.price.copy()
         if price[1] in items:
             price[1] = items[price[1]]
@@ -2167,7 +2179,7 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
                 global_profiles[author_id]['items'][price[1].real_name] -= price[0] * amount
                 last_line = f"Owned: {global_profiles[author_id]['items'][price[1].real_name]:,} {price[1].emoji}"
             else:  # price[1] == 'coin'
-                bal = remove_coins_from_user(str(ctx.guild.id), author_id, price[0] * amount)
+                bal = remove_coins_from_user(guild_id, author_id, price[0] * amount)
                 last_line = f"Balance: {bal:,} {coin}"
             save_profiles()
             await msg.reply(f"## Purchase successful\n"
@@ -4226,15 +4238,16 @@ class Currency(commands.Cog):
             if ctx.author.id not in active_lottery[today_date]:
                 if make_sure_user_has_currency(guild_id, author_id) < entrance_price:
                     await ctx.reply(f"You don't own {entrance_price} {coin} {sadgebusiness}")
-                    return
+                    return False
                 remove_coins_from_user(guild_id, author_id, entrance_price)
                 active_lottery[today_date].append(ctx.author.id)
                 save_active_lottery()
                 add_coins_to_user(guild_id, str(bot_id), ukra_bot_fee)
-                await ctx.reply(
-                    f"**Successfully entered lottery** {yay}\nYour balance: {get_user_balance(guild_id, author_id):,} {coin}" + join_server_msg)
+                await ctx.reply(f"**Successfully entered lottery** {yay}\nYour balance: {get_user_balance(guild_id, author_id):,} {coin}" + join_server_msg)
+                return True
             else:
                 await ctx.reply(f"You've already joined today's lottery {peepositbusiness}" + join_server_msg)
+                return True
 
         except Exception:
             print(traceback.format_exc())
