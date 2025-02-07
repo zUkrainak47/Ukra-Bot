@@ -416,63 +416,66 @@ def find_closest_item(input_str):
 
 
 async def loan_payment(id_: str, payment: int, pay_loaner=True):
-    """
-    Returns
-    whether the loan is paid back,
-    who the loaner was,
-    how big the loan was,
-    how much money is left for the loanee
-    """
-    loaner_id = active_loans[id_][0]
-    loanee_id = active_loans[id_][1]
+    try:
+        """
+        Returns
+        whether the loan is paid back,
+        who the loaner was,
+        how big the loan was,
+        how much money is left for the loanee
+        """
+        loaner_id = active_loans[id_][0]
+        loanee_id = active_loans[id_][1]
 
-    if loaner_id in ignored_users:
-        global_profiles[str(loaner_id)]['dict_1']['out'].remove(id_)
-        global_profiles[str(loanee_id)]['dict_1']['in'].remove(id_)
-        del active_loans[id_]
-        return False, loaner_id, False, False, False
+        if loaner_id in ignored_users:
+            global_profiles[str(loaner_id)]['dict_1']['out'].remove(id_)
+            global_profiles[str(loanee_id)]['dict_1']['in'].remove(id_)
+            del active_loans[id_]
+            return False, loaner_id, False, False, False
 
-    amount = active_loans[id_][2]
-    to_be_paid = amount - active_loans[id_][3]
-    paid = min(payment, to_be_paid)
-    active_loans[id_][3] += paid
-    if pay_loaner:
-        add_coins_to_user('', str(loaner_id), paid)
-    if active_loans[id_][3] == amount:
-        left_over = payment - paid
-        global_profiles[str(loaner_id)]['dict_1']['out'].remove(id_)
-        global_profiles[str(loanee_id)]['dict_1']['in'].remove(id_)
-        save_profiles()
+        amount = active_loans[id_][2]
+        to_be_paid = amount - active_loans[id_][3]
+        paid = min(payment, to_be_paid)
+        active_loans[id_][3] += paid
+        if pay_loaner:
+            add_coins_to_user('', str(loaner_id), paid)
+        if active_loans[id_][3] == amount:
+            left_over = payment - paid
+            global_profiles[str(loaner_id)]['dict_1']['out'].remove(id_)
+            global_profiles[str(loanee_id)]['dict_1']['in'].remove(id_)
+            save_profiles()
 
-        del active_loans[id_]
+            del active_loans[id_]
+            save_active_loans()
+
+            global fetched_users
+            if loaner_id in fetched_users:
+                loaner = fetched_users.get(loaner_id)
+            else:
+                try:
+                    loaner = await client.fetch_user(loaner_id)
+                    fetched_users[loaner_id] = loaner
+                except discord.errors.NotFound:
+                    loaner = None
+
+            if loanee_id in fetched_users:
+                loanee = fetched_users.get(loanee_id)
+            else:
+                try:
+                    loanee = await client.fetch_user(loanee_id)
+                    fetched_users[loanee_id] = loanee
+                except discord.errors.NotFound:
+                    loanee = None
+
+            if loaner and loanee and loaner.id != bot_id:
+                await loaner.send(f'## Loan `#{id_}` of {amount:,} {coin} from {loanee.name} (<@{loanee_id}>) has been repaid!\nBalance: {get_user_balance('', str(loaner_id)):,} {coin}')
+
+            return True, loaner_id, amount, left_over, paid
+
         save_active_loans()
-
-        global fetched_users
-        if loaner_id in fetched_users:
-            loaner = fetched_users.get(loaner_id)
-        else:
-            try:
-                loaner = await client.fetch_user(loaner_id)
-                fetched_users[loaner_id] = loaner
-            except discord.errors.NotFound:
-                loaner = None
-
-        if loanee_id in fetched_users:
-            loanee = fetched_users.get(loanee_id)
-        else:
-            try:
-                loanee = await client.fetch_user(loanee_id)
-                fetched_users[loanee_id] = loanee
-            except discord.errors.NotFound:
-                loanee = None
-
-        if loaner and loanee and loaner.id != bot_id:
-            await loaner.send(f'## Loan `#{id_}` of {amount:,} {coin} from {loanee.name} (<@{loanee_id}>) has been repaid!\nBalance: {get_user_balance('', str(loaner_id)):,} {coin}')
-
-        return True, loaner_id, amount, left_over, paid
-
-    save_active_loans()
-    return False, loaner_id, amount, 0, paid
+        return False, loaner_id, amount, 0, paid
+    except Exception:
+        print(traceback.format_exc())
 
 
 def make_sure_server_settings_exist(guild_id, save=True):
@@ -631,6 +634,7 @@ async def on_ready():
         client.add_command(choose)
         client.add_command(compliment)
         client.add_command(backup)
+        client.add_command(botafk)
         client.add_command(save)
         client.add_command(source)
         client.add_command(server)
@@ -746,19 +750,6 @@ async def on_ready():
             tasks.append(asyncio.create_task(resume_giveaway(message_id)))
         await asyncio.gather(*tasks)
 
-    # async def refund_giveaways():
-    #     for guild_id in active_giveaways:
-    #         guild = await client.fetch_guild(int(guild_id))
-    #         if not guild:
-    #             continue
-    #         this_guild_giveaways = active_giveaways.get(guild_id)
-    #         for user_id, amount in this_guild_giveaways.items():
-    #             member = guild.get_member(int(user_id))
-    #             add_coins_to_user(guild_id, user_id, amount)  # save file
-    #             active_giveaways[guild_id].pop(user_id)
-    #             save_active_giveaways()  # I don't like this, but it doesn't seem to work otherwise
-    #             await member.send(f'You have been refunded **{amount:,}** {coin} for giveaways you hosted in **{guild.name}**, they was canceled due to a bot reset')
-    #             await log_channel.send(f"💸 {member.mention} has been refunded **{amount:,}** {coin} for giveaways they hosted in **{guild.name}**")
     for role_ in role_dict:
         await remove_all_roles(role_)
         save_dict[role_]()
@@ -776,18 +767,6 @@ async def ignore(ctx):
 async def ping(ctx):
     """pong"""
     await ctx.send(f"Pong! {round(client.latency * 1000)}ms")
-
-
-# @client.command()
-# async def uptime(ctx):
-#     """check how long the bot has been running for"""
-#     end = time.perf_counter()
-#     run_time = end - start
-#     to_hours = time.strftime("%T", time.gmtime(run_time))
-#     decimals = f'{(run_time % 1):.3f}'
-#     msg = f'{bot_name} has been up for {to_hours}:{str(decimals)[2:]}'
-#
-#     await ctx.send(msg)
 
 
 @commands.hybrid_command(name="uptime", description="Check how long the bot has been running for")
@@ -956,22 +935,6 @@ async def botafk(ctx):
             bot_down = False
             reason = f'{bot_name} is in Development Mode'
             save_everything()
-
-
-# @client.command(aliases=['notafk', 'unafk'])
-# async def notdown(ctx):
-#     """
-#     Sends message announcing the bot is not actually shutting down
-#     Only usable by bot developer
-#     """
-#     if ctx.author.id not in allowed_users:
-#         await ctx.send("You can't use this command, silly")
-#     else:
-#         await ctx.send(f"Ukra Bot is no longer going down {yay}")
-#         global bot_down, reason
-#         bot_down = False
-#         reason = f'{bot_name} is in Development Mode'
-#         save_everything()
 
 
 @commands.hybrid_command(name="save", description="Saves everything")
@@ -2233,29 +2196,13 @@ class Currency(commands.Cog):
             except discord.errors.NotFound:
                 return None
 
-    async def get_user_profile(self, ctx, target, not_slash, full_info=False):
+    async def get_user_profile(self, ctx, target, full_info=False):
         """
         Returns embed for profile or info
         """
         global fetched_users
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
-            if target is None:
-                if not_slash:
-                    contents = ctx.message.content.split()[1:]
-                    target_id = convert_msg_to_user_id(contents)
-
-                    if target_id == -1:  # if no id or mention was passed
-                        target = ctx.author
-                    else:
-                        try:  # if ID or mention was found
-                            target = await self.get_user(target_id)
-
-                        except discord.errors.NotFound:
-                            await ctx.reply(f'User with ID "{target_id}" does not exist')
-                            return
-                else:
-                    target = ctx.author
             target_id = target.id
             if ctx.guild and ctx.guild.get_member(target_id):
                 target = ctx.guild.get_member(target_id)
@@ -2352,15 +2299,32 @@ class Currency(commands.Cog):
         """
         Check your or someone else's profile (stats being collected since 12 Jan 2025)
         """
+        if user is None:
+            user = ctx.author
+        await self.get_user_profile(ctx, user, False)
 
-        await self.get_user_profile(ctx, user, getattr(ctx, "interaction", None) is None, False)
+    @profile.error
+    async def profile_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            await ctx.reply("If you're passing something it must be a user ID or mention")
+        else:
+            print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.hybrid_command(name="info", description="Check your or someone else's info")
     async def info(self, ctx, *, user: discord.User = None):
         """
         Check your or someone else's info (stats being collected since 12 Jan 2025)
         """
-        await self.get_user_profile(ctx, user, getattr(ctx, "interaction", None) is None, True)
+        if user is None:
+            user = ctx.author
+        await self.get_user_profile(ctx, user, True)
+        
+    @info.error
+    async def info_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            await ctx.reply("If you're passing something it must be a user ID or mention")
+        else:
+            print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.hybrid_command(name="request", description="DMs you all data the bot collected about you")
     async def request(self, ctx):
@@ -2376,19 +2340,15 @@ class Currency(commands.Cog):
         if guild_id:
             await ctx.reply('Check your DMs', ephemeral=True)
 
-    @commands.command(aliases=['inv'])
-    async def inventory(self, ctx):
+    @commands.hybrid_command(name="inventory", description="Displays your or someone else's inventory", aliases=['inv'])
+    async def inventory(self, ctx, *, user: discord.User=None):
         """
         Displays your or someone else's inventory
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
-            contents = ctx.message.content.split()[1:]
-            if len(contents):
-                user_in_question = convert_msg_to_user_id(contents)
-            if not len(contents) or user_in_question == -1:
-                user_in_question = ctx.author.id
-            user = await self.get_user(user_in_question)
+            if user is None:
+                user = ctx.author
             user_id = str(user.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 make_sure_user_profile_exists(guild_id, user_id)
@@ -2774,10 +2734,11 @@ class Currency(commands.Cog):
             highest_balance_check(guild_id, str(user.id), num)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
+
     @balance.error
     async def balance_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
-            await ctx.reply("If you're passing something it must be another user's ID or mention")
+            await ctx.reply("If you're passing something it must be a user ID or mention")
         else:
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
