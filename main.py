@@ -402,6 +402,7 @@ items = {
     'weekly_item': Item('weekly_item', "Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
 }
 sorted_items = {item: num for num, item in enumerate(items)}
+shop_items = [(items[item].real_name, items[item].price) for item in items if (items[item].price is not None)]
 
 
 def find_closest_item(input_str):
@@ -1636,7 +1637,11 @@ class PaginationView(discord.ui.View):
             desc = ''
             for item, num in data:
                 emoji, name = items[item].emoji, items[item].name
-                desc += f'{emoji} **{name}** ─ {num:,}\n'
+                if self.user_in_question:
+                    desc += f'{emoji} **{name}** ─ {num:,}\n'
+                else:
+                    desc += f'{emoji} **{name}** ─ {num[0]:,} {coin if num[1] == 'coin' else items[num[1]].emoji}\n'
+
             embed = discord.Embed(title="", color=self.color, description=desc)
 
             if self.author:
@@ -1835,7 +1840,7 @@ async def confirm_purchase(item_message, author: discord.User, item: Item, amoun
     """Sends a confirmation message with buttons and waits for the user's response."""
     view = ConfirmView(author, item=item, amount=amount)  # Create the view and pass the allowed author
     message = await item_message.reply(
-        f"## {author.display_name}, do you want to buy **{amount} {item}{'s' if amount != 1 else ''} for {item.price[0] * amount:,} {coin if item.price[1] == 'coin' else item.price[1]}**?{additional_msg}",
+        f"## {author.display_name}, do you want to buy **{amount} {item}{'s' if amount != 1 else ''} for {item.price[0] * amount:,} {coin if item.price[1] == 'coin' else item.price[1]}{'s' if (item.price[0] * amount != 1 and item.price[1] != 'coin') else ''}**?{additional_msg}",
         view=view
     )
     view.message = message
@@ -2069,7 +2074,7 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
                 last_line = f"Balance: {bal:,} {coin}"
             save_profiles()
             await item_message.reply(f"## Purchase successful\n"
-                                     f"**+{amount:,} {item}**\n"
+                                     f"**+{amount:,} {item}{'s' if amount != 1 else ''}**\n"
                                      f"Owned: {global_profiles[author_id]['items'][item.real_name]:,} {item.emoji}\n"
                                      f"\n"
                                      f"**-{price[0] * amount:,} {coin if price[1] == 'coin' else price[1]}**\n"
@@ -2097,7 +2102,7 @@ def add_item_to_user(guild_id: str, user_id: str, item: str, amount: int = 1, sa
     if save:
         save_profiles()
 
-    return f"\n\n**+{amount:,} {items[item]}**\nOwned: {global_profiles[user_id]['items'][item]:,} {items[item].emoji}"
+    return f"\n\n**+{amount:,} {items[item]}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[user_id]['items'][item]:,} {items[item].emoji}"
 
 
 class Currency(commands.Cog):
@@ -2289,6 +2294,24 @@ class Currency(commands.Cog):
 
                     pagination_view = PaginationView(user_items, title_=f"", author_=f"{user.display_name}'s Inventory", author_icon_=user.avatar.url, color_=embed_color, description_=desc, user_in_question_=user_in_question, ctx_=ctx)
                     await pagination_view.send_embed()
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
+
+    @commands.command()
+    async def shop(self, ctx):
+        """
+        Item shop!
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                desc = ''
+                embed_color = 0xffd000
+
+                pagination_view = PaginationView(shop_items, color_=embed_color, description_=desc, ctx_=ctx, title_=f"", author_=f"Item Shop", author_icon_='https://cdn.discordapp.com/attachments/696842659989291130/1337215653618122804/item_shop.png?ex=67a6a2a0&is=67a55120&hm=d63680cfc556c0924a6e9a0cfc4477d2568156929d507271312abe10421484af&')
+                await pagination_view.send_embed()
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
