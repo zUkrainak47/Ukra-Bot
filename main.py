@@ -3572,7 +3572,7 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
-    @commands.hybrid_command(name="dice", description="Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet", aliases=['1d, onedice'])
+    @commands.hybrid_command(name="dice", description="Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet", aliases=['1d', 'onedice'])
     @app_commands.describe(number="How many coins you're betting")
     async def dice(self, ctx, *, number: str = ''):
         """
@@ -3618,7 +3618,7 @@ class Currency(commands.Cog):
         pass
 
     @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
-    @commands.hybrid_command(name="twodice", description="Takes a bet, rolls 2d6, if it rolled 12 you win 35x the bet", aliases=['2d, onedice'])
+    @commands.hybrid_command(name="twodice", description="Takes a bet, rolls 2d6, if it rolled 12 you win 35x the bet", aliases=['2d'])
     @app_commands.describe(number="How many coins you're betting")
     async def twodice(self, ctx, *, number: str = ''):
         """
