@@ -3960,8 +3960,8 @@ class Currency(commands.Cog):
             print(traceback.format_exc())
             await ctx.reply("Loan failed!")
 
-    @commands.command()
-    async def loans(self, ctx):
+    @commands.hybrid_command(name="loans", description="Check your or someone else's active loans")
+    async def loans(self, ctx, *, user: discord.User=None):
         """
         Displays your or someone else's active loans
         To pay back a loan use !pb or !give
@@ -3970,12 +3970,8 @@ class Currency(commands.Cog):
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             loans_found1 = 0
             loans_found2 = 0
-            contents = ctx.message.content.split()[1:]
-            if len(contents):
-                user_in_question = convert_msg_to_user_id(contents)
-            if not len(contents) or user_in_question == -1:
-                user_in_question = ctx.author.id
-            user = await self.get_user(user_in_question)
+            if user is None:
+                user = ctx.author
 
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 user_id = str(user.id)
@@ -4015,6 +4011,13 @@ class Currency(commands.Cog):
         except Exception:
             print(traceback.format_exc())
             await ctx.reply("Something went wrong!")
+
+    @loans.error
+    async def loans_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            await ctx.reply("Invalid input! Please provide a user mention or ID")
+        else:
+            print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.hybrid_command(name="pb", description="Pay back a loan", aliases=['payback', 'pay_back'])
     @app_commands.describe(user='Who you owe coins')
