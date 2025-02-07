@@ -3501,11 +3501,12 @@ class Currency(commands.Cog):
         else:
             await ctx.reply(f"Result is `{random.choice(results)}`!")
 
-    @commands.command(aliases=['g'])
-    async def gamble(self, ctx):
+    @commands.hybrid_command(name="gamble", description="Takes a bet, 50% win rate", aliases=['g'])
+    @app_commands.describe(number="How many coins you're betting")
+    async def gamble(self, ctx, *, number: str = ''):
         """
         Takes a bet, 50% win rate
-        !g number
+        !gamble 2.5k
         """
         results = [1, 0]
         result = random.choice(results)
@@ -3513,11 +3514,11 @@ class Currency(commands.Cog):
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-            contents = ctx.message.content.split()[1:]
+            contents = number.split()
             if len(contents) > 1:
-                await ctx.reply(f"!gamble takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
+                await ctx.reply(f"gamble takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
                 return
-            number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
+            number, _, _ = convert_msg_to_number([number], guild_id, author_id)
             if number == -1:
                 number = 0
             try:
@@ -3538,8 +3539,9 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
-    @commands.command(aliases=['1d', 'onedice'])
-    async def dice(self, ctx):
+    @commands.hybrid_command(name="dice", description="Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet", aliases=['1d, onedice'])
+    @app_commands.describe(number="How many coins you're betting")
+    async def dice(self, ctx, *, number: str = ''):
         """
         Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet
         There is a 1-second cooldown
@@ -3551,12 +3553,12 @@ class Currency(commands.Cog):
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-            contents = ctx.message.content.split()[1:]
+            contents = number.split()
             if len(contents) > 1:
-                await ctx.reply(f"!dice takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
+                await ctx.reply(f"dice takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
                 return
 
-            number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
+            number, _, _ = convert_msg_to_number([number], guild_id, author_id)
             if number == -1:
                 number = 0
             try:
@@ -3580,8 +3582,9 @@ class Currency(commands.Cog):
         pass
 
     @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
-    @commands.command(aliases=['2d'])
-    async def twodice(self, ctx):
+    @commands.hybrid_command(name="twodice", description="Takes a bet, rolls 2d6, if it rolled 12 you win 35x the bet", aliases=['2d, onedice'])
+    @app_commands.describe(number="How many coins you're betting")
+    async def twodice(self, ctx, *, number: str = ''):
         """
         Takes a bet, rolls 2d6, if it rolled 12 you win 35x the bet
         There is a 1-second cooldown
@@ -3594,12 +3597,12 @@ class Currency(commands.Cog):
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-            contents = ctx.message.content.split()[1:]
+            contents = number.split()
             if len(contents) > 1:
-                await ctx.reply(f"!twodice takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
+                await ctx.reply(f"twodice takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
                 return
 
-            number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
+            number, _, _ = convert_msg_to_number([number], guild_id, author_id)
             if number == -1:
                 number = 0
             try:
@@ -4112,8 +4115,9 @@ class Currency(commands.Cog):
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
-    @commands.command(aliases=['slot', 's'])
-    async def slots(self, ctx):
+    @commands.hybrid_command(name="slots", description="Takes a bet, spins three wheels of 10 emojis", aliases=['slot', 's'])
+    @app_commands.describe(number="How many coins you're betting")
+    async def slots(self, ctx, *, number: str = ''):
         """
         Takes a bet, spins three wheels of 10 emojis, if all of them match you win 50x the bet, if they are :sunfire2: you win 500x the bet
         !slots number
@@ -4123,12 +4127,12 @@ class Currency(commands.Cog):
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-            contents = ctx.message.content.split()[1:]
+            contents = number.split()
             if len(contents) > 1:
-                await ctx.reply(f"!slots takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
+                await ctx.reply(f"slots takes at most 1 argument - a bet\n({len(contents)} arguments were passed)")
                 return
 
-            number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
+            number, _, _ = convert_msg_to_number([number], guild_id, author_id)
             if number == -1:
                 number = 0
             results = [random.choice(slot_options) for _ in range(3)]
