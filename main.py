@@ -9,7 +9,7 @@ import os
 import random
 from dotenv import load_dotenv
 import discord
-from discord import Intents, Client, Message
+from discord import Intents, Client, Message, app_commands
 from discord.ext import commands
 import json
 import time
@@ -406,6 +406,7 @@ items = {
 sorted_items = {item: num for num, item in enumerate(items)}
 shop_items = [(items[item].real_name, items[item].price) for item in items if (items[item].price is not None)]
 all_items = list(items.keys())
+all_item_names = [items[item].name for item in all_items]
 
 
 def find_closest_item(input_str):
@@ -623,7 +624,7 @@ async def print_reset_time(r, ctx, custom_message=''):
 
 @client.event
 async def on_ready():
-    print('Bot is up!')
+    await client.tree.sync()
     global log_channel, rare_channel, lottery_channel
     log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
     rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
@@ -673,6 +674,7 @@ async def on_ready():
                     await log_channel.send(f"❓ Failed to remove `@{role.name}` from {member.mention}: {e}")
             # message = await log_channel.fetch_message(react_to.id)
             # await message.add_reaction('✅')
+    print('Bot is up!')
 
     async def resume_giveaway(message_id):
         try:
@@ -1854,7 +1856,7 @@ async def confirm_purchase(item_message, author: discord.User, item: Item, amoun
     """Sends a confirmation message with buttons and waits for the user's response."""
     view = ConfirmView(author, item=item, amount=amount, type_=f"{item.name} purchase")  # Create the view and pass the allowed author
     message = await item_message.reply(
-        f"## {author.display_name}, do you want to buy **{amount} {item}{'s' if amount != 1 else ''} for {item.price[0] * amount:,} {coin if item.price[1] == 'coin' else items[item.price[1]].emoji}{'s' if (item.price[0] * amount != 1 and item.price[1] != 'coin') else ''}**?{additional_msg}",
+        f"## {author.display_name}, do you want to buy **{amount} {item}{'s' if amount != 1 else ''} for {item.price[0] * amount:,} {coin if item.price[1] == 'coin' else items[item.price[1]].emoji}**?{additional_msg}",
         view=view
     )
     view.message = message
@@ -2092,11 +2094,11 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
                 last_line = f"Balance: {bal:,} {coin}"
             save_profiles()
             await msg.reply(f"## Purchase successful\n"
-                                     f"**+{amount:,} {item}{'s' if amount != 1 else ''}**\n"
-                                     f"Owned: {global_profiles[author_id]['items'][item.real_name]:,} {item.emoji}\n"
-                                     f"\n"
-                                     f"**-{price[0] * amount:,} {coin if price[1] == 'coin' else price[1]}**\n"
-                                     f"{last_line}")
+                            f"**+{amount:,} {item}{'s' if amount != 1 else ''}**\n"
+                            f"Owned: {global_profiles[author_id]['items'][item.real_name]:,} {item.emoji}\n"
+                            f"\n"
+                            f"**-{price[0] * amount:,} {coin if price[1] == 'coin' else price[1]}**\n"
+                            f"{last_line}")
         else:
             # Optionally, handle cancellation here
             pass
@@ -2318,7 +2320,7 @@ class Currency(commands.Cog):
         except Exception:
             print(traceback.format_exc())
 
-    @commands.command(aliases=['store'])
+    @commands.hybrid_command(name="shop", description="Item shop!", aliases=['store'])
     async def shop(self, ctx):
         """
         Item shop!
@@ -2336,39 +2338,71 @@ class Currency(commands.Cog):
         except Exception:
             print(traceback.format_exc())
 
-    @commands.command()
-    async def item(self, ctx):
+    @commands.hybrid_command(name="item", description="Displays info on an item")
+    @app_commands.describe(item="The name of the item")
+    async def item(self, ctx, *, item: str):
         """
-        Displays info on an item
-        Example: !info daily
+        Displays info on an item.
+        For slash commands, you might want to add an autocomplete or choice list.
+        For prefix commands, the item name is parsed from the message content.
         """
         try:
+            # Determine if this was a slash command or a prefix command.
+            if getattr(ctx, "interaction", None) is None:
+                # This is a prefix command; we need to extract the input from the message.
+                if not item:
+                    # Extract the item name from the message content if not provided as an argument.
+                    # (This is usually not needed with hybrid commands that have proper parameters.)
+                    content_parts = ctx.message.content.split()
+                    if len(content_parts) < 2:
+                        await ctx.reply("You need to provide the item name!\nExample: `!item rigged`\nRun `!items` for the list of all items")
+                        return
+                    item = " ".join(content_parts[1:])
+            else:
+                # This is a slash command; item_input should come from the slash command option.
+                # You can also use autocompletion or choices here if you wish.
+                if not item:
+                    await ctx.reply("You need to provide the item name!", ephemeral=True)
+                    return
+
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             author_id = str(ctx.author.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 make_sure_user_profile_exists(guild_id, author_id)
-                content = ' '.join(ctx.message.content.split()[1:])
-                if not content:
-                    await ctx.reply('You need to provide the item name!\nExample: `!item rigged`\nRun `!items` for the list of all items')
+                # Find the closest matching item using your existing function
+                found_item = find_closest_item(item)
+                if not found_item:
+                    await ctx.reply(f"Couldn't find an item matching: `{item}`")
                     return
-                item = find_closest_item(content)
-                if not item:
-                    await ctx.reply(f"Couldn't find an item from the following description: `{content}`")
-                    return
+
+                # Prepare embed color based on context
                 if ctx.guild:
                     embed_color = ctx.author.color
                     if embed_color == discord.Colour.default():
                         embed_color = 0xffd000
                 else:
                     embed_color = 0xffd000
-                owned = global_profiles[str(ctx.author.id)]['items'].setdefault(item, 0)
-                view = UseItemView(ctx, ctx.author, items[item], owned)
-                await ctx.reply(embed=items[item].describe(embed_color, owned, ctx.author.avatar.url), view=view)  # Send the response
-
+                owned = global_profiles[author_id]['items'].setdefault(found_item, 0)
+                view = UseItemView(ctx, ctx.author, items[found_item], owned)
+                await ctx.reply(embed=items[found_item].describe(embed_color, owned, ctx.author.avatar.url), view=view)
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
             print(traceback.format_exc())
+
+    @item.autocomplete("item")
+    async def item_input_autocomplete(self, interaction: discord.Interaction, current: str):
+        """
+        Autocomplete callback for the item_input parameter.
+        Returns a list of up to 25 app_commands.Choice objects.
+        """
+        # Filter the available item names based on the current input (case-insensitive)
+        choices = [
+            app_commands.Choice(name=item_name, value=item_name)
+            for item_name in all_item_names
+            if current.lower() in item_name.lower()
+        ]
+        return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     # @commands.command()
     # async def items(self, ctx):
@@ -2384,7 +2418,7 @@ class Currency(commands.Cog):
     #     except Exception:
     #         print(traceback.format_exc())
 
-    @commands.command()
+    @commands.hybrid_command(name="items", description="Lists all items in the bot")
     async def items(self, ctx):
         """
         Lists all items in the bot
@@ -2693,7 +2727,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['cooldown', 'cd', 'xd', 'св'])
+    @commands.hybrid_command(name="cd", description="Displays cooldowns for farming commands", aliases=['cooldown', 'cooldowns', 'xd', 'св'])
     async def cooldowns(self, ctx):
         """
         Displays cooldowns for farming commands
@@ -2740,7 +2774,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['d', 'в'])
+    @commands.hybrid_command(name="dig", description="Dig and get a very small number of coins", aliases=['d', 'в'])
     @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
     async def dig(self, ctx):
         """
@@ -2807,7 +2841,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['m', 'ь'])
+    @commands.hybrid_command(name="mine", description="Mine and get a small number of coins", aliases=['m', 'ь'])
     @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
     async def mine(self, ctx):
         """
@@ -2889,7 +2923,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['w', 'ц'])
+    @commands.hybrid_command(name="work", description="Work and get a moderate number of coins", aliases=['w', 'ц'])
     @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
     async def work(self, ctx):
         """
@@ -2925,7 +2959,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['fish', 'f', 'а'])
+    @commands.hybrid_command(name="fish", description="Fish and get a random number of coins from 1 to 167", aliases=['fishinge', 'f', 'а'])
     @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
     async def fishinge(self, ctx):
         """
@@ -2977,7 +3011,10 @@ class Currency(commands.Cog):
             else:
                 if fish_coins == 69:
                     item_msg = add_item_to_user(guild_id, author_id, 'funny_item')
-                cast_command = ctx.message.content.split()[0].lower().lstrip('!')
+                if ctx.message.content:
+                    cast_command = ctx.message.content.split()[0].lower().lstrip('!')
+                else:
+                    cast_command = 'f'
                 if cast_command in ('fish', 'f', 'а'):
                     cast_command = 'fishing'
                 fish_message = f"## {cast_command.capitalize()} successful! {'🎣' * (cast_command == 'fishing') + fishinge * (cast_command == 'fishinge')}\n"
@@ -3024,7 +3061,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command()
+    @commands.hybrid_command(name="daily", description="Claim 1 Daily Item and daily coins!")
     async def daily(self, ctx):
         """
         Claim 1 Daily Item and a random number of daily coins from 140 to 260
@@ -3080,7 +3117,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command()
+    @commands.hybrid_command(name="weekly", description="Claim 1 Weekly Item and weekly coins!")
     async def weekly(self, ctx):
         """
         Claim a random number of weekly coins from 1500 to 2500
