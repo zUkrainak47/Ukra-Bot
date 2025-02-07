@@ -466,7 +466,7 @@ async def loan_payment(id_: str, payment: int, pay_loaner=True):
             except discord.errors.NotFound:
                 loanee = None
 
-        if loaner and loanee:
+        if loaner and loanee and loaner.id != bot_id:
             await loaner.send(f'## Loan `#{id_}` of {amount:,} {coin} from {loanee.name} (<@{loanee_id}>) has been repaid!\nBalance: {get_user_balance('', str(loaner_id)):,} {coin}')
 
         return True, loaner_id, amount, left_over, paid
@@ -1871,14 +1871,17 @@ class ConfirmView(discord.ui.View):
     async def on_timeout(self):
         # This method is called when the view times out.
         # Edit the message to indicate that the confirmation has timed out.
-        if self.message is not None:
-            try:
+        try:
+            if self.message is not None:
                 await self.message.edit(content="Decision timed out", view=None)
-            except Exception:
-                print("Failed to edit the message on timeout.")
+            elif hasattr(self, "interaction"):  # Check if interaction exists (slash command case)
+                message = await self.interaction.original_response()
+                await message.edit(content="Decision timed out", view=None)
+        except Exception:
+            print("Failed to edit the message on timeout.")
 
 
-async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, additional_context=[], additional_msg=''):
+async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, additional_context=[], additional_msg='', interaction=None):
     """Sends a confirmation message with buttons and waits for the user's response."""
     # if item.real_name in ['rigged_potion']:
     #     bal = f"\nYour balance: {get_user_balance('', str(author.id)):,} {coin}\n‎"
@@ -1888,6 +1891,7 @@ async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, a
         target, num = additional_context
         additional_msg = f'\nThis will set back both {author.display_name} and {target.display_name} back {num:,} {coin}'
     view = ConfirmView(author, item=item, amount=amount, type_=f"{item.name} usage")  # Create the view and pass the allowed author
+    view.interaction = interaction
     message = await reply_func(
         f"## {author.display_name}, do you want to use **{amount} {item}{'s' if amount != 1 else ''}**?{additional_msg}",
         view=view
@@ -2082,7 +2086,7 @@ async def use_item(author: discord.User, item: Item, item_message, reply_func, a
         elif item.real_name in ['evil_potion']:
             await reply_func("`/use evil @user amount` to use this item")
             return
-        decision, msg = await confirm_item(reply_func, author, item, amount, additional_context, f"\n> {item.description.split('\n\n')[0].replace('\n', '\n> ')}")
+        decision, msg = await confirm_item(reply_func, author, item, amount, additional_context, f"\n> {item.description.split('\n\n')[0].replace('\n', '\n> ')}", interaction=item_message)
         if msg is not None:
             reply_func = msg.reply
         else:
@@ -2534,8 +2538,8 @@ class Currency(commands.Cog):
         # Filter the available item names based on the current input (case-insensitive)
         choices = [
             app_commands.Choice(name=item_name, value=item_name)
-            for item_name in usable_items
-            if current.lower() in item_name.lower()
+            for item_name, item_real_name in zip(usable_items, item_use_functions.keys())
+            if current.lower() in item_name.lower() and global_profiles[str(interaction.user.id)]['items'][item_real_name]
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
@@ -2722,39 +2726,27 @@ class Currency(commands.Cog):
             else:
                 await ctx.reply(f"**{user.display_name}** has been granted the *{passed_title}* Title")
 
-    @commands.command(aliases=['b', 'bal'])
-    async def balance(self, ctx):
+    @commands.hybrid_command(name="balance", description="Check your or someone else's balance", aliases=['b', 'bal'])
+    async def balance(self, ctx, *, user: discord.User = None):
         """
         Check your or someone else's balance
         """
         global fetched_users
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
-            if mentions := ctx.message.mentions:
-                num = make_sure_user_has_currency(guild_id, str(mentions[0].id))
-                await ctx.reply(f"**{mentions[0].display_name}'s balance:** {num:,} {coin}")
-                highest_balance_check(guild_id, str(mentions[0].id), num)
-
-            else:
-                contents = ctx.message.content.split()[1:]
-                target_id = convert_msg_to_user_id(contents, False)
-                if target_id == -1:
-                    num = make_sure_user_has_currency(guild_id, str(ctx.author.id))
-                    await ctx.reply(f"**{ctx.author.display_name}'s balance:** {num:,} {coin}")
-                    highest_balance_check(guild_id, str(ctx.author.id), num)
-                    return
-                try:
-                    user = await self.get_user(target_id)
-                    if global_currency.setdefault(str(target_id), 750) == 750:
-                        save_currency()
-                    num = get_user_balance('', str(target_id))
-                    highest_balance_check(guild_id, str(target_id), num)
-                    await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}")
-                except discord.errors.NotFound:
-                    await ctx.reply(f'User with ID "{target_id}" does not exist')
-
+            if user is None:
+                user = ctx.author
+            num = make_sure_user_has_currency(guild_id, str(user.id))
+            await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}")
+            highest_balance_check(guild_id, str(user.id), num)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
+    @balance.error
+    async def balance_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            await ctx.reply("If you're passing something it must be another user's ID or mention")
+        else:
+            print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.command(aliases=['claim', 'code'])
     async def redeem(self, ctx):
@@ -3789,6 +3781,8 @@ class Currency(commands.Cog):
 
         Usage: !loan @user number interest
         Example: !loan @user 10k 50%  -  this means @user will have to pay you back 15k
+
+        To pay back a loan use !pb or !give
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -3970,6 +3964,7 @@ class Currency(commands.Cog):
     async def loans(self, ctx):
         """
         Displays your or someone else's active loans
+        To pay back a loan use !pb or !give
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
