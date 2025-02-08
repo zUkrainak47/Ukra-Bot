@@ -3681,6 +3681,7 @@ class Currency(commands.Cog):
         !pvp @user number
         """
         results = [1, -1]
+        not_slash = getattr(ctx, "interaction", None) is None
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             active_pvp_requests.setdefault(guild_id, set())
@@ -3741,7 +3742,7 @@ class Currency(commands.Cog):
                         await view.wait()
                         return view.value, message, view.cancel_pressed_by
 
-                    message1 = (f'## {user.display_name}, do you accept the PVP for {number:,} {coin}?\n' +
+                    message1 = (f'## {user.display_name if (not_slash and ctx.message.mentions) else user.mention}, do you accept the PVP for {number:,} {coin}?\n' +
                                 f"**{user.display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
                                 f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
 
@@ -3798,16 +3799,12 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
         else:
-            if mentions := ctx.message.mentions:
-                if user.id == ctx.author.id:
-                    await ctx.reply("You can't pvp yourself, silly")
-                    return
-                result = random.choice(results)
-                winner = ctx.author if result == 1 else user
-                await ctx.reply(f"## PVP winner is **{winner.display_name}**!")
-            else:
-                await ctx.reply("Something went wrong, please make sure that the command has a user mention")
+            if user.id == ctx.author.id:
+                await ctx.reply("You can't pvp yourself, silly")
                 return
+            result = random.choice(results)
+            winner = ctx.author if result == 1 else user
+            await ctx.reply(f"## PVP winner is **{winner.display_name}**!")
 
     @pvp.error
     async def pvp_error(self, ctx, error):
