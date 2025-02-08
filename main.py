@@ -3437,20 +3437,20 @@ class Currency(commands.Cog):
                     if int(user_id) != ctx.author.id:
                         name_ = user.global_name or user.name
                         top_users.append([name_, coins])
-                        c += 1
                     else:
                         top_users.append([f"{user.mention}", coins])
                         found_author = True
-                        c += 1
-                        rank = page*10 + c
-                        highest_rank = global_profiles[str(ctx.author.id)]['highest_global_rank']
-                        if rank < highest_rank or highest_rank == -1:
-                            global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
-                            save_profiles()
-                            if rank == 1:
-                                if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
-                                    global_profiles[author_id]['items']['titles'].append('Reached #1')
-                                await ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
+                    make_sure_user_profile_exists(guild_id, user_id)
+                    c += 1
+                    rank = page*10 + c
+                    highest_rank = global_profiles[user_id]['highest_global_rank']
+                    if rank < highest_rank or highest_rank == -1:
+                        global_profiles[user_id]['highest_global_rank'] = rank
+                        if rank == 1:
+                            if 'Reached #1' not in global_profiles[user_id]['items'].setdefault('titles', []):
+                                global_profiles[user_id]['items']['titles'].append('Reached #1')
+                            await ctx.send(f"{user.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
+                        save_profiles()
                 except discord.NotFound:
                     global_currency.remove(user_id)
                     save_currency()
@@ -3459,11 +3459,11 @@ class Currency(commands.Cog):
                 highest_rank = global_profiles[str(ctx.author.id)]['highest_global_rank']
                 if rank < highest_rank or highest_rank == -1:
                     global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
-                    save_profiles()
                     if rank == 1:
                         if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
                             global_profiles[author_id]['items']['titles'].append('Reached #1')
                         await ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
+                    save_profiles()
                 you = f"\n\nYou're at **#{rank}**"
             else:
                 you = ''
