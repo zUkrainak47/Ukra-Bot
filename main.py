@@ -366,7 +366,7 @@ class UseItemView(discord.ui.View):
         # Create the "Buy" button dynamically
         if self.item.price:
             buy_button = discord.ui.Button(
-                label="Buy",
+                label="Buy 1",
                 style=discord.ButtonStyle.primary,
                 row=0
             )
@@ -2456,18 +2456,6 @@ class Currency(commands.Cog):
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             author_id = str(ctx.author.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
-                # Determine if this was a slash command or a prefix command.
-                if getattr(ctx, "interaction", None) is None:
-                    # This is a prefix command; we need to extract the input from the message.
-                    if not item:
-                        # Extract the item name from the message content if not provided as an argument.
-                        # (This is usually not needed with hybrid commands that have proper parameters.)
-                        content_parts = ctx.message.content.split()
-                        if len(content_parts) < 2:
-                            await ctx.reply(
-                                "You need to provide the item name!\nExample: `!item rigged`\nRun `!items` for the list of all items")
-                            return
-                        item = " ".join(content_parts[1:])
                 make_sure_user_profile_exists(guild_id, author_id)
                 # Find the closest matching item using your existing function
                 found_item = find_closest_item(item)
@@ -2490,6 +2478,13 @@ class Currency(commands.Cog):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
             print(traceback.format_exc())
+
+    @item.error
+    async def item_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply("You need to provide the item name!\nExample: `!item rigged`\nRun `items` for the list of all items")
+        else:
+            print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @item.autocomplete("item")
     async def item_input_autocomplete(self, interaction: discord.Interaction, current: str):
