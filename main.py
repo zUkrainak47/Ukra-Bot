@@ -350,10 +350,10 @@ class UseItemView(discord.ui.View):
         self.author = author
         self.item = item
         self.btn_enabled = btn_enabled
-
+        self.amount = 1 if self.item.real_name != 'funny_item' else 69
         # Create the "Use" button dynamically
         use_button = discord.ui.Button(
-            label="Use",
+            label=f"Use {self.amount}",
             style=discord.ButtonStyle.green,
             row=0,
             disabled=not btn_enabled  # if btn_enabled is False, then disabled=True
@@ -390,7 +390,7 @@ class UseItemView(discord.ui.View):
             return
 
         await interaction.response.defer()
-        await use_item(self.author, self.item, item_message=interaction.message, reply_func=interaction.message.reply, amount=1 if self.item.real_name != 'funny_item' else 69)
+        await use_item(self.author, self.item, item_message=interaction.message, reply_func=interaction.message.reply, amount=self.amount)
 
     async def on_timeout(self):
         # Disable all buttons in the view.
@@ -2268,7 +2268,8 @@ class Currency(commands.Cog):
                 try:
                     make_sure_user_profile_exists(guild_id, str(target_id))
                     num = get_user_balance(guild_id, str(target_id))
-
+                    laundry = global_profiles[str(target_id)]['items'].setdefault('laundry_machine', 0)
+                    laundry_msg = f' (+{laundry:,} {laundry_machine})' if laundry else ''
                     user_streak = daily_streaks.setdefault(str(target_id), 0)
                     now = datetime.now()
                     last_used = user_last_used.setdefault(str(target_id), datetime.today() - timedelta(days=2))
@@ -2302,7 +2303,7 @@ class Currency(commands.Cog):
                         profile_embed = discord.Embed(title=f"{target.display_name}{embed_title}", color=embed_color)
                     profile_embed.set_thumbnail(url=target.avatar.url)
 
-                    profile_embed.add_field(name="Balance", value=f"{num:,} {coin}", inline=True)
+                    profile_embed.add_field(name="Balance", value=f"{num:,} {coin}{laundry_msg}", inline=True)
                     profile_embed.add_field(name="Global Rank", value=f"#{global_rank:,}", inline=True)
                     profile_embed.add_field(name="Daily Streak", value=d_msg, inline=True)
 
@@ -2345,6 +2346,7 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.hybrid_command(name="profile", description="Check your or someone else's profile", aliases=['p'])
+    @app_commands.describe(user="Whose profile you want to view")
     async def profile(self, ctx, *, user: discord.User = None):
         """
         Check your or someone else's profile (stats being collected since 12 Jan 2025)
@@ -2361,6 +2363,7 @@ class Currency(commands.Cog):
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.hybrid_command(name="info", description="Check your or someone else's info")
+    @app_commands.describe(user="Whose info you want to view")
     async def info(self, ctx, *, user: discord.User = None):
         """
         Check your or someone else's info (stats being collected since 12 Jan 2025)
@@ -2771,6 +2774,7 @@ class Currency(commands.Cog):
                 await ctx.reply(f"**{user.display_name}** has been granted the *{passed_title}* Title")
 
     @commands.hybrid_command(name="balance", description="Check your or someone else's balance", aliases=['b', 'bal'])
+    @app_commands.describe(user="Whose balance you want to check")
     async def balance(self, ctx, *, user: discord.User = None):
         """
         Check your or someone else's balance
@@ -2780,8 +2784,10 @@ class Currency(commands.Cog):
         if currency_allowed(ctx) and bot_down_check(guild_id):
             if user is None:
                 user = ctx.author
-            num = make_sure_user_has_currency(guild_id, str(user.id))
-            await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}")
+            num = make_sure_user_profile_exists(guild_id, str(user.id))
+            laundry = global_profiles[str(user.id)]['items'].setdefault('laundry_machine', 0)
+            laundry_msg = f' (+{laundry:,} {laundry_machine})' if laundry else ''
+            await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}{laundry_msg}")
             highest_balance_check(guild_id, str(user.id), num)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
