@@ -315,10 +315,9 @@ def save_everything():
     save_active_loans()
 
 
-def perform_backup():
+def perform_backup(reason='no reason given', destination='auto'):
     save_everything()
     source = "dev"
-    destination = "dev_backup"
 
     if not os.path.exists(source):
         raise FileNotFoundError(f"The source directory '{source}' does not exist.")
@@ -329,7 +328,7 @@ def perform_backup():
     ignore_func = shutil.ignore_patterns("assets")
 
     shutil.copytree(source, destination, ignore=ignore_func)
-    print(f"Copied '{source}' to '{destination}' successfully")
+    print(f"Copied '{source}' to '{destination}' successfully - {reason}")
 
 
 class Item:
@@ -990,7 +989,7 @@ async def backup(ctx):
     if ctx.author.id not in allowed_users:
         await ctx.send("You can't use this command, silly", ephemeral=True)
     else:
-        perform_backup()
+        perform_backup('backup command call', destination='dev_backup')
         await ctx.send("Backup complete", ephemeral=True)
 
 
@@ -4235,7 +4234,7 @@ class Currency(commands.Cog):
                            f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
                            f"Participants: {len(lottery_participants)}")
         await lottery_channel.send(lottery_message)
-        perform_backup()
+        perform_backup('lotto finalized')
 
     async def enter_lotto(self, ctx: commands.Context, entrance_price, ukra_bot_fee, payout):
         """Enters lotto for a user"""
@@ -4259,6 +4258,7 @@ class Currency(commands.Cog):
                 save_active_lottery()
                 add_coins_to_user(guild_id, str(bot_id), ukra_bot_fee)
                 await ctx.reply(f"**Successfully entered lottery** {yay}\nYour balance: {get_user_balance(guild_id, author_id):,} {coin}" + join_server_msg)
+                perform_backup(f'{ctx.author.name} entered lotto')
                 return True
             else:
                 await ctx.reply(f"You've already joined today's lottery {peepositbusiness}" + join_server_msg)
@@ -4444,6 +4444,7 @@ class Currency(commands.Cog):
                 make_sure_user_has_currency(guild_id, target_id)
                 num = add_coins_to_user(guild_id, target_id, number)  # save file
                 highest_balance_check(guild_id, target_id, num)
+                perform_backup(f'{mentions[0].name} was blessed')
                 await ctx.reply(f"## Blessing successful!\n\n**{mentions[0].display_name}:** +{number:,} {coin}\nBalance: {num:,} {coin}")
             except:
                 await ctx.reply("Blessing failed!")
@@ -4504,6 +4505,7 @@ class Currency(commands.Cog):
                             additional_msg += f"\n\n{mentions[0].mention}, you've unlocked the *{new_titles[0]}* Title!\nRun `!title` to change it!"
                 else:
                     additional_msg = ''
+                perform_backup(f'{mentions[0].name} was cursed')
                 await ctx.reply(f"## {cmd} successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}{additional_msg}")
             except Exception:
                 print(traceback.format_exc())
@@ -4523,7 +4525,7 @@ async def on_command_error(ctx, error):
 
 
 def log_shutdown():
-    save_everything()
+    perform_backup('bot shutdown')
     end = time.perf_counter()
     run_time = end - start
     to_hours = time.strftime("%T", time.gmtime(run_time))

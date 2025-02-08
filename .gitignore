@@ -1,4 +1,5 @@
 /.idea/
 /dev/
 /dev_backup/
+/auto/
 .env
