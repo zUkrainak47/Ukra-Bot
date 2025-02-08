@@ -45,7 +45,7 @@ intents = Intents.default()
 intents.members = True
 intents.message_content = True
 intents.reactions = True
-client = commands.Bot(command_prefix="!", intents=intents)
+client = commands.Bot(command_prefix="!", intents=intents, case_insensitive=True)
 
 # EMOJIS
 rigged_potion = '<:rigged_potion:1336395108244787232>'
