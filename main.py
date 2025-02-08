@@ -315,6 +315,23 @@ def save_everything():
     save_active_loans()
 
 
+def perform_backup():
+    save_everything()
+    source = "dev"
+    destination = "dev_backup"
+
+    if not os.path.exists(source):
+        raise FileNotFoundError(f"The source directory '{source}' does not exist.")
+
+    if os.path.exists(destination):
+        shutil.rmtree(destination)
+
+    ignore_func = shutil.ignore_patterns("assets")
+
+    shutil.copytree(source, destination, ignore=ignore_func)
+    print(f"Copied '{source}' to '{destination}' successfully")
+
+
 class Item:
     def __init__(self, real_name, name, description, emoji, emoji_url, price=None):
         self.real_name = real_name
@@ -973,21 +990,7 @@ async def backup(ctx):
     if ctx.author.id not in allowed_users:
         await ctx.send("You can't use this command, silly", ephemeral=True)
     else:
-        save_everything()
-        source = "dev"
-        destination = "dev_backup"
-
-        if not os.path.exists(source):
-            raise FileNotFoundError(f"The source directory '{source}' does not exist.")
-
-        if os.path.exists(destination):
-            shutil.rmtree(destination)
-
-        ignore_func = shutil.ignore_patterns("assets")
-
-        shutil.copytree(source, destination, ignore=ignore_func)
-        print(f"Copied '{source}' to '{destination}' successfully")
-
+        perform_backup()
         await ctx.send("Backup complete", ephemeral=True)
 
 
@@ -4232,6 +4235,7 @@ class Currency(commands.Cog):
                            f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
                            f"Participants: {len(lottery_participants)}")
         await lottery_channel.send(lottery_message)
+        perform_backup()
 
     async def enter_lotto(self, ctx: commands.Context, entrance_price, ukra_bot_fee, payout):
         """Enters lotto for a user"""
