@@ -410,7 +410,7 @@ items = {
     'the_catch': Item('the_catch', "The Catch", f"Rarest item in the bot\nUsing it grants you 25,000,000 {coin}\n\nObtainable in 1 of 5000 Treasure Chests {treasure_chest}", The_Catch, "https://cdn.discordapp.com/attachments/696842659989291130/1337170886373146634/The_Catch.png?ex=67a678ee&is=67a5276e&hm=3ae6739e718213ac63952faeefdcc64cc878d953da52ccb318628fb11371db2d&"),
     'rigged_potion': Item('rigged_potion', "Rigged Potion", f"Upon use, this potion doubles your balance.\nBe cautious when you use it!\n\nHas a 5% chance to drop from a Treasure Chest {treasure_chest}\nAlso distributed by the bot developer as an exclusive reward", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
     'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion requires you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins\n\nDrops alongside Fool's Gold ✨", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
-    'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing it grants you 69,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
+    'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing 69 Funny Items grants you 750,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
     'twisted_orb': Item('twisted_orb', "Twisted Orb", f"Using this orb has a 50% chance to 5x your balance and a 50% chance for you to lose all coins and owe Ukra Bot 3x your current balance\n\nPurchasable for 3 {daily_item}", twisted_orb, "https://cdn.discordapp.com/attachments/696842659989291130/1337165843359993926/twisted_orb.png?ex=67a6743c&is=67a522bc&hm=161c5d30fd3de60d086db3d4d09c325cb0768a89cfa46804c7db0d55db2beac5&", [3, 'daily_item']),
     'laundry_machine': Item('laundry_machine', "Laundry Machine", f"It's what you think it is.\nUsing this item grants you 10,000 {coin}\n\nPurchasable for 10,000 {coin}", laundry_machine, "https://cdn.discordapp.com/attachments/696842659989291130/1337206253784535101/laundry_machine.png?ex=67a699de&is=67a5485e&hm=3e7dd2b88acaee2d9c82d86285bcde8d40a809006f7945c9112e610e6afc5f38&", [10000, 'coin']),
 
@@ -1747,7 +1747,7 @@ class PaginationView(discord.ui.View):
                         embed_color = 0xffd000
                     owned = global_profiles[str(interaction.user.id)]['items'].setdefault(item_data, 0)
                     view = UseItemView(self.ctx, target, items[item_data], owned)
-                    message = await interaction.response.send_message(embed=items[item_data].describe(embed_color, owned, target.avatar.url), view=view)  # Send the response
+                    await interaction.response.send_message(embed=items[item_data].describe(embed_color, owned, target.avatar.url), view=view)  # Send the response
                     view.message = await interaction.original_response()
                 button.callback = item_callback
 
@@ -1947,18 +1947,21 @@ async def confirm_purchase(item_message, author: discord.User, item: Item, amoun
 
 
 async def rigged_potion_func(message, castor, amount, additional_context=[]):
-    guild_id = '' if not message.guild else str(message.guild.id)
-    castor_id = str(castor.id)
-    bal = get_user_balance(guild_id, castor_id)
-    bal2 = add_coins_to_user(guild_id, castor_id, bal)
-    await message.reply(
-        f"# {items['rigged_potion']} used successfully\n"
-        f"**{castor.display_name}**: +{bal:,} {coin}\n"
-        f"Balance: {bal2:,} {coin}"
-    )
-    global_profiles[castor_id]['items']['rigged_potion'] -= 1
-    highest_balance_check(guild_id, castor_id, bal2, save=False, make_sure=False)
-    save_profiles()
+    try:
+        guild_id = '' if not message.guild else str(message.guild.id)
+        castor_id = str(castor.id)
+        bal = get_user_balance(guild_id, castor_id)
+        bal2 = add_coins_to_user(guild_id, castor_id, bal)
+        await message.reply(
+            f"# {items['rigged_potion']} used successfully\n"
+            f"**{castor.display_name}**: +{bal:,} {coin}\n"
+            f"Balance: {bal2:,} {coin}"
+        )
+        global_profiles[castor_id]['items']['rigged_potion'] -= 1
+        highest_balance_check(guild_id, castor_id, bal2, save=False, make_sure=False)
+        save_profiles()
+    except Exception:
+        print(traceback.format_exc())
 
 
 async def evil_potion_func(message, castor, amount, additional_context=[]):
@@ -1993,35 +1996,41 @@ async def evil_potion_func(message, castor, amount, additional_context=[]):
 
 
 async def funny_item_func(message, castor, amount, additional_context=[]):
-    guild_id = '' if not message.guild else str(message.guild.id)
-    castor_id = str(castor.id)
-    items_owned = global_profiles[castor_id]['items']['funny_item']
-    if items_owned < 69:
-        await message.reply(f'{castor.mention} come back when you have **69 {items['funny_item']}s**. You only own {items_owned} {funny_item}')
-    else:
-        bal = add_coins_to_user(guild_id, castor_id, 69000)
-        await message.reply(
-            f"# 69 {items['funny_item']}s have been used successfully\n"
-            f"**{castor.display_name}**: +{69000:,} {coin}\n"
-            f"Balance: {bal:,} {coin}"
-        )
-        global_profiles[castor_id]['items']['funny_item'] -= 69
-        highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
-        save_profiles()
+    try:
+        guild_id = '' if not message.guild else str(message.guild.id)
+        castor_id = str(castor.id)
+        items_owned = global_profiles[castor_id]['items']['funny_item']
+        if items_owned < 69:
+            await message.reply(f'{castor.mention} come back when you have **69 {items['funny_item']}s**. You only own {items_owned} {funny_item}')
+        else:
+            bal = add_coins_to_user(guild_id, castor_id, 750000)
+            await message.reply(
+                f"# 69 {items['funny_item']}s have been used successfully\n"
+                f"**{castor.display_name}**: +{750000:,} {coin}\n"
+                f"Balance: {bal:,} {coin}"
+            )
+            global_profiles[castor_id]['items']['funny_item'] -= 69
+            highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
+            save_profiles()
+    except Exception:
+        print(traceback.format_exc())
 
 
 async def laundry_machine_func(message, castor, amount, additional_context=[]):
-    guild_id = '' if not message.guild else str(message.guild.id)
-    castor_id = str(castor.id)
-    bal = add_coins_to_user(guild_id, castor_id, 10000 * amount)
-    await message.reply(
-        f"# {amount} {items['laundry_machine']}{'s' if amount != 1 else ''} used successfully\n"
-        f"**{castor.display_name}**: +{10000 * amount:,} {coin}\n"
-        f"Balance: {bal:,} {coin}"
-    )
-    global_profiles[castor_id]['items']['laundry_machine'] -= amount
-    highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
-    save_profiles()
+    try:
+        guild_id = '' if not message.guild else str(message.guild.id)
+        castor_id = str(castor.id)
+        bal = add_coins_to_user(guild_id, castor_id, 10000 * amount)
+        await message.reply(
+            f"# {amount} {items['laundry_machine']}{'s' if amount != 1 else ''} used successfully\n"
+            f"**{castor.display_name}**: +{10000 * amount:,} {coin}\n"
+            f"Balance: {bal:,} {coin}"
+        )
+        global_profiles[castor_id]['items']['laundry_machine'] -= amount
+        highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
+        save_profiles()
+    except Exception:
+        print(traceback.format_exc())
 
 
 async def twisted_orb_func(message, castor, amount, additional_context=[]):
@@ -2075,17 +2084,20 @@ async def twisted_orb_func(message, castor, amount, additional_context=[]):
 
 
 async def the_catch_func(message, castor, amount, additional_context=[]):
-    guild_id = '' if not message.guild else str(message.guild.id)
-    castor_id = str(castor.id)
-    bal = add_coins_to_user(guild_id, castor_id, 25000000)
-    await message.reply(
-        f"# {items['the_catch']} used successfully\n"
-        f"**{castor.display_name}**: +{25000000:,} {coin}\n"
-        f"Balance: {bal:,} {coin}"
-    )
-    global_profiles[castor_id]['items']['the_catch'] -= 1
-    highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
-    save_profiles()
+    try:
+        guild_id = '' if not message.guild else str(message.guild.id)
+        castor_id = str(castor.id)
+        bal = add_coins_to_user(guild_id, castor_id, 25000000)
+        await message.reply(
+            f"# {items['the_catch']} used successfully\n"
+            f"**{castor.display_name}**: +{25000000:,} {coin}\n"
+            f"Balance: {bal:,} {coin}"
+        )
+        global_profiles[castor_id]['items']['the_catch'] -= 1
+        highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
+        save_profiles()
+    except Exception:
+        print(traceback.format_exc())
 
 
 item_use_functions = {
@@ -2123,6 +2135,7 @@ async def use_item(author: discord.User, item: Item, item_message, reply_func, a
             reply_func = msg.reply
         else:
             reply_func = item_message.followup.send
+            msg = await item_message.original_response()
         if decision is None:
             # await msg.reply("Decision timed out.")
             pass
