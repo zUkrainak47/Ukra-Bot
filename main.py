@@ -2307,6 +2307,8 @@ def add_item_to_user(guild_id: str, user_id: str, item: str, amount: int = 1, sa
 
 
 def user_has_access_to_channel(ctx, user):
+    if user.id == bot_id:
+        return True
     if not ctx.guild:
         return user.id in (bot_id, ctx.author.id)
 
@@ -2742,6 +2744,9 @@ class Currency(commands.Cog):
     @commands.hybrid_command(name="title", description="Change the title in your profile", aliases=['titles'])
     @app_commands.describe(title="The title you want to set")
     async def title(self, ctx, *, title=None):
+        """
+        Change the title in your profile
+        """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             author_id = str(ctx.author.id)
@@ -3771,134 +3776,138 @@ class Currency(commands.Cog):
         Takes a user mention and a bet, one of the users wins
         !pvp @user number
         """
-        results = [1, -1]
-        not_slash = getattr(ctx, "interaction", None) is None
-        guild_id = '' if not ctx.guild else str(ctx.guild.id)
-        if currency_allowed(ctx) and bot_down_check(guild_id):
-            active_pvp_requests.setdefault(guild_id, set())
-            author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)
+        try:
+            results = [1, -1]
+            not_slash = getattr(ctx, "interaction", None) is None
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                active_pvp_requests.setdefault(guild_id, set())
+                author_id = str(ctx.author.id)
+                make_sure_user_has_currency(guild_id, author_id)
 
-            if ctx.author.id in active_pvp_requests.get(guild_id):
-                await ctx.reply(f"You already have a pvp request pending")
-                return
-            if user.id in ignored_users:
-                await ctx.reply(f"{user.display_name} is banned from Ukra Bot")
-                return
-            target_id = str(user.id)
-            if user.id == ctx.author.id:
-                await ctx.reply("You can't pvp yourself, silly")
-                return
-            if user.id in active_pvp_requests.get(guild_id):
-                await ctx.reply(f"**{user.display_name}** already has a pvp request pending")
-                return
-            if not user_has_access_to_channel(ctx, user):
-                await ctx.reply(f"**{user.display_name}** doesn't have access to this channel")
-                return
-
-            make_sure_user_has_currency(guild_id, target_id)
-            number, source, msg = convert_msg_to_number([number], guild_id, author_id)
-            if source == '%':
-                number = int(min(get_user_balance(guild_id, author_id),
-                                 get_user_balance(guild_id, target_id)) * float(msg.rstrip('%')) / 100)
-            elif source == 'all':
-                number = min(get_user_balance(guild_id, author_id),
-                             get_user_balance(guild_id, target_id))
-            elif source == 'half':
-                number = min(get_user_balance(guild_id, author_id),
-                             get_user_balance(guild_id, target_id)) // 2
-            elif number == -1:
-                number = 0
-
-            if number > get_user_balance(guild_id, author_id):
-                await ctx.reply(f"PVP failed! **{ctx.author.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
-                return
-            if number > get_user_balance(guild_id, target_id):
-                await ctx.reply(f"PVP failed! **{user.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
-                return
-
-            active_pvp_requests.get(guild_id).add(user.id)
-            active_pvp_requests.get(guild_id).add(ctx.author.id)
-
-            try:
-                if user.id == bot_id:
-                    bot_challenged = True
-                elif number in (0, -1):
-                    bot_challenged = False
-                else:
-                    bot_challenged = False
-
-                    async def confirm_pvp(author: discord.User, message_content, allow):
-                        """Sends a confirmation message with buttons and waits for the user's response."""
-                        view = ConfirmView(author, allowed_to_cancel=allow, timeout=60.0)
-                        message = await ctx.reply(message_content, view=view)
-                        view.message = message
-                        await view.wait()
-                        return view.value, message, view.cancel_pressed_by
-
-                    message1 = (f'## {user.display_name if (not_slash and ctx.message.mentions) else user.mention}, do you accept the PVP for {number:,} {coin}?\n' +
-                                f"**{user.display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
-                                f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
-
-                    decision, msg, canceled_by = await confirm_pvp(user, message1, ctx.author)
-
-                if bot_challenged or (number in (0, -1)) or decision:
-                    if number > get_user_balance(guild_id, author_id):
-                        active_pvp_requests.get(guild_id).discard(user.id)
-                        active_pvp_requests.get(guild_id).discard(ctx.author.id)
-                        await ctx.reply(f"PVP failed! **{ctx.author.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
-                        return
-                    if number > get_user_balance(guild_id, target_id):
-                        active_pvp_requests.get(guild_id).discard(user.id)
-                        active_pvp_requests.get(guild_id).discard(ctx.author.id)
-                        await ctx.reply(f"PVP failed! **{user.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
-                        return
-                    result = random.choice(results)
-                    winner = ctx.author if result == 1 else user
-                    loser = ctx.author if result == -1 else user
-                    for_author = number * result
-                    for_target = -number * result
-                    add_coins_to_user(guild_id, author_id, for_author, save=False)
-                    add_coins_to_user(guild_id, target_id, for_target, save=False)
-                    save_currency()  # save file
-                    num1 = get_user_balance(guild_id, str(winner.id))
-                    num2 = get_user_balance(guild_id, str(loser.id))
-                    profile_update_after_any_gamble(guild_id, str(winner.id), number, num1)
-                    profile_update_after_any_gamble(guild_id, str(loser.id), -number, num2)
-                    command_count_increment(guild_id, author_id, 'pvp', True, False)
-                    await ctx.reply(
-                        f"## PVP winner is **{winner.display_name}**!\n" +
-                        f"**{winner.display_name}:** +{number:,} {coin}, balance: {num1:,} {coin}\n" * (number > 0) +
-                        f"**{loser.display_name}:** -{number:,} {coin}, balance: {num2:,} {coin}" * (number > 0)
-                    )
-                    active_pvp_requests.get(guild_id).discard(user.id)
-                    active_pvp_requests.get(guild_id).discard(ctx.author.id)
-
-                elif decision is None:
-                    await msg.reply(f"{user.display_name} did not respond in time")
-                    active_pvp_requests.get(guild_id).discard(user.id)
-                    active_pvp_requests.get(guild_id).discard(ctx.author.id)
+                if ctx.author.id in active_pvp_requests.get(guild_id):
+                    await ctx.reply(f"You already have a pvp request pending")
+                    return
+                if user.id in ignored_users:
+                    await ctx.reply(f"{user.display_name} is banned from Ukra Bot")
+                    return
+                target_id = str(user.id)
+                if user.id == ctx.author.id:
+                    await ctx.reply("You can't pvp yourself, silly")
+                    return
+                if user.id in active_pvp_requests.get(guild_id):
+                    await ctx.reply(f"**{user.display_name}** already has a pvp request pending")
+                    return
+                if not user_has_access_to_channel(ctx, user):
+                    await ctx.reply(f"**{user.display_name}** doesn't have access to this channel")
                     return
 
-                else:
-                    await ctx.reply(f"{canceled_by.display_name} canceled the PVP request")
-                    active_pvp_requests.get(guild_id).discard(user.id)
-                    active_pvp_requests.get(guild_id).discard(ctx.author.id)
+                make_sure_user_has_currency(guild_id, target_id)
+                number, source, msg = convert_msg_to_number([number], guild_id, author_id)
+                if source == '%':
+                    number = int(min(get_user_balance(guild_id, author_id),
+                                     get_user_balance(guild_id, target_id)) * float(msg.rstrip('%')) / 100)
+                elif source == 'all':
+                    number = min(get_user_balance(guild_id, author_id),
+                                 get_user_balance(guild_id, target_id))
+                elif source == 'half':
+                    number = min(get_user_balance(guild_id, author_id),
+                                 get_user_balance(guild_id, target_id)) // 2
+                elif number == -1:
+                    number = 0
 
-            except Exception:
-                print(traceback.format_exc())
-                await ctx.reply("PVP failed!")
+                if number > get_user_balance(guild_id, author_id):
+                    await ctx.reply(f"PVP failed! **{ctx.author.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
+                    return
+                if number > get_user_balance(guild_id, target_id):
+                    await ctx.reply(f"PVP failed! **{user.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
+                    return
 
-        elif currency_allowed(ctx):
-            await ctx.reply(f'{reason}, currency commands are disabled')
+                active_pvp_requests.get(guild_id).add(user.id)
+                active_pvp_requests.get(guild_id).add(ctx.author.id)
 
-        else:
-            if user.id == ctx.author.id:
-                await ctx.reply("You can't pvp yourself, silly")
-                return
-            result = random.choice(results)
-            winner = ctx.author if result == 1 else user
-            await ctx.reply(f"## PVP winner is **{winner.display_name}**!")
+                try:
+                    if user.id == bot_id:
+                        bot_challenged = True
+                    elif number in (0, -1):
+                        bot_challenged = False
+                    else:
+                        bot_challenged = False
+
+                        async def confirm_pvp(author: discord.User, message_content, allow):
+                            """Sends a confirmation message with buttons and waits for the user's response."""
+                            view = ConfirmView(author, allowed_to_cancel=allow, timeout=60.0)
+                            message = await ctx.reply(message_content, view=view)
+                            view.message = message
+                            await view.wait()
+                            return view.value, message, view.cancel_pressed_by
+
+                        message1 = (f'## {user.display_name if (not_slash and ctx.message.mentions) else user.mention}, do you accept the PVP for {number:,} {coin}?\n' +
+                                    f"**{user.display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
+                                    f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
+
+                        decision, msg, canceled_by = await confirm_pvp(user, message1, ctx.author)
+
+                    if bot_challenged or (number in (0, -1)) or decision:
+                        if number > get_user_balance(guild_id, author_id):
+                            active_pvp_requests.get(guild_id).discard(user.id)
+                            active_pvp_requests.get(guild_id).discard(ctx.author.id)
+                            await ctx.reply(f"PVP failed! **{ctx.author.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
+                            return
+                        if number > get_user_balance(guild_id, target_id):
+                            active_pvp_requests.get(guild_id).discard(user.id)
+                            active_pvp_requests.get(guild_id).discard(ctx.author.id)
+                            await ctx.reply(f"PVP failed! **{user.display_name}** doesn't own {number:,} {coin} {sadgebusiness}")
+                            return
+                        result = random.choice(results)
+                        winner = ctx.author if result == 1 else user
+                        loser = ctx.author if result == -1 else user
+                        for_author = number * result
+                        for_target = -number * result
+                        add_coins_to_user(guild_id, author_id, for_author, save=False)
+                        add_coins_to_user(guild_id, target_id, for_target, save=False)
+                        save_currency()  # save file
+                        num1 = get_user_balance(guild_id, str(winner.id))
+                        num2 = get_user_balance(guild_id, str(loser.id))
+                        profile_update_after_any_gamble(guild_id, str(winner.id), number, num1)
+                        profile_update_after_any_gamble(guild_id, str(loser.id), -number, num2)
+                        command_count_increment(guild_id, author_id, 'pvp', True, False)
+                        await ctx.reply(
+                            f"## PVP winner is **{winner.display_name}**!\n" +
+                            f"**{winner.display_name}:** +{number:,} {coin}, balance: {num1:,} {coin}\n" * (number > 0) +
+                            f"**{loser.display_name}:** -{number:,} {coin}, balance: {num2:,} {coin}" * (number > 0)
+                        )
+                        active_pvp_requests.get(guild_id).discard(user.id)
+                        active_pvp_requests.get(guild_id).discard(ctx.author.id)
+
+                    elif decision is None:
+                        await msg.reply(f"{user.display_name} did not respond in time")
+                        active_pvp_requests.get(guild_id).discard(user.id)
+                        active_pvp_requests.get(guild_id).discard(ctx.author.id)
+                        return
+
+                    else:
+                        await ctx.reply(f"{canceled_by.display_name} canceled the PVP request")
+                        active_pvp_requests.get(guild_id).discard(user.id)
+                        active_pvp_requests.get(guild_id).discard(ctx.author.id)
+
+                except Exception:
+                    print(traceback.format_exc())
+                    await ctx.reply("PVP failed!")
+
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+
+            else:
+                if user.id == ctx.author.id:
+                    await ctx.reply("You can't pvp yourself, silly")
+                    return
+                result = random.choice(results)
+                winner = ctx.author if result == 1 else user
+                await ctx.reply(f"## PVP winner is **{winner.display_name}**!")
+        except Exception:
+            print(traceback.format_exc())
+            await ctx.reply("PVP failed!")
 
     @pvp.error
     async def pvp_error(self, ctx, error):
