@@ -94,15 +94,15 @@ SPECIAL_CODES = {'genshingift': [3, 'https://cdn.discordapp.com/attachments/6968
 SECRET_CODES = {code: lis.split(',') for (code, lis) in [x.split(':-:') for x in os.getenv('SECRET_CODES').split(', ')]}
 SPECIAL_CODES.update(SECRET_CODES)
 titles = [
-    'Ukra Bot Dev', 'Top Contributor', 'Reached #1', 'Bug Hunter', 'Lottery Winner',
-
     'Gave away 25k', 'Gave away 50k', 'Gave away 100k',
     'Gave away 250k', 'Gave away 500k', 'Gave away 1M',
     'Gave away 2.5M', 'Gave away 5M', 'Gave away 10M',
     'Gave away 25M', 'Gave away 50M', 'Gave away 100M',
     'Gave away 250M', 'Gave away 500M', 'Gave away 1B',
+
+    'Lottery Winner', 'Bug Hunter', 'Reached #1', 'Top Contributor', 'Ukra Bot Dev',
 ]
-sorted_titles = {title: number for number, title in enumerate(titles)}
+sorted_titles = {title: number for number, title in enumerate(reversed(titles))}
 num_to_title = {25000: 'Gave away 25k', 50000: 'Gave away 50k', 100000: 'Gave away 100k',
                 250000: 'Gave away 250k', 500000: 'Gave away 500k', 1000000: 'Gave away 1M',
                 2500000: 'Gave away 2.5M', 5000000: 'Gave away 5M', 10000000: 'Gave away 10M',
@@ -1646,9 +1646,10 @@ class PaginationView(discord.ui.View):
         current_data = self.get_current_page_data()
         embed = self.create_embed(current_data)
         self.update_buttons()
-        # If we are not in footer mode, update dynamic item buttons.
         if not (self.footer and self.footer_icon):
             self.update_item_buttons()
+        else:
+            self.update_title_buttons()
         self.message = await self.ctx.reply(embed=embed, view=self)
 
     def create_embed(self, data):
@@ -1697,6 +1698,8 @@ class PaginationView(discord.ui.View):
         self.update_buttons()
         if not (self.footer and self.footer_icon):
             self.update_item_buttons()
+        else:
+            self.update_title_buttons()
         await self.message.edit(embed=self.create_embed(data), view=self)
 
     def update_buttons(self):
@@ -1733,9 +1736,9 @@ class PaginationView(discord.ui.View):
                 if not isinstance(item, str):
                     item, _ = item
                 if item in items:
-                    button = discord.ui.Button(emoji=items[item].emoji, style=discord.ButtonStyle.secondary, row=1 + count//4)
+                    button = discord.ui.Button(emoji=items[item].emoji, style=discord.ButtonStyle.secondary, row=1 + count//4, custom_id=f'item_button_{count}')
                 else:
-                    button = discord.ui.Button(label=item, style=discord.ButtonStyle.secondary, row=1 + count//4)
+                    button = discord.ui.Button(label=item, style=discord.ButtonStyle.secondary, row=1 + count//4, custom_id=f'item_button_{count}')
                 count += 1
                 # Mark this button as dynamic so we can remove it later.
                 button.is_item_button = True
@@ -1759,28 +1762,98 @@ class PaginationView(discord.ui.View):
                 # Add the button to the view.
                 self.add_item(button)
 
-    @discord.ui.button(label="|<", style=discord.ButtonStyle.green, row=0)
+    def update_title_buttons(self):
+        # Remove any previously added dynamic title buttons.
+        # (Assuming the navigation buttons do not have the attribute `is_title_button`)
+        for child in list(self.children):
+            if getattr(child, "is_title_button", False):
+                self.remove_item(child)
+
+        # Add a new button for each title on the current page.
+        # This only happens when NOT using the footer/footer_icon mode.
+        if self.footer and self.footer_icon:
+            count = 0
+            for title in self.get_current_page_data():
+                title = title['label'].split(' - ')[1]
+                title_button = discord.ui.Button(label=title, style=discord.ButtonStyle.secondary, row=1, custom_id=f'title_button_{count}')
+                count += 1
+                # Mark this button as dynamic so we can remove it later.
+                title_button.is_title_button = True
+
+                # Define the callback function with a default parameter to capture the current item.
+                async def title_callback(interaction: discord.Interaction, *, title_data=title):
+                    current_title = global_profiles[str(interaction.user.id)]['title']
+                    if title_data == current_title:
+                        global_profiles[str(interaction.user.id)]['title'] = ''
+                        self.footer = f'Your current title is not set'
+                        await self.update_message(self.get_current_page_data())
+                        await interaction.response.send_message(f"**{interaction.user.display_name}'s** title has been reset", ephemeral=True)
+                    else:
+                        global_profiles[str(interaction.user.id)]['title'] = title_data
+                        self.footer = f'Your current title is {title_data}'
+                        await self.update_message(self.get_current_page_data())
+                        await interaction.response.send_message(f"**{interaction.user.display_name}'s** title has been changed to *{title_data}*", ephemeral=True)
+
+                    save_profiles()
+                title_button.callback = title_callback
+
+                # Add the button to the view.
+                self.add_item(title_button)
+
+            reset_button = discord.ui.Button(label='Reset', style=discord.ButtonStyle.red, row=2, custom_id='reset_button')
+            reset_button.is_title_button = True
+
+            async def reset_callback(interaction: discord.Interaction):
+                global_profiles[str(interaction.user.id)]['title'] = ''
+                self.footer = f'Your current title is not set'
+                await self.update_message(self.get_current_page_data())
+                await interaction.response.send_message(f"**{interaction.user.display_name}'s** title has been reset", ephemeral=True)
+                save_profiles()
+
+            reset_button.callback = reset_callback
+            self.add_item(reset_button)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # Identify which button was pressed from its custom_id
+        custom_id = interaction.data.get("custom_id")
+
+        if custom_id in ("left_full", "left", "right", "right_full", 'reset_button') or "title_button" in custom_id:
+            if interaction.user.id != self.ctx.author.id:
+                await interaction.response.send_message("This isn't your view wyd", ephemeral=True)
+                return False
+            return True
+        return True
+
+    @discord.ui.button(label="|<", style=discord.ButtonStyle.green, row=0, custom_id='left_full')
     async def first_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page = 1
+        current_title = global_profiles[str(interaction.user.id)]['title']
+        self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
-    @discord.ui.button(label="<", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="<", style=discord.ButtonStyle.primary, row=0, custom_id='left')
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page -= 1
+        current_title = global_profiles[str(interaction.user.id)]['title']
+        self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
-    @discord.ui.button(label=">", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label=">", style=discord.ButtonStyle.primary, row=0, custom_id='right')
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page += 1
+        current_title = global_profiles[str(interaction.user.id)]['title']
+        self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
-    @discord.ui.button(label=">|", style=discord.ButtonStyle.green, row=0)
+    @discord.ui.button(label=">|", style=discord.ButtonStyle.green, row=0, custom_id='right_full')
     async def last_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page = math.ceil(len(self.data) / self.page_size)
+        current_title = global_profiles[str(interaction.user.id)]['title']
+        self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
     async def on_timeout(self):
@@ -2666,85 +2739,64 @@ class Currency(commands.Cog):
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
-    @commands.command(aliases=['titles_'])
-    async def title_(self, ctx):
+    @commands.hybrid_command(name="title", description="Change the title in your profile", aliases=['titles'])
+    @app_commands.describe(title="The title you want to set")
+    async def title(self, ctx, *, title=None):
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             author_id = str(ctx.author.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 make_sure_user_profile_exists(guild_id, author_id)
+                current_title = global_profiles[author_id]["title"]
                 if not global_profiles[author_id]['items'].get('titles', False):
                     await ctx.reply(f'You have no titles to choose from yet :p')
-                else:
-                    user_titles = sorted(global_profiles[author_id]["items"]["titles"], key=lambda t: sorted_titles[t])
-                    contents = ctx.message.content.split()[1:]
-                    if len(contents) == 1 and contents[0].isdecimal() and len(global_profiles[author_id]['items']['titles']) >= int(contents[0]):
-                        if int(contents[0]) == 0:
-                            global_profiles[author_id]['title'] = ''
-                            await ctx.reply('Your title has been reset')
-                            save_profiles()
-                            return
-                        global_profiles[author_id]['title'] = user_titles[int(contents[0])-1]
-                        await ctx.reply(f'Your title has been changed to {global_profiles[author_id]["title"]}')
-                        save_profiles()
+                    return
+                if title in global_profiles[author_id]["items"]["titles"] + ['-- Reset --']:
+                    if title not in (current_title, '-- Reset --'):
+                        global_profiles[author_id]['title'] = title
+                        await ctx.reply(f'Your title has been changed to *{title}*', ephemeral=True)
                     else:
-                        current_title = global_profiles[author_id]["title"]
-                        embed_data = []
-                        for n, i in enumerate(user_titles, start=1):
-                            embed_data.append({
-                                "label": f'#{n} - {i}',
-                                "item": ''
-                            })
-                        stickied_msg = ['To set title #1 use `!title_ 1`', 'To set no title use `!title_ 0`']
-                        footer = f'Your current title is {current_title if current_title else 'not set'}'
-                        if ctx.guild and ctx.guild.get_member(ctx.author.id):
-                            target = ctx.guild.get_member(ctx.author.id)
-                            embed_color = target.color
-                            if embed_color == discord.Colour.default():
-                                embed_color = 0xffd000
-                        else:
-                            embed_color = 0xffd000
+                        global_profiles[author_id]['title'] = ''
+                        await ctx.reply(f'Your title has been reset', ephemeral=True)
+                    save_profiles()
+                    return
+                user_titles = sorted(global_profiles[author_id]["items"]["titles"], key=lambda t: sorted_titles[t])
+                embed_data = []
+                for n, i in enumerate(user_titles, start=1):
+                    embed_data.append({
+                        "label": f'#{n} - {i}',
+                        "item": ''
+                    })
+                # stickied_msg = ['To reset your title click your current one']
+                footer = f'Your current title is {current_title if current_title else 'not set'}'
+                if ctx.guild and ctx.guild.get_member(ctx.author.id):
+                    target = ctx.guild.get_member(ctx.author.id)
+                    embed_color = target.color
+                    if embed_color == discord.Colour.default():
+                        embed_color = 0xffd000
+                else:
+                    embed_color = 0xffd000
 
-                        pagination_view = PaginationView(embed_data, title_='Titles', color_=embed_color, stickied_msg_=stickied_msg, footer_=[footer, ctx.author.avatar.url], ctx_=ctx)
-                        await pagination_view.send_embed()
+                pagination_view = PaginationView(embed_data, title_='Titles', color_=embed_color, footer_=[footer, ctx.author.avatar.url], ctx_=ctx)
+                await pagination_view.send_embed()
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
             print(traceback.format_exc())
 
-    @commands.command(aliases=['titles'])
-    async def title(self, ctx):
+    @title.autocomplete("title")
+    async def title_input_autocomplete(self, interaction: discord.Interaction, current: str):
         """
-        Change the title in your profile
+        Autocomplete callback for the title parameter.
+        Returns a list of up to 25 app_commands.Choice objects.
         """
-        guild_id = '' if not ctx.guild else str(ctx.guild.id)
-        author_id = str(ctx.author.id)
-        if currency_allowed(ctx) and bot_down_check(guild_id):
-            make_sure_user_profile_exists(guild_id, author_id)
-            if not global_profiles[author_id]['items'].get('titles', False):
-                await ctx.reply(f'You have no titles to choose from yet :p')
-            else:
-                user_titles = sorted(global_profiles[author_id]["items"]["titles"], key=lambda t: sorted_titles[t])
-                contents = ctx.message.content.split()[1:]
-                if len(contents) == 1 and contents[0].isdecimal() and len(global_profiles[author_id]['items']['titles']) >= int(contents[0]):
-                    if int(contents[0]) == 0:
-                        global_profiles[author_id]['title'] = ''
-                        await ctx.reply('Your title has been reset')
-                        save_profiles()
-                        return
-                    global_profiles[author_id]['title'] = user_titles[int(contents[0])-1]
-                    await ctx.reply(f'Your title has been changed to {global_profiles[author_id]["title"]}')
-                    save_profiles()
-                else:
-                    current_title = global_profiles[author_id]["title"]
-                    await ctx.reply(f'## Available titles:\n'
-                                    f'{"\n".join(f'#{n} - {i}' for n, i in enumerate(user_titles, start=1))}\n'
-                                    f'\n'
-                                    f'To set title #1 use `!title 1`\n'
-                                    f'To set no title use `!title 0`\n'
-                                    f'Your current title is **{current_title if current_title else 'not set'}**\n')
-        elif currency_allowed(ctx):
-            await ctx.reply(f'{reason}, currency commands are disabled')
+        # Filter the available titles based on the current input (case-insensitive)
+        choices = [
+            app_commands.Choice(name=t, value=t)
+            for t in ['-- Reset --'] + titles[::-1]
+            if current.lower() in t.lower() and (t in global_profiles[str(interaction.user.id)]['items']['titles'] + ['-- Reset --'])
+        ]
+        return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.hybrid_command(name="add_title", description="Adds title to user. Only usable by bot developer", aliases=['give_title', 'givetitle', 'addtitle'])
     @app_commands.describe(user="Who the title is for", title="The title you want to add")
