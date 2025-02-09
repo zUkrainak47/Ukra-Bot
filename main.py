@@ -426,7 +426,7 @@ items = {
     'the_catch': Item('the_catch', "The Catch", f"Rarest item in the bot\nUsing it grants you 25,000,000 {coin}\n\nObtainable in 1 of 5000 Treasure Chests {treasure_chest}", The_Catch, "https://cdn.discordapp.com/attachments/696842659989291130/1337170886373146634/The_Catch.png?ex=67a678ee&is=67a5276e&hm=3ae6739e718213ac63952faeefdcc64cc878d953da52ccb318628fb11371db2d&"),
     'rigged_potion': Item('rigged_potion', "Rigged Potion", f"Upon use, this potion doubles your balance.\nBe cautious when you use it!\n\nHas a 5% chance to drop from a Treasure Chest {treasure_chest}\nAlso distributed by the bot developer as an exclusive reward", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
     'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion requires you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins\n\nDrops alongside Fool's Gold ✨", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
-    'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing 69 Funny Items grants you 750,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
+    'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing 69 Funny Items grants you 1,000,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
     'twisted_orb': Item('twisted_orb', "Twisted Orb", f"Using this orb has a 50% chance to 5x your balance and a 50% chance for you to lose all coins and owe Ukra Bot 3x your current balance\n\nPurchasable for 3 {daily_item}", twisted_orb, "https://cdn.discordapp.com/attachments/696842659989291130/1337165843359993926/twisted_orb.png?ex=67a6743c&is=67a522bc&hm=161c5d30fd3de60d086db3d4d09c325cb0768a89cfa46804c7db0d55db2beac5&", [3, 'daily_item']),
     'laundry_machine': Item('laundry_machine', "Laundry Machine", f"It's what you think it is.\nUsing this item grants you 10,000 {coin}\n\nPurchasable for 10,000 {coin}", laundry_machine, "https://cdn.discordapp.com/attachments/696842659989291130/1337206253784535101/laundry_machine.png?ex=67a699de&is=67a5485e&hm=3e7dd2b88acaee2d9c82d86285bcde8d40a809006f7945c9112e610e6afc5f38&", [10000, 'coin']),
 
@@ -857,14 +857,15 @@ async def server(ctx):
 
 
 @commands.hybrid_command(name="choose", description="Chooses from multiple options separated by |", aliases=['choice'])
-async def choose(ctx, *, contents: str):
+@app_commands.describe(options="Separated by |")
+async def choose(ctx, *, options: str):
     """
     Chooses from provided options, separated by |
     Example: choice option | option 2 | another option
     choice <choice1> | <choice2> ...
     """
-    print(contents)
-    options = [s for s in contents.split('|') if s != '']
+    print(options)
+    options = [s for s in options.split('|') if s != '']
     if options:
         if len(options) == 1:
             await ctx.reply(f"Separate options with `|`\nYou only gave me one option to choose from!")
@@ -2005,10 +2006,10 @@ async def funny_item_func(message, castor, amount, additional_context=[]):
         if items_owned < 69:
             await message.reply(f'{castor.mention} come back when you have **69 {items['funny_item']}s**. You only own {items_owned} {funny_item}')
         else:
-            bal = add_coins_to_user(guild_id, castor_id, 750000)
+            bal = add_coins_to_user(guild_id, castor_id, 1000000)
             await message.reply(
                 f"# 69 {items['funny_item']}s have been used successfully\n"
-                f"**{castor.display_name}**: +{750000:,} {coin}\n"
+                f"**{castor.display_name}**: +{1000000:,} {coin}\n"
                 f"Balance: {bal:,} {coin}"
             )
             global_profiles[castor_id]['items']['funny_item'] -= 69
@@ -3887,6 +3888,10 @@ class Currency(commands.Cog):
 
                 else:
                     interest, source_, msg_ = 0, None, None
+
+                if interest > 3 * number:
+                    await ctx.reply("Interest is capped at 3x of the loan itself. Try again")
+                    return
 
                 # else:
                 #     await ctx.reply(f"Something went wrong, please make sure that the command has a user mention\n\n{example}")
