@@ -845,15 +845,17 @@ async def source(ctx):
     await ctx.reply("https://github.com/zUkrainak47/Ukra-Bot")
 
 
-@commands.hybrid_command(name="server", description="DM's the sender a link to Ukra Bot Server", aliases=['invite'])
+@commands.hybrid_command(name="server", description="DM's the sender an invite link to Ukra Bot Server", aliases=['invite'])
 async def server(ctx):
     """
     You should write this command for exclusive giveaways :3
-    DM's the sender a link to Ukra Bot Server
+    DM's the sender an invite link to Ukra Bot Server
     """
     if ctx.guild:
         await ctx.reply(f"Check your DMs {sunfire2stonks}")
-    await ctx.author.send("discord.gg/n24Bbdjg43")
+        await ctx.author.send("discord.gg/n24Bbdjg43")
+    else:
+        await ctx.reply(f"discord.gg/n24Bbdjg43")
 
 
 @commands.hybrid_command(name="choose", description="Chooses from multiple options separated by |", aliases=['choice'])
@@ -2389,12 +2391,15 @@ class Currency(commands.Cog):
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         make_sure_user_profile_exists(guild_id, str(ctx.author.id))
-        await ctx.author.send("```\n"
-                              f"{global_profiles[str(ctx.author.id)]}\n"
-                              "```\n\n"
-                              "`dict_1` - loans, `list_1` - used codes, `num_1` - total funded giveaways")
+        known_data = ("```\n"
+                      f"{global_profiles[str(ctx.author.id)]}\n"
+                      "```\n\n"
+                      "`dict_1` - loans, `list_1` - used codes, `num_1` - total funded giveaways")
         if guild_id:
             await ctx.reply('Check your DMs', ephemeral=True)
+            await ctx.author.send(known_data)
+        else:
+            await ctx.reply(known_data)
 
     @commands.hybrid_command(name="inventory", description="Displays your or someone else's inventory", aliases=['inv'])
     async def inventory(self, ctx, *, user: discord.User=None):
