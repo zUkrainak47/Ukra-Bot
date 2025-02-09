@@ -2233,6 +2233,17 @@ def add_item_to_user(guild_id: str, user_id: str, item: str, amount: int = 1, sa
             f"Owned: {global_profiles[user_id]['items'][item]:,} {items[item].emoji}")
 
 
+def user_has_access_to_channel(ctx, user):
+    if not ctx.guild:
+        return user.id in (bot_id, ctx.author.id)
+
+    if isinstance(user, discord.User):
+        user = ctx.guild.get_member(user.id)
+    if not user:  # User is not in the guild
+        return False
+    return ctx.channel.permissions_for(user).view_channel
+
+
 class Currency(commands.Cog):
     """Commands related to the currency system"""
 
@@ -2402,9 +2413,10 @@ class Currency(commands.Cog):
             await ctx.reply(known_data)
 
     @commands.hybrid_command(name="inventory", description="Displays your or someone else's inventory", aliases=['inv'])
-    async def inventory(self, ctx, *, user: discord.User=None):
+    async def inventory(self, ctx, *, user: discord.User = None):
         """
         Displays your or someone else's inventory
+        Click the buttons under the embed to inspect the individual items
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -2438,6 +2450,7 @@ class Currency(commands.Cog):
     async def shop(self, ctx):
         """
         Item shop!
+        Click the buttons under the embed to inspect the individual items
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -2512,6 +2525,7 @@ class Currency(commands.Cog):
     async def items(self, ctx):
         """
         Lists all items in the bot
+        Click the buttons under the embed to inspect the individual items
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -2580,7 +2594,7 @@ class Currency(commands.Cog):
             print(traceback.format_exc())
 
     @use.autocomplete("item")
-    async def item_input_autocomplete(self, interaction: discord.Interaction, current: str):
+    async def use_item_input_autocomplete(self, interaction: discord.Interaction, current: str):
         """
         Autocomplete callback for the item_input parameter.
         Returns a list of up to 25 app_commands.Choice objects.
@@ -2639,7 +2653,7 @@ class Currency(commands.Cog):
             print(traceback.format_exc())
 
     @buy.autocomplete("item")
-    async def item_input_autocomplete(self, interaction: discord.Interaction, current: str):
+    async def buy_item_input_autocomplete(self, interaction: discord.Interaction, current: str):
         """
         Autocomplete callback for the item_input parameter.
         Returns a list of up to 25 app_commands.Choice objects.
@@ -2732,35 +2746,28 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['give_title', 'givetitle', 'addtitle'])
-    async def add_title(self, ctx):
+    @commands.hybrid_command(name="add_title", description="Adds title to user. Only usable by bot developer", aliases=['give_title', 'givetitle', 'addtitle'])
+    @app_commands.describe(user="Who the title is for", title="The title you want to add")
+    async def add_title(self, ctx, user: discord.User, *, title: str):
         """
         Adds title to user. Only usable by bot developer
         """
+        # try:
         global fetched_users
-        contents = ctx.message.content.split()[1:]
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             if ctx.author.id not in allowed_users:
                 await ctx.send("You can't use this command, silly")
                 return
 
-            target_id = convert_msg_to_user_id(contents)
+            target_id = user.id
             if target_id in ignored_users:
-                user = await self.get_user(target_id)
                 await ctx.reply(f"{user.display_name} is banned from Ukra Bot")
                 return
 
-            if target_id == -1:
-                await ctx.reply("Something went wrong, please make sure that the command has a user mention or ID")
-                return
-            passed_title = ' '.join([x for x in ctx.message.content.split()[1:] if str(target_id) not in x])
-            print(passed_title)
-
-            user = await self.get_user(target_id)
-
-            if passed_title not in sorted_titles:
-                await ctx.reply('erm thats not a valid title')
+            passed_title = title
+            if passed_title not in titles:
+                await ctx.reply(f'`{passed_title}` is not a valid title', ephemeral=True)
                 return
 
             make_sure_user_profile_exists(guild_id, str(target_id))
@@ -2771,10 +2778,27 @@ class Currency(commands.Cog):
             global_profiles[str(target_id)]['items'].setdefault('titles', []).append(passed_title)
             save_profiles()
 
-            if ctx.message.mentions:
-                await ctx.send(f"**{user.display_name}**, you've unlocked the *{passed_title}* Title!\nRun `!title` to change it!")
+            if user_has_access_to_channel(ctx, user):
+                await ctx.send(f"**{user.display_name if ctx.message.mentions else user.mention}**, you've unlocked the *{passed_title}* Title!\nRun `!title` to change it!")
             else:
-                await ctx.reply(f"**{user.display_name}** has been granted the *{passed_title}* Title")
+                await user.send(f"**{user.display_name}**, you've unlocked the *{passed_title}* Title!\nRun `!title` to change it!")
+                await ctx.send("Done!", ephemeral=True)
+        # except Exception:
+        #     print(traceback.format_exc())
+
+    @add_title.autocomplete("title")
+    async def add_title_autocomplete(self, interaction: discord.Interaction, current: str):
+        """
+        Autocomplete callback for the title parameter.
+        Returns a list of up to 25 app_commands.Choice objects.
+        """
+        # Filter the available item names based on the current input (case-insensitive)
+        choices = [
+            app_commands.Choice(name=title, value=title)
+            for title in titles
+            if current.lower() in title.lower()
+        ]
+        return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.hybrid_command(name="balance", description="Check your or someone else's balance", aliases=['b', 'bal'])
     @app_commands.describe(user="Whose balance you want to check")
@@ -3273,8 +3297,9 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['pay', 'gift'])
-    async def give(self, ctx):
+    @commands.hybrid_command(name="give", description="Give someone an amount of coins", aliases=['pay, gift'])
+    @app_commands.describe(user="Who you'd like to give coins to", number="How many coins you'd like to give")
+    async def give(self, ctx, user: discord.User, number: str):
         """
         Give someone an amount of coins
         !give @user <number>
@@ -3283,33 +3308,26 @@ class Currency(commands.Cog):
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-            example = 'Example: `Give @user 100` gives @user 100 coins'
-            contents = ctx.message.content.split()[1:]
-            if not contents:
-                await ctx.reply('This command is used to give coins to someone!\n' + example)
+            example = 'Example: `give @user 100` gives @user 100 coins'
+
+            if user.id in ignored_users:
+                await ctx.reply(f"{user.display_name} is banned from Ukra Bot")
+                return
+            target_id = str(user.id)
+            if user.id == ctx.author.id:
+                await ctx.reply(f"You can't send {coin} to yourself, silly")
                 return
 
-            if mentions := ctx.message.mentions:
-                if mentions[0].id in ignored_users:
-                    await ctx.reply(f"{mentions[0].display_name} is banned from Ukra Bot")
-                    return
-                target_id = str(mentions[0].id)
-                if mentions[0].id == ctx.author.id:
-                    await ctx.reply(f"You can't send {coin} to yourself, silly")
-                    return
-                if len(contents) != 2:
-                    await ctx.reply(f"!give takes exactly 2 arguments - a user mention and the amount\n({len(contents)} arguments were passed)\n\n{example}")
-                    return
-
-                number, _, _ = convert_msg_to_number(contents, guild_id, author_id)
-                if number == -1:
-                    await ctx.reply(f"Please include the amount you'd like the give\n\n{example}")
-                    return
-                if not number:
-                    await ctx.reply("You gotta send something at least")
-                    return
-            else:
-                await ctx.reply(f"Something went wrong, please make sure that the command has a user mention\n\n{example}")
+            number, _, _ = convert_msg_to_number([number], guild_id, author_id)
+            if number == -1:
+                await ctx.reply(f"Please include the amount you'd like the give\n\n{example}")
+                return
+            if not number:
+                await ctx.reply("You gotta send something at least")
+                return
+            has_access = user_has_access_to_channel(ctx, user)
+            if not has_access and number < 500:
+                await ctx.reply(f"{user.display_name} doesn't have access to this channel and you're sending less than 500 {coin}\nTransaction failed")
                 return
 
             try:
@@ -3317,13 +3335,13 @@ class Currency(commands.Cog):
                 if number <= get_user_balance(guild_id, author_id):
                     num1 = remove_coins_from_user(guild_id, author_id, number, save=False)
                     num2 = add_coins_to_user(guild_id, target_id, number, save=False)
-                    answer = f"## Transaction successful!\n\n**{ctx.author.display_name}:** {num1:,} {coin}\n**{mentions[0].display_name}:** {num2:,} {coin}"
+                    answer = f"**{ctx.author.display_name}:** -{number:,} {coin} ({num1:,} {coin})\n**{user.display_name if (ctx.message.mentions or not has_access) else user.mention}:** +{number:,} {coin} ({num2:,} {coin})"
                     make_sure_user_profile_exists(guild_id, author_id)
                     make_sure_user_profile_exists(guild_id, target_id)
                     loan_money = number
                     loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                     for loan_id in loans:
-                        if active_loans[loan_id][0] == mentions[0].id:
+                        if active_loans[loan_id][0] == user.id:
                             finalized, loaner_id, loan_size, loan_money, paid = await loan_payment(loan_id, loan_money, False)
 
                             if finalized:
@@ -3334,7 +3352,9 @@ class Currency(commands.Cog):
 
                     save_currency()  # save file
                     highest_balance_check(guild_id, target_id, num2)
-                    await ctx.reply(answer)
+                    await ctx.reply("## Transaction successful!\n\n" + answer)
+                    if not has_access:
+                        await user.send(f"## You have been given {number:,} {coin}\n\n" + answer)
                 else:
                     await ctx.reply(f"Transaction failed! You don't own {number:,} {coin} {sadgebusiness}")
 
@@ -3344,6 +3364,16 @@ class Currency(commands.Cog):
 
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
+
+    @give.error
+    async def give_error(self, ctx, error):
+        example = 'Example: `give @user 100` gives @user 100 coins'
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply('This command is used to give coins to someone!\n' + example)
+        elif isinstance(error, commands.BadArgument):
+            await ctx.reply('Invalid input!\n' + example)
+        else:
+            print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.hybrid_command(name="lb", description="View the leaderboard of the 10 richest users in this server", aliases=['leaderboard'])
     @app_commands.describe(page="Leaderboard page")
@@ -3684,7 +3714,7 @@ class Currency(commands.Cog):
 
     @commands.hybrid_command(name="pvp", description="Takes a user mention and a bet, one of the users wins")
     @app_commands.describe(user="The member you want to PVP", number="How many coins you're betting")
-    async def pvp(self, ctx, user: discord.Member, number: str = '0'):
+    async def pvp(self, ctx, user: discord.User, number: str = '0'):
         """
         Takes a user mention and a bet, one of the users wins
         !pvp @user number
@@ -3709,6 +3739,9 @@ class Currency(commands.Cog):
                 return
             if user.id in active_pvp_requests.get(guild_id):
                 await ctx.reply(f"**{user.display_name}** already has a pvp request pending")
+                return
+            if not user_has_access_to_channel(ctx, user):
+                await ctx.reply(f"**{user.display_name}** doesn't have access to this channel")
                 return
 
             make_sure_user_has_currency(guild_id, target_id)
@@ -3819,7 +3852,7 @@ class Currency(commands.Cog):
     async def pvp_error(self, ctx, error):
         example = 'Example: `pvp @user 2.5k` means both you and @user put 2.5k coins on the line and a winner is chosen randomly - the winner walks away with 5k coins, the loser walks away with nothing'
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.reply(f"You need to provide a user mention and a number of coins\n{example}")
+            await ctx.reply(f"This command is used to initiate pvp with another user!\n{example}")
         elif isinstance(error, commands.BadArgument):
             await ctx.reply(f"Invalid input!\n{example}")
         else:
@@ -3864,6 +3897,9 @@ class Currency(commands.Cog):
                     return
                 if user.id == bot_id:
                     await ctx.reply("I don't need your loan lmao")
+                    return
+                if not user_has_access_to_channel(ctx, user):
+                    await ctx.reply(f"**{user.display_name}** doesn't have access to this channel")
                     return
                 if user.id in active_loan_requests:
                     await ctx.reply(f"**{user.display_name}** already has a loan request pending")
@@ -4171,7 +4207,7 @@ class Currency(commands.Cog):
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
-    @commands.hybrid_command(name="slots", description="Takes a bet, spins three wheels of 10 emojis", aliases=['slot', 's'])
+    @commands.hybrid_command(name="slots", description="Takes a bet, spins three wheels of 10 emojis if all of them match you win", aliases=['slot', 's'])
     @app_commands.describe(number="How many coins you're betting")
     async def slots(self, ctx, *, number: str = ''):
         """
