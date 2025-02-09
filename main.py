@@ -4119,6 +4119,8 @@ class Currency(commands.Cog):
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             loans_found1 = 0
             loans_found2 = 0
+            total_left_to_pay = 0
+            total_left_owed = 0
             if user is None:
                 user = ctx.author
 
@@ -4136,8 +4138,10 @@ class Currency(commands.Cog):
                         await ctx.reply(f'Loan `#{i}` to <@{loaner_id}> has been closed. {loaner.display_name} is banned from Ukra Bot')
                         continue
                     loans_found2 += 1
-
+                    total_left_to_pay += active_loans[i][2]-active_loans[i][3]
                     answer += f"{loans_found2}. `#{i}` - **{user.display_name}** owes **{loaner.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+                if loans_found2:
+                    answer += f"Total left to pay back: {total_left_to_pay:,} {coin}\n"
                 for i in global_profiles[str(user_id)]['dict_1'].setdefault('out', []):
                     if not loans_found1:
                         answer += '### Outgoing:\n'
@@ -4148,8 +4152,10 @@ class Currency(commands.Cog):
                         await ctx.reply(f'Loan `#{i}` from <@{loanee_id}> has been closed. {loanee.display_name} is banned from Ukra Bot\n**{user.display_name}:** +{paid:,} {coin}, balance: {get_user_balance('', user_id)} {coin}')
                         continue
                     loans_found1 += 1
-
+                    total_left_owed += active_loans[i][2]-active_loans[i][3]
                     answer += f"{loans_found1}. `#{i}` - **{loanee.display_name}** owes **{user.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+                if loans_found1:
+                    answer += f"Total left to be paid back: {total_left_owed:,} {coin}\n"
                 if loans_found1 or loans_found2:
                     await ctx.reply(answer)
                 else:
