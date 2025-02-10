@@ -10,6 +10,7 @@ import os
 import random
 import pytz
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import mplfinance as mpf  # For candlestick charts
 import pandas as pd
 from dotenv import load_dotenv
@@ -2950,43 +2951,53 @@ class Currency(commands.Cog):
                     await sell_stock(ctx, ctx.author, stock=stock, stock_message=stock_message, amount=amount, price=price)
                 else:
                     try:
-                        stock_tick = Ticker(ticker=stock)
+                        stock_tick = yfinance.Ticker(ticker=stock)
 
-                        # Get the last month's data
-                        df = stock_tick.yahoo_api_price()
+                        # Get the last month's data.
+                        # If you're using yfinance's history() method, you can do:
+                        df = stock_tick.history(period="1mo")
                         if df.empty:
                             return await ctx.reply(f"❌ No data found for `{stock}`")
 
-                        df['timestamp'] = pd.to_datetime(df['timestamp'])
+                        # Ensure the index is timezone-aware and in the 'America/New_York' timezone.
+                        if df.index.tzinfo is None:
+                            df.index = df.index.tz_localize("America/New_York")
+                        else:
+                            df.index = df.index.tz_convert("America/New_York")
 
-                        # Set the 'timestamp' column as the index
-                        df.set_index('timestamp', inplace=True)
-
-                        # Check the first few rows to ensure the index is datetime
-                        print(df.head())
-
-                        # Ensure the index is in the correct timezone (America/New_York)
-                        df.index = df.index.tz_localize("America/New_York", ambiguous='NaT')
-
-                        # Get data for the last 30 days
-                        one_month_ago = datetime.now(pytz.timezone('America/New_York')) - timedelta(days=30)
+                        # Optional: Filter data explicitly to the last 30 days (in case history() returns a bit more)
+                        one_month_ago = datetime.now(pytz.timezone("America/New_York")) - timedelta(days=30)
                         df = df[df.index >= one_month_ago]
-
                         if df.empty:
-                            return await ctx.reply(f"❌ No data available for `{stock}` in the last day.")
+                            return await ctx.reply(f"❌ No data available for `{stock}` in the last month.")
 
-                        # Plot using mplfinance (candlestick chart)
+                        # Create a line chart: Plot the 'Close' price using a line and markers.
                         fig, ax = plt.subplots(figsize=(8, 4))
-                        mpf.plot(df, type='candle', style='charles', ax=ax, ylabel='Price')
+                        ax.plot(df.index, df['Close'], marker='o', linestyle='-', label=stock)
+                        ax.set_ylabel('Price')
+                        # ax.set_title(f"📊 **`{stock}` - Last Month's Price**")
 
-                        # Save the image
+                        # Set the x-ticks to match every data point.
+                        ax.set_xticks(df.index)
+                        # Format the tick labels to show month and day (e.g., "03-15")
+                        ax.set_xticklabels([dt.strftime('%m-%d') for dt in df.index], rotation=45)
+
+                        # Optionally, use AutoDateFormatter for a cleaner look (uncomment if desired):
+                        # locator = mdates.AutoDateLocator()
+                        # formatter = mdates.ConciseDateFormatter(locator)
+                        # ax.xaxis.set_major_locator(locator)
+                        # ax.xaxis.set_major_formatter(formatter)
+
+                        ax.legend()
+                        fig.tight_layout()
+
+                        # Save and send the plot
                         image_path = f"stocks/{stock}_chart.png"
                         plt.savefig(image_path, bbox_inches="tight")
                         plt.close(fig)
 
-                        # Send the chart as a file
                         file = discord.File(image_path, filename=image_path)
-                        await ctx.reply(f"📊 **`{stock}` - Last Day's Chart**", file=file)
+                        await ctx.reply(f"📊 **`{stock}` - Last Month's Chart**", file=file)
 
                     except Exception:
                         await ctx.reply(f"❌ Error fetching chart for `{stock}`")
