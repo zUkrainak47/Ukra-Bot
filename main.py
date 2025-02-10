@@ -17,6 +17,8 @@ import atexit
 from pathlib import Path
 import math
 from rapidfuzz import process
+from stockdex import Ticker
+
 start = time.perf_counter()
 
 # dict_1 - loans
@@ -89,6 +91,7 @@ coin = "<:fishingecoin:1324905329657643179>"
 
 rare_items_to_emoji = {'gold': gold_emoji, 'fool': '✨', 'diamonds': '💎', 'treasure_chest': treasure_chest, 'the_catch': The_Catch}
 slot_options = [yay, o7, peeposcheme, sunfire2, stare, HUH, wicked, deadge, teripoint, pepela]
+available_stocks = ['AAPL', 'AMD', 'AMZN', 'F', 'GOOGL', 'INTC', 'NVDA', 'RIOT', 'TSLA', 'UBER']
 
 SPECIAL_CODES = {'genshingift': [3, 'https://cdn.discordapp.com/attachments/696842659989291130/1335602103460036639/image.png?ex=67a0c3e3&is=679f7263&hm=d91c7f72d6dcb4576948d98ea6206395c1da900f08d2ba8982ccb48f719b73ac&']}
 SECRET_CODES = {code: lis.split(',') for (code, lis) in [x.split(':-:') for x in os.getenv('SECRET_CODES').split(', ')]}
@@ -434,6 +437,7 @@ items = {
     'weekly_item': Item('weekly_item', "Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
 }
 sorted_items = {item: num for num, item in enumerate(items)}
+sorted_items.update({'stock': 1000})
 shop_items = [(items[item].real_name, items[item].price) for item in items if (items[item].price is not None)]
 all_items = list(items.keys())
 all_item_names = [items[item].name for item in all_items]
@@ -1668,6 +1672,7 @@ class PaginationView(discord.ui.View):
         else:
             # Otherwise use a description-style embed.
             desc = ''
+            stock = ''
             for item in data:
                 if self.author == "Item List":
                     emoji, name = items[item].emoji, items[item].name
@@ -1677,11 +1682,22 @@ class PaginationView(discord.ui.View):
                     emoji, name = items[item].emoji, items[item].name
                     desc += f'{emoji} **{name}** ─ {num[0]:,} {coin if num[1] == 'coin' else items[num[1]].emoji}\n'
                 else:
-                    item, num = item
-                    emoji, name = items[item].emoji, items[item].name
-                    desc += f'{emoji} **{name}** ─ {num:,}\n'
+                    item, info = item
+                    if isinstance(info, dict):
+                        found = False
+                        for s in sorted(info):
+                            if info[s]:
+                                stock += f'`{s}` ─ {info[s]:,}\n'
+                                found = True
+                        if not found:
+                            stock = "You don't own any Stock Shares!\nRun `/stock` to get some"
+                    else:
+                        emoji, name = items[item].emoji, items[item].name
+                        desc += f'{emoji} **{name}** ─ {info:,}\n'
+            if not data:
+                desc = "You don't own any Items yet!"
 
-            embed = discord.Embed(title="", color=self.color, description=desc)
+            embed = discord.Embed(title="Items" if (not data or data[-1][0] != 'stock') else 'Stock shares', color=self.color, description=desc+stock)
 
             if self.author:
                 embed.set_author(name=self.author, icon_url=self.author_icon)
@@ -1690,7 +1706,7 @@ class PaginationView(discord.ui.View):
                 embed.add_field(name='', value='')
                 for i in self.stickied_msg:
                     embed.add_field(name='', value=i, inline=False)
-            embed.set_footer(text=f"Page {self.current_page} / {math.ceil(len(self.data) / self.page_size)}")
+            embed.set_footer(text=f"Page {self.current_page} / {math.ceil(len(self.data) / self.page_size) + (self.data[-1][0] == 'stock')}")
 
         return embed
 
@@ -1710,13 +1726,21 @@ class PaginationView(discord.ui.View):
                 elif child.label == "<":
                     child.disabled = self.current_page == 1
                 elif child.label == ">":
-                    child.disabled = self.current_page == math.ceil(len(self.data) / self.page_size)
+                    child.disabled = self.current_page == math.ceil(len(self.data) / self.page_size) + (self.data[-1][0] == 'stock')
                 elif child.label == ">|":
-                    child.disabled = self.current_page == math.ceil(len(self.data) / self.page_size)
+                    child.disabled = self.current_page == math.ceil(len(self.data) / self.page_size) + (self.data[-1][0] == 'stock')
 
     def get_current_page_data(self):
         from_item = (self.current_page - 1) * self.page_size
-        until_item = self.current_page * self.page_size
+        until_item = min(self.current_page * self.page_size,  len(self.data))
+        # print(self.data[min(until_item, len(self.data))-1][0])
+        # print(until_item)
+        if self.data[until_item-1][0] == 'stock':
+            if self.current_page != math.ceil(len(self.data) / self.page_size) + 1:
+                until_item -= 1
+                # print(until_item)
+            else:
+                return self.data[-1:]
         return self.data[from_item:until_item]
 
     def update_item_buttons(self):
@@ -1735,6 +1759,8 @@ class PaginationView(discord.ui.View):
                 # Adjust the key/index as necessary.
                 if not isinstance(item, str):
                     item, _ = item
+                if item == 'stock':
+                    continue
                 if item in items:
                     button = discord.ui.Button(emoji=items[item].emoji, style=discord.ButtonStyle.secondary, row=1 + count//4, custom_id=f'item_button_{count}')
                 else:
@@ -1851,7 +1877,7 @@ class PaginationView(discord.ui.View):
     @discord.ui.button(label=">|", style=discord.ButtonStyle.green, row=0, custom_id='right_full')
     async def last_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        self.current_page = math.ceil(len(self.data) / self.page_size)
+        self.current_page = math.ceil(len(self.data) / self.page_size) + (self.data[-1][0] == 'stock')
         current_title = global_profiles[str(interaction.user.id)]['title']
         self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
@@ -1871,7 +1897,7 @@ class PaginationView(discord.ui.View):
 
 
 class ConfirmView(discord.ui.View):
-    def __init__(self, author: discord.User, allowed_to_cancel=None, item=None, amount: int = 1, type_="", timeout: float = 30):
+    def __init__(self, author: discord.User, allowed_to_cancel=None, item=None, amount: int = 1, type_="", timeout: float = 30, stock=None):
         super().__init__(timeout=timeout)
         self.value = None  # This will store the user's decision
         self.author = author
@@ -1880,6 +1906,7 @@ class ConfirmView(discord.ui.View):
         self.allowed_to_cancel_id = allowed_to_cancel.id if allowed_to_cancel is not None else None
         self.amount = amount
         self.item = item
+        self.stock = stock
         self.type_ = type_
         self.message = None  # We'll store the confirmation message here
         self.cancel_pressed_by = None  # This will store the user who pressed the cancel button
@@ -1911,7 +1938,7 @@ class ConfirmView(discord.ui.View):
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green, row=0, custom_id="confirm_button")
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
-        if self.item:
+        if self.item or self.stock:
             # await interaction.response.edit_message(content=f"{self.author.display_name} confirmed the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
             await interaction.response.edit_message(content=f"{self.type_} confirmed", view=None)
         else:
@@ -1922,7 +1949,7 @@ class ConfirmView(discord.ui.View):
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = False
         self.cancel_pressed_by = interaction.user  # Store the user who pressed the cancel button
-        if self.item:
+        if self.item or self.stock:
             # await interaction.response.edit_message(content=f"{self.author.display_name} canceled the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
             await interaction.response.edit_message(content=f"{self.type_} canceled", view=None)
         else:
@@ -2013,10 +2040,23 @@ async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, a
 
 
 async def confirm_purchase(item_message, author: discord.User, item: Item, amount=1, additional_msg=''):
-    """Sends a confirmation message with buttons and waits for the user's response."""
+    """Sends a confirmation message with buttons and waits for the user's response"""
     view = ConfirmView(author, item=item, amount=amount, type_=f"{item.name} purchase")  # Create the view and pass the allowed author
     message = await item_message.reply(
         f"## {author.display_name}, do you want to buy **{amount} {item}{'s' if amount != 1 else ''} for {item.price[0] * amount:,} {coin if item.price[1] == 'coin' else items[item.price[1]].emoji}**?{additional_msg}",
+        view=view
+    )
+    view.message = message
+    await view.wait()
+    return view.value, message
+
+
+async def confirm_stock(message1, author: discord.User, stock: str, amount: int, price: float, action: str):
+    """Sends a confirmation message with buttons and waits for the user's response"""
+    t, f = ("purchase", math.ceil) if action == 'Buy' else ('sale', int)
+    view = ConfirmView(author, stock=stock, amount=amount, type_=f"{amount:,} `{stock}` {t}")  # Create the view and pass the allowed author
+    message = await message1.reply(
+        f"## {author.display_name}, do you want to {action.lower()} **{amount:,} `{stock}` stock for {f(price * amount):,} {coin}**?\nCurrently, `{stock}` is at {round(price, 5)} {coin} per stock",
         view=view
     )
     view.message = message
@@ -2286,6 +2326,73 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
         print(traceback.format_exc())
 
 
+async def buy_stock(ctx: commands.Context, author: discord.User, stock: str, stock_message, amount, price):
+    """
+    Buys a stock by a user
+    """
+    try:
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        author_id = str(author.id)
+        to_pay = math.ceil(price * amount)
+        if get_user_balance(guild_id, author_id) < to_pay:
+            await stock_message.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} `{stock}` stock**\n\n**Balance:** {get_user_balance('', str(author.id)):,} {coin}\n**Needed:** {to_pay:,} {coin}")
+            return
+
+        decision, msg = await confirm_stock(stock_message, author, stock, amount, price, action='Buy')
+        if decision:
+            if get_user_balance(guild_id, author_id) < to_pay:
+                await stock_message.reply(f"**{author.display_name}**, you don't have enough {coin} to buy **{amount:,} `{stock}` stock**\n\n**Balance:** {get_user_balance('', str(author.id)):,} {coin}\n**Needed:** {to_pay:,} {coin}")
+                return
+
+            if stock in global_profiles[author_id]['items'].setdefault('stock', {}):
+                global_profiles[author_id]['items']['stock'][stock] += amount
+            else:
+                global_profiles[author_id]['items']['stock'][stock] = amount
+
+            bal = remove_coins_from_user(guild_id, author_id, to_pay)
+            save_profiles()
+            await msg.reply(f"## Purchase successful\n"
+                            f"**+{amount:,} `{stock}`**\n"
+                            f"Owned: {global_profiles[author_id]['items']['stock'][stock]:,} `{stock}`\n"
+                            f"\n"
+                            f"**-{to_pay:,} {coin}**\n"
+                            f"Balance: {bal:,} {coin}")
+    except Exception:
+        print(traceback.format_exc())
+
+
+async def sell_stock(ctx: commands.Context, author: discord.User, stock: str, stock_message, amount, price):
+    """
+    Buys a stock by a user
+    """
+    try:
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        author_id = str(author.id)
+        to_pay_out = int(price * amount)
+        if global_profiles[author_id]['items'].setdefault('stock', {}).setdefault(stock, 0) < amount:
+            await stock_message.reply(f"**{author.display_name}**, you don't have enough `{stock}` for that. You only own {global_profiles[author_id]['items']['stock'][stock]:,}")
+            return
+
+        decision, msg = await confirm_stock(stock_message, author, stock, amount, price, action='Sell')
+        if decision:
+            if global_profiles[author_id]['items']['stock'][stock] < amount:
+                await stock_message.reply(f"**{author.display_name}**, you don't have enough `{stock}` for that. You only own {global_profiles[author_id]['items']['stock'][stock]:,}")
+                return
+
+            global_profiles[author_id]['items']['stock'][stock] -= amount
+
+            bal = add_coins_to_user(guild_id, author_id, to_pay_out)
+            save_profiles()
+            await msg.reply(f"## Sale successful\n"
+                            f"**+{to_pay_out:,} {coin}**\n"
+                            f"Balance: {bal:,} {coin}\n"
+                            f"\n"
+                            f"**-{amount:,} `{stock}`**\n"
+                            f"Owned: {global_profiles[author_id]['items']['stock'][stock]:,} `{stock}`")
+    except Exception:
+        print(traceback.format_exc())
+
+
 def add_item_to_user(guild_id: str, user_id: str, item: str, amount: int = 1, save=True, make_sure=True):
     """
     Adds an item to a user
@@ -2500,6 +2607,7 @@ class Currency(commands.Cog):
             user_id = str(user.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 make_sure_user_profile_exists(guild_id, user_id)
+                global_profiles[user_id]['items'].setdefault('stock', {'NVDA': 0})
                 user_items = sorted([(item, global_profiles[user_id]["items"][item]) for item in global_profiles[user_id]["items"] if ((item != 'titles') and (global_profiles[user_id]["items"][item]))], key=lambda x: sorted_items[x[0]])
                 if not user_items:
                     await ctx.reply(f'**{user.display_name}** has no items yet :p')
@@ -2740,6 +2848,96 @@ class Currency(commands.Cog):
             if current.lower() in item_name.lower()
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+
+    @commands.hybrid_command(name="stock", description="Purchase or sell stock of choice")
+    @app_commands.describe(stock="The name of the stock", action="Buy or Sell", amount="How many you want to buy or sell")
+    async def stock(self, ctx, stock: str, action: str, amount: int):
+        """
+        Purchase item of choice
+        Accepts a number as a parameter, so you can buy in bulk
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            author_id = str(ctx.author.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                action = action.capitalize()
+                if action not in ('Buy', 'Sell'):
+                    await ctx.reply(f"Please provide the action - Buy or Sell. There is no `{action}`")
+                    return
+                stock = stock.upper()
+                if stock not in available_stocks:
+                    await ctx.reply(f"Please provide the stock. Available stocks are `{'` `'.join(available_stocks)}`")
+                    return
+                if amount < 1:
+                    await ctx.reply(f"You can't {action.lower()} {amount} stock {icant}")
+                    return
+                stock_message = ctx
+                if getattr(ctx, "interaction", None) is None:
+                    stock_message = ctx.message
+
+                make_sure_user_profile_exists(guild_id, author_id)
+                price = Ticker(ticker=stock).yahoo_api_price()['close'].iloc[-1]
+                if action == 'Buy':
+                    await buy_stock(ctx, ctx.author, stock=stock, stock_message=stock_message, amount=amount, price=price)
+                else:
+                    await sell_stock(ctx, ctx.author, stock=stock, stock_message=stock_message, amount=amount, price=price)
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
+
+    @stock.error
+    async def stock_error(self, ctx, error):
+        example = 'Example: `stock NVDA buy 10` means you buy 10 shares of Nvidia'
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply(f"This command is used to buy or sell stocks!\n{example}")
+        elif isinstance(error, commands.BadArgument):
+            await ctx.reply(f"Invalid input!\n{example}")
+        else:
+            print(f"Unexpected error: {error}")  # Log other errors for debugging
+
+    @stock.autocomplete("stock")
+    async def stock_autocomplete(self, interaction: discord.Interaction, current: str):
+        """
+        Autocomplete callback for the stock parameter.
+        Returns a list of up to 25 app_commands.Choice objects.
+        """
+        # Filter the available item names based on the current input (case-insensitive)
+        choices = [
+            app_commands.Choice(name=stock, value=stock)
+            for stock in available_stocks
+            if current.lower() in stock.lower()
+        ]
+        return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+
+    @stock.autocomplete("action")
+    async def action_autocomplete(self, interaction: discord.Interaction, current: str):
+        """
+        Autocomplete callback for the action parameter.
+        Returns a list of ['Buy', 'Sell'] app_commands.Choice objects.
+        """
+        # Filter the available item names based on the current input (case-insensitive)
+        choices = [
+            app_commands.Choice(name=action, value=action)
+            for action in ['Buy', 'Sell']
+            if current.lower() in action.lower()
+        ]
+        return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+
+    @commands.hybrid_command(name="stock_prices", description="Sends a list of stock prices")
+    async def stock_prices(self, ctx):
+        """
+        Sends a list of stock prices
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                reply = [f'`{stock}{' '*(5-len(stock))}`: {round(Ticker(ticker=stock).yahoo_api_price()['close'].iloc[-1], 5)}' for stock in available_stocks]
+                await ctx.reply('\n'.join(reply))
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
 
     @commands.hybrid_command(name="title", description="Change the title in your profile", aliases=['titles'])
     @app_commands.describe(title="The title you want to set")
