@@ -1687,7 +1687,7 @@ class PaginationView(discord.ui.View):
                         found = False
                         for s in sorted(info):
                             if info[s]:
-                                stock += f'`{s}` ─ {info[s]:,}\n'
+                                stock += f'`{s}{' '*(5-len(s))}` ─ {info[s]:,}\n'
                                 found = True
                         if not found:
                             stock = "You don't own any Stock Shares!\nRun `/stock` to get some"
@@ -2070,12 +2070,12 @@ async def rigged_potion_func(message, castor, amount, additional_context=[]):
         castor_id = str(castor.id)
         bal = get_user_balance(guild_id, castor_id)
         bal2 = add_coins_to_user(guild_id, castor_id, bal)
+        global_profiles[castor_id]['items']['rigged_potion'] -= 1
         await message.reply(
             f"# {items['rigged_potion']} used successfully\n"
             f"**{castor.display_name}**: +{bal:,} {coin}\n"
             f"Balance: {bal2:,} {coin}"
         )
-        global_profiles[castor_id]['items']['rigged_potion'] -= 1
         highest_balance_check(guild_id, castor_id, bal2, save=False, make_sure=False)
         save_profiles()
     except Exception:
@@ -2122,12 +2122,12 @@ async def funny_item_func(message, castor, amount, additional_context=[]):
             await message.reply(f'{castor.mention} come back when you have **69 {items['funny_item']}s**. You only own {items_owned} {funny_item}')
         else:
             bal = add_coins_to_user(guild_id, castor_id, 1000000)
+            global_profiles[castor_id]['items']['funny_item'] -= 69
             await message.reply(
                 f"# 69 {items['funny_item']}s have been used successfully\n"
                 f"**{castor.display_name}**: +{1000000:,} {coin}\n"
                 f"Balance: {bal:,} {coin}"
             )
-            global_profiles[castor_id]['items']['funny_item'] -= 69
             highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
             save_profiles()
     except Exception:
@@ -2139,12 +2139,15 @@ async def laundry_machine_func(message, castor, amount, additional_context=[]):
         guild_id = '' if not message.guild else str(message.guild.id)
         castor_id = str(castor.id)
         bal = add_coins_to_user(guild_id, castor_id, 10000 * amount)
-        await message.reply(
-            f"# {amount} {items['laundry_machine']}{'s' if amount != 1 else ''} used successfully\n"
-            f"**{castor.display_name}**: +{10000 * amount:,} {coin}\n"
-            f"Balance: {bal:,} {coin}"
-        )
         global_profiles[castor_id]['items']['laundry_machine'] -= amount
+        await message.reply(
+            f"# {amount:,} {items['laundry_machine']}{'s' if amount != 1 else ''} used successfully\n"
+            f"**{castor.display_name}: +{10000 * amount:,} {coin}**\n"
+            f"Balance: {bal:,} {coin}\n"
+            f"\n"
+            f"**-{amount:,} {items['laundry_machine']}{'s' if amount != 1 else ''}**\n"
+            f"Owned: {global_profiles[castor_id]['items']['laundry_machine']} {laundry_machine}"
+        )
         highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
         save_profiles()
     except Exception:
@@ -2160,6 +2163,7 @@ async def twisted_orb_func(message, castor, amount, additional_context=[]):
 
         if win_chance >= 0.5:
             bal2 = add_coins_to_user(guild_id, castor_id, bal * 4)
+            global_profiles[castor_id]['items']['twisted_orb'] -= 1
             await message.reply(
                 f"# {items['twisted_orb']} used successfully\n"
                 f"## You win - `{win_chance}` {yay}\n"
@@ -2185,6 +2189,8 @@ async def twisted_orb_func(message, castor, amount, additional_context=[]):
             save_active_loans()
 
             bal2 = remove_coins_from_user(guild_id, castor_id, bal)
+            global_profiles[castor_id]['items']['twisted_orb'] -= 1
+
             await message.reply(
                 f"# {items['twisted_orb']} used successfully\n"
                 f"## You lose - `{win_chance}` {o7}\n"
@@ -2195,7 +2201,6 @@ async def twisted_orb_func(message, castor, amount, additional_context=[]):
                 f"{ps}"
             )
 
-        global_profiles[castor_id]['items']['twisted_orb'] -= 1
         save_profiles()
     except Exception:
         print(traceback.format_exc())
@@ -2317,7 +2322,7 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
                             f"**+{amount:,} {item}{'s' if amount != 1 else ''}**\n"
                             f"Owned: {global_profiles[author_id]['items'][item.real_name]:,} {item.emoji}\n"
                             f"\n"
-                            f"**-{price[0] * amount:,} {coin if price[1] == 'coin' else price[1]}**\n"
+                            f"**{author.display_name}: -{price[0] * amount:,} {coin if price[1] == 'coin' else price[1]}**\n"
                             f"{last_line}")
         else:
             # Optionally, handle cancellation here
@@ -2355,7 +2360,7 @@ async def buy_stock(ctx: commands.Context, author: discord.User, stock: str, sto
                             f"**+{amount:,} `{stock}`**\n"
                             f"Owned: {global_profiles[author_id]['items']['stock'][stock]:,} `{stock}`\n"
                             f"\n"
-                            f"**-{to_pay:,} {coin}**\n"
+                            f"**{author.display_name}: -{to_pay:,} {coin}**\n"
                             f"Balance: {bal:,} {coin}")
     except Exception:
         print(traceback.format_exc())
