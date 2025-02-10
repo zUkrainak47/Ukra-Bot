@@ -2447,25 +2447,40 @@ def is_market_open():
     market_open = datetime_time(9, 30)
     market_close = datetime_time(16, 0)
 
-    if now.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
+    # If it's Saturday (5) or Sunday (6), market is closed.
+    if now.weekday() >= 5:
         return False, next_market_open(now)
 
+    # If the current time is between market open and market close, market is open.
     if market_open <= now.time() <= market_close:
-        return True, None  # Market is open
+        return True, None
 
+    # Otherwise, market is closed; determine the next market open.
     return False, next_market_open(now)
 
 
 def next_market_open(now):
-    """Determines the next market opening time and converts to UNIX timestamp."""
-    next_open = now + timedelta(days=1)
-    while next_open.weekday() >= 5:  # Skip weekends
-        next_open += timedelta(days=1)
-    next_open = next_open.replace(hour=9, minute=30, second=0, microsecond=0)
+    """
+    Determines the next market opening time and returns it in Discord's relative time format.
+    If the market hasn't opened yet today (and today is a trading day), it returns today's 9:30 AM.
+    Otherwise, it returns the next trading day's 9:30 AM.
+    """
+    market_open_time = datetime_time(9, 30)
 
-    # Convert to UNIX timestamp (seconds)
+    # If today is a trading day and current time is before market open, return today's open.
+    if now.weekday() < 5 and now.time() < market_open_time:
+        next_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    else:
+        # Otherwise, move to the next day.
+        next_open = now + timedelta(days=1)
+        # Skip days until a weekday is found (i.e. Monday-Friday).
+        while next_open.weekday() >= 5:
+            next_open += timedelta(days=1)
+        next_open = next_open.replace(hour=9, minute=30, second=0, microsecond=0)
+
+    # Convert to UNIX timestamp (seconds) and format for Discord's relative time.
     unix_timestamp = int(next_open.timestamp())
-    return f"<t:{unix_timestamp}:R>"  # Discord relative time format
+    return f"<t:{unix_timestamp}:R>"
 
 
 async def fetch_price(stock):
@@ -2992,7 +3007,7 @@ class Currency(commands.Cog):
                         fig.tight_layout()
 
                         # Save and send the plot
-                        image_path = f"stocks/{stock}_chart.png"
+                        image_path = f"stocks/{stock}_chart_{datetime.now().timestamp()}.png"
                         plt.savefig(image_path, bbox_inches="tight")
                         plt.close(fig)
 
