@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, UTC
 from datetime import time as datetime_time
 import os
 import random
+
+import numpy as np
 import pytz
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -696,6 +698,7 @@ async def on_ready():
         lottery_channel = client.get_guild(696311992973131796).get_channel(1326949510336872458)
         await log_channel.send(f'{yay} {bot_name} has connected to Discord!')
         print('Bot is up!')
+        # print(get_global_net_lb()[:25])
         role_dict = {'backshots_role': distributed_backshots,
                      'segs_role': distributed_segs}
         save_dict = {'backshots_role': save_distributed_backshots,
@@ -1465,6 +1468,39 @@ def get_user_balance(guild_: str, user_: str):
     return global_currency.get(user_)
 
 
+def get_global_net_lb():
+    net_worth_list = []
+
+    for user_id, balance in global_currency.items():
+        # Start with the user's balance
+        total_worth = balance
+
+        # Get the user's profile from global_profiles; default to {} if missing.
+        profile = global_profiles.get(user_id, {}).get("items", {})
+
+        # Add value from laundry machines if present (each counts as 10000)
+        laundry_count = profile.get("laundry_machine", 0)
+        total_worth += laundry_count * 10000
+
+        # Add value from stocks if present.
+        stocks = profile.get("stock", {})
+        if isinstance(stocks, dict):
+            for stock_name, shares in stocks.items():
+                # Get the price from stock_cache; default to 0 if not found.
+                price = stock_cache.get(stock_name, (0,))[0]
+                # Multiply shares by price and take the integer part.
+                total_worth += int(shares * price)
+
+        # Append the tuple (user_id, total_worth) to our list.
+        net_worth_list.append((user_id, total_worth))
+
+    # Sort the list in descending order of net worth
+    net_worth_list.sort(key=lambda x: x[1], reverse=True)
+
+    # net_worth_list now contains tuples sorted by net worth in descending order.
+    return net_worth_list
+
+
 def get_profile(user_: str) -> dict:
     return global_profiles.get(user_)
 
@@ -1700,7 +1736,7 @@ class PaginationView(discord.ui.View):
                         found = False
                         for s in sorted(info):
                             if info[s]:
-                                stock += f'`{s}{' '*(5-len(s))}` ─ {info[s]:,}\n'
+                                stock += f'`{s.ljust(5)}` ─ `{format(info[s], ",").center(10)}` ─ {coin} {int(info[s] * stock_cache[s][0]):,}\n'
                                 found = True
                         if not found:
                             stock = "You don't own any Stock Shares!\nRun `/stock` to get some"
@@ -2069,7 +2105,7 @@ async def confirm_stock(message1, author: discord.User, stock: str, amount: int,
     t, f = ("purchase", math.ceil) if action == 'Buy' else ('sale', int)
     view = ConfirmView(author, stock=stock, amount=amount, type_=f"{amount:,} `{stock}` {t}")  # Create the view and pass the allowed author
     message = await message1.reply(
-        f"## {author.display_name}, do you want to {action.lower()} **{amount:,} `{stock}` stock for {f(price * amount):,} {coin}**?\nCurrently, `{stock}` is at {round(price, 2)} {coin} per stock",
+        f"## {author.display_name}, do you want to {action.lower()} **{amount:,} `{stock}` stock for {f(price * amount):,} {coin}**?\n`{stock}` is at {round(price, 2)} {coin} per stock\n\n**Owned:** {global_profiles[str(author.id)]['items'].setdefault('stock', {}).setdefault(stock, 0)} `{stock}`\n**Balance:** {get_user_balance('', str(author.id)):,} {coin}",
         view=view
     )
     view.message = message
@@ -2402,7 +2438,7 @@ async def sell_stock(ctx: commands.Context, author: discord.User, stock: str, st
             bal = add_coins_to_user(guild_id, author_id, to_pay_out)
             save_profiles()
             await msg.reply(f"## Sale successful\n"
-                            f"**+{to_pay_out:,} {coin}**\n"
+                            f"**{author.display_name}: +{to_pay_out:,} {coin}**\n"
                             f"Balance: {bal:,} {coin}\n"
                             f"\n"
                             f"**-{amount:,} `{stock}`**\n"
@@ -2564,7 +2600,12 @@ class Currency(commands.Cog):
                     make_sure_user_profile_exists(guild_id, str(target_id))
                     num = get_user_balance(guild_id, str(target_id))
                     laundry = global_profiles[str(target_id)]['items'].setdefault('laundry_machine', 0)
-                    laundry_msg = f' (+{laundry:,} {laundry_machine})' if laundry else ''
+                    num += laundry * 10000
+                    # laundry_msg = f' (+{laundry:,} {laundry_machine})' if laundry else ''
+                    if 'stock' in global_profiles[str(target_id)]['items']:
+                        user_stocks = global_profiles[str(target_id)]['items']['stock']
+                        for s in user_stocks:
+                            num += int(user_stocks[s] * stock_cache[s][0])
                     user_streak = daily_streaks.setdefault(str(target_id), 0)
                     now = datetime.now()
                     last_used = user_last_used.setdefault(str(target_id), datetime.today() - timedelta(days=2))
@@ -2580,7 +2621,8 @@ class Currency(commands.Cog):
 
                     target_profile = get_profile(str(target_id))
 
-                    global_rank = sorted(global_currency.items(), key=lambda x: x[1], reverse=True).index((str(target_id), global_currency[str(target_id)])) + 1
+                    # global_rank = sorted(global_currency.items(), key=lambda x: x[1], reverse=True).index((str(target_id), global_currency[str(target_id)])) + 1
+                    global_rank = get_global_net_lb().index((str(target_id), num)) + 1
                     if target_profile['highest_global_rank'] > global_rank or target_profile['highest_global_rank'] == -1:
                         target_profile['highest_global_rank'] = global_rank
                         if global_rank == 1:
@@ -2598,7 +2640,8 @@ class Currency(commands.Cog):
                         profile_embed = discord.Embed(title=f"{target.display_name}{embed_title}", color=embed_color)
                     profile_embed.set_thumbnail(url=target.avatar.url)
 
-                    profile_embed.add_field(name="Balance", value=f"{num:,} {coin}{laundry_msg}", inline=True)
+                    # profile_embed.add_field(name="Balance", value=f"{num:,} {coin}{laundry_msg}", inline=True)
+                    profile_embed.add_field(name="Net worth", value=f"{num:,} {coin}", inline=True)
                     profile_embed.add_field(name="Global Rank", value=f"#{global_rank:,}", inline=True)
                     profile_embed.add_field(name="Daily Streak", value=d_msg, inline=True)
 
@@ -2946,11 +2989,13 @@ class Currency(commands.Cog):
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
-    @commands.hybrid_command(name="stock", description="Purchase or sell stock of choice")
+    @commands.cooldown(rate=2, per=10, type=commands.BucketType.user)
+    @commands.hybrid_command(name="stock", description="Purchase or sell stocks of choice", alias=['stocks'])
     @app_commands.describe(stock="The name of the stock", action="Inspect/Buy/Sell", amount="How many you want to buy or sell")
     async def stock(self, ctx, stock: str, action: str = 'Inspect - day', amount: int = 1):
         """
         Inspect, buy or sell stocks! If no valid action is passed, defaults to viewing today's chart of the given stock
+        2 uses per 10 seconds are allowed
         """
         stock_dict = {'apple': 'AAPL',
                       'amazon': 'AMZN',
@@ -3086,12 +3131,18 @@ class Currency(commands.Cog):
     @stock.error
     async def stock_error(self, ctx, error):
         example = 'Example: `stock NVDA buy 10` means you buy 10 shares of Nvidia'
-        if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.reply(f"This command is used to buy or sell stocks!\n{example}")
-        elif isinstance(error, commands.BadArgument):
-            await ctx.reply(f"Invalid input!\n{example}")
-        else:
-            print(f"Unexpected error: {error}")  # Log other errors for debugging
+        if currency_allowed(ctx) and bot_down_check(str(ctx.guild.id)):
+            if isinstance(error, commands.CommandOnCooldown):
+                retry_after = round(error.retry_after, 1)
+                await print_reset_time(retry_after, ctx, f"This command is on cooldown\n")
+            elif isinstance(error, commands.MissingRequiredArgument):
+                await ctx.reply(f"This command is used to buy, sell or inspect stocks!\n{example}")
+            elif isinstance(error, commands.BadArgument):
+                await ctx.reply(f"Invalid input!\n{example}")
+            else:
+                print(f"Unexpected error: {error}")  # Log other errors for debugging
+        elif currency_allowed(ctx):
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @stock.autocomplete("stock")
     async def stock_autocomplete(self, interaction: discord.Interaction, current: str):
@@ -3141,7 +3192,7 @@ class Currency(commands.Cog):
             print("Error updating stock prices:")
             print(traceback.format_exc())
 
-    @commands.hybrid_command(name="stock_prices", description="Sends a list of stock prices")
+    @commands.hybrid_command(name="stock_prices", description="Sends a list of stock prices", aliases=['stock_price', 'stocks_price', 'stocks_prices'])
     async def stock_prices(self, ctx):
         """
         Sends a list of stock prices (updated every 15 seconds)
@@ -3297,8 +3348,16 @@ class Currency(commands.Cog):
                 user = ctx.author
             num = make_sure_user_profile_exists(guild_id, str(user.id))
             laundry = global_profiles[str(user.id)]['items'].setdefault('laundry_machine', 0)
-            laundry_msg = f' (+{laundry:,} {laundry_machine})' if laundry else ''
-            await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}{laundry_msg}")
+            laundry_msg = f' +{laundry:,} {laundry_machine}' if laundry else ''
+            stock_total = 0
+            if 'stock' in global_profiles[str(user.id)]['items']:
+                user_stocks = global_profiles[str(user.id)]['items']['stock']
+                for s in user_stocks:
+                    stock_total += user_stocks[s] * stock_cache[s][0]
+            stock_total = int(stock_total)
+            stock_msg = f" +{stock_total:,} {coin} in `STOCK`" if stock_total else ''
+            # await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}{laundry_msg}")
+            await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}{stock_msg}{laundry_msg}\n**Net worth:** {num + laundry * 10000 + stock_total:,} {coin}")
             highest_balance_check(guild_id, str(user.id), num)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
@@ -3935,7 +3994,8 @@ class Currency(commands.Cog):
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
-            sorted_members = sorted(global_currency.items(), key=lambda x: x[1], reverse=True)
+            # sorted_members = sorted(global_currency.items(), key=lambda x: x[1], reverse=True)
+            sorted_members = get_global_net_lb()
             #  FIXME probably not the best approach
             top_users = []
             found_author = False
@@ -3979,7 +4039,9 @@ class Currency(commands.Cog):
                     global_currency.remove(user_id)
                     save_currency()
             if not found_author:
-                rank = sorted_members.index((str(ctx.author.id), global_currency[str(ctx.author.id)]))+1
+                # rank = sorted_members.index((str(ctx.author.id), global_currency[str(ctx.author.id)]))+1
+                user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
+                rank = user_to_index[str(ctx.author.id)] + 1
                 highest_rank = global_profiles[str(ctx.author.id)]['highest_global_rank']
                 if rank < highest_rank or highest_rank == -1:
                     global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
