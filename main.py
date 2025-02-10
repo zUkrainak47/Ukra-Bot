@@ -686,7 +686,10 @@ async def on_ready():
         client.add_command(tcc)
         client.add_command(tuc)
         await client.tree.sync()
-        await update_stock_cache()
+        # await update_stock_cache()
+        # for s in server_settings:
+        #     if s:
+        #         print(s, client.get_guild(int(s)).name)
         global log_channel, rare_channel, lottery_channel
         log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
         rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
@@ -2485,16 +2488,27 @@ def next_market_open(now):
 
 async def fetch_price(stock):
     try:
-        ticker = Ticker(ticker=stock)
-        data_ = ticker.yahoo_api_price()
-        current_price = data_['close'].iloc[-1]
-        previous_close = data_['close'].iloc[-2]  # Previous day's close
+        ticker = yfinance.Ticker(stock)
+        # Retrieve the last 5 days of data to be safe if there are market holidays.
+        data = ticker.history(period="5d")
+
+        # Ensure we have at least 2 days of data
+        if data.shape[0] < 2:
+            return stock, "No Data", ""
+
+        # Get the last two trading days
+        current_price = data['Close'].iloc[-1]
+        previous_close = data['Close'].iloc[-2]
 
         # Calculate percentage change
         percent_change = ((current_price - previous_close) / previous_close) * 100
         percent_sign = "📈" if percent_change > 0 else "📉"
-        return stock, round(current_price, 2), f"{percent_sign} {'+' if current_price > previous_close else ''}{round(percent_change, 2)}%"
+
+        # Return the stock, current price rounded to 2 decimals, and a formatted change string
+        print(stock, current_price, previous_close, percent_change)
+        return stock, round(current_price, 2), f"{percent_sign} `{'+' if current_price > previous_close else ''}{format(percent_change, ".2f")}%`"
     except Exception:
+        print(traceback.format_exc())
         return stock, "Error", ""
 
 
@@ -2502,6 +2516,7 @@ async def update_stock_cache():
     global stock_cache
     stock_data = await asyncio.gather(*[fetch_price(stock) for stock in available_stocks])
     stock_cache = {stock: (price, change) for stock, price, change in stock_data}
+    print()
 
 
 class Currency(commands.Cog):
@@ -2933,20 +2948,28 @@ class Currency(commands.Cog):
 
     @commands.hybrid_command(name="stock", description="Purchase or sell stock of choice")
     @app_commands.describe(stock="The name of the stock", action="Inspect/Buy/Sell", amount="How many you want to buy or sell")
-    async def stock(self, ctx, stock: str, action: str, amount: int = 1):
+    async def stock(self, ctx, stock: str, action: str = 'Inspect - day', amount: int = 1):
         """
-        Purchase item of choice
-        Accepts a number as a parameter, so you can buy in bulk
+        Inspect, buy or sell stocks! If no valid action is passed, defaults to viewing today's chart of the given stock
         """
+        stock_dict = {'apple': 'AAPL',
+                      'amazon': 'AMZN',
+                      'ford': 'F',
+                      'google': 'GOOGL',
+                      'intel': 'INTC',
+                      'nvidia': 'NVDA',
+                      'tesla': 'TSLA'}
+        if stock.lower() in stock_dict:
+            stock = stock_dict[stock.lower()]
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             author_id = str(ctx.author.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 action = action.capitalize()
-                if action not in ('Buy', 'Sell'):
+                if action not in ('Buy', 'Sell', 'Inspect - month'):
                     # await ctx.reply(f"Please provide the action - Buy or Sell. There is no `{action}`")
                     # return
-                    action = 'Inspect'
+                    action = 'Inspect - day'
                 stock = stock.upper()
                 if stock not in available_stocks:
                     await ctx.reply(f"Please provide the stock. Available stocks are `{'` `'.join(available_stocks)}`")
@@ -2960,11 +2983,12 @@ class Currency(commands.Cog):
 
                 make_sure_user_profile_exists(guild_id, author_id)
                 price = Ticker(ticker=stock).yahoo_api_price()['close'].iloc[-1]
+                print('"' + action + '"')
                 if action == 'Buy':
                     await buy_stock(ctx, ctx.author, stock=stock, stock_message=stock_message, amount=amount, price=price)
                 elif action == 'Sell':
                     await sell_stock(ctx, ctx.author, stock=stock, stock_message=stock_message, amount=amount, price=price)
-                else:
+                elif action == 'Inspect - month':
                     try:
                         stock_tick = yfinance.Ticker(ticker=stock)
 
@@ -2991,6 +3015,7 @@ class Currency(commands.Cog):
                         ax.plot(df.index, df['Close'], marker='o', linestyle='-', label=stock)
                         ax.set_ylabel('Price')
                         # ax.set_title(f"📊 **`{stock}` - Last Month's Price**")
+                        ax.grid(axis='y', linestyle='--', alpha=0.7)
 
                         # Set the x-ticks to match every data point.
                         ax.set_xticks(df.index)
@@ -3014,6 +3039,40 @@ class Currency(commands.Cog):
                         file = discord.File(image_path, filename=image_path)
                         await ctx.reply(f"📊 **`{stock}` - Last Month's Chart**", file=file)
 
+                    except Exception:
+                        await ctx.reply(f"❌ Error fetching chart for `{stock}`")
+                        print(traceback.format_exc())
+                else:
+                    try:
+                        stock_tick = Ticker(ticker=stock)
+                        # Get the last month's data
+                        df = stock_tick.yahoo_api_price()
+                        if df.empty:
+                            return await ctx.reply(f"❌ No data found for `{stock}`")
+                        df['timestamp'] = pd.to_datetime(df['timestamp'])
+                        # Set the 'timestamp' column as the index
+                        df.set_index('timestamp', inplace=True)
+                        # Check the first few rows to ensure the index is datetime
+                        # print(df.head())
+                        # Ensure the index is in the correct timezone (America/New_York)
+                        df.index = df.index.tz_localize("America/New_York", ambiguous='NaT')
+                        # Get data for the last 30 days
+                        one_month_ago = datetime.now(pytz.timezone('America/New_York')) - timedelta(days=30)
+                        df = df[df.index >= one_month_ago]
+                        if df.empty:
+                            return await ctx.reply(f"❌ No data available for `{stock}` in the last day.")
+                        df.index = df.index - pd.Timedelta(hours=5)
+                        # Plot using mplfinance (candlestick chart)
+                        fig, ax = plt.subplots(figsize=(8, 4))
+                        mpf.plot(df, type='candle', style='charles', ax=ax, ylabel='Price')
+                        ax.yaxis.grid(True, linestyle='--', color='grey', alpha=0.7)
+                        # Save the image
+                        image_path = f"stocks/{stock}_day_chart_{datetime.now().timestamp()}.png"
+                        plt.savefig(image_path, bbox_inches="tight")
+                        plt.close(fig)
+                        # Send the chart as a file
+                        file = discord.File(image_path, filename=image_path)
+                        await ctx.reply(f"📊 **`{stock}` - Last Day's Chart**", file=file)
                     except Exception:
                         await ctx.reply(f"❌ Error fetching chart for `{stock}`")
                         print(traceback.format_exc())
@@ -3057,14 +3116,14 @@ class Currency(commands.Cog):
         # Filter the available item names based on the current input (case-insensitive)
         choices = [
             app_commands.Choice(name=action, value=action)
-            for action in ['Inspect', 'Buy', 'Sell']
+            for action in ['Inspect - month', 'Inspect - day', 'Buy', 'Sell']
             if current.lower() in action.lower()
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
-    @tasks.loop(seconds=15)
+    @tasks.loop(seconds=45)
     async def update_stock_prices(self):
-        """Fetch stock prices every 15 seconds if the market is open."""
+        """Fetch stock prices every 45 seconds if the market is open."""
         try:
             global stock_cache, market_closed_message
             is_open, next_open_time = is_market_open()
@@ -3076,6 +3135,7 @@ class Currency(commands.Cog):
             market_closed_message = ""  # Clear message when market is open
             stock_data = await asyncio.gather(*[fetch_price(stock) for stock in available_stocks])
             stock_cache = {stock: (price, change) for stock, price, change in stock_data}
+            print()
 
         except Exception:
             print("Error updating stock prices:")
@@ -3097,7 +3157,7 @@ class Currency(commands.Cog):
                 return
 
             reply = [
-                f'`{stock.ljust(5)} {str(price).ljust(6)}` {change}'
+                f'`{stock.ljust(5)} {format(price, ".2f").rjust(6)}` {change}'
                 for stock, (price, change) in stock_cache.items()
             ]
             reply.append(market_closed_message)  # Add market status message if closed
@@ -3852,6 +3912,7 @@ class Currency(commands.Cog):
                     server_settings[guild_id]['members'].remove(member_id)
                     global_currency.remove(member_id)
                     save_currency()
+            save_settings()
             if not found_author:
                 you = f"\n\nYou're at **#{sorted_members.index(str(ctx.author.id))+1}**"
             else:
