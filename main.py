@@ -5,8 +5,11 @@ import asyncio
 import datetime
 import re
 from datetime import datetime, timedelta, UTC
+from datetime import time as datetime_time
 import os
 import random
+
+import pytz
 from dotenv import load_dotenv
 import discord
 from discord import Intents, Client, Message, app_commands
@@ -41,6 +44,7 @@ bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 fetched_users = {}
 stock_cache = {}
+market_closed_message = ""
 allow_dict = {True:  "Enabled ",
               False: "Disabled"}
 
@@ -678,6 +682,7 @@ async def on_ready():
         client.add_command(tcc)
         client.add_command(tuc)
         await client.tree.sync()
+        await update_stock_cache()
         global log_channel, rare_channel, lottery_channel
         log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
         rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
@@ -2057,7 +2062,7 @@ async def confirm_stock(message1, author: discord.User, stock: str, amount: int,
     t, f = ("purchase", math.ceil) if action == 'Buy' else ('sale', int)
     view = ConfirmView(author, stock=stock, amount=amount, type_=f"{amount:,} `{stock}` {t}")  # Create the view and pass the allowed author
     message = await message1.reply(
-        f"## {author.display_name}, do you want to {action.lower()} **{amount:,} `{stock}` stock for {f(price * amount):,} {coin}**?\nCurrently, `{stock}` is at {round(price, 5)} {coin} per stock",
+        f"## {author.display_name}, do you want to {action.lower()} **{amount:,} `{stock}` stock for {f(price * amount):,} {coin}**?\nCurrently, `{stock}` is at {round(price, 2)} {coin} per stock",
         view=view
     )
     view.message = message
@@ -2430,6 +2435,54 @@ def user_has_access_to_channel(ctx, user):
     if not user:  # User is not in the guild
         return False
     return ctx.channel.permissions_for(user).view_channel
+
+
+def is_market_open():
+    """Checks if the US stock market (NYSE/NASDAQ) is open."""
+    now = datetime.now(pytz.timezone("America/New_York"))
+    market_open = datetime_time(9, 30)
+    market_close = datetime_time(16, 0)
+
+    if now.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
+        return False, next_market_open(now)
+
+    if market_open <= now.time() <= market_close:
+        return True, None  # Market is open
+
+    return False, next_market_open(now)
+
+
+def next_market_open(now):
+    """Determines the next market opening time and converts to UNIX timestamp."""
+    next_open = now + timedelta(days=1)
+    while next_open.weekday() >= 5:  # Skip weekends
+        next_open += timedelta(days=1)
+    next_open = next_open.replace(hour=9, minute=30, second=0, microsecond=0)
+
+    # Convert to UNIX timestamp (seconds)
+    unix_timestamp = int(next_open.timestamp())
+    return f"<t:{unix_timestamp}:R>"  # Discord relative time format
+
+
+async def fetch_price(stock):
+    try:
+        ticker = Ticker(ticker=stock)
+        data_ = ticker.yahoo_api_price()
+        current_price = data_['close'].iloc[-1]
+        previous_close = data_['close'].iloc[-2]  # Previous day's close
+
+        # Calculate percentage change
+        percent_change = ((current_price - previous_close) / previous_close) * 100
+        percent_sign = "📈" if percent_change > 0 else "📉"
+        return stock, round(current_price, 2), f"{percent_sign} {'+' if current_price > previous_close else ''}{round(percent_change, 2)}%"
+    except Exception:
+        return stock, "Error", ""
+
+
+async def update_stock_cache():
+    global stock_cache
+    stock_data = await asyncio.gather(*[fetch_price(stock) for stock in available_stocks])
+    stock_cache = {stock: (price, change) for stock, price, change in stock_data}
 
 
 class Currency(commands.Cog):
@@ -2936,19 +2989,18 @@ class Currency(commands.Cog):
 
     @tasks.loop(seconds=15)
     async def update_stock_prices(self):
-        """Fetch stock prices every 15 seconds and cache them."""
-        global stock_cache
+        """Fetch stock prices every 15 seconds if the market is open."""
         try:
-            async def fetch_price(stock):
-                try:
-                    ticker = Ticker(ticker=stock)
-                    price = ticker.yahoo_api_price()['close'].iloc[-1]
-                    return stock, round(price, 5)
-                except Exception:
-                    return stock, "Error"
+            global stock_cache, market_closed_message
+            is_open, next_open_time = is_market_open()
 
+            if not is_open:
+                market_closed_message = f"\n📌 The stock market is closed. Next opening: {next_open_time}"
+                return  # Skip updating prices
+
+            market_closed_message = ""  # Clear message when market is open
             stock_data = await asyncio.gather(*[fetch_price(stock) for stock in available_stocks])
-            stock_cache = {stock: price for stock, price in stock_data}
+            stock_cache = {stock: (price, change) for stock, price, change in stock_data}
 
         except Exception:
             print("Error updating stock prices:")
@@ -2969,7 +3021,12 @@ class Currency(commands.Cog):
                 await ctx.reply(f'{reason}, currency commands are disabled')
                 return
 
-            reply = [f'`{stock.ljust(5)}`: {price}' for stock, price in stock_cache.items()]
+            reply = [
+                f'`{stock.ljust(5)} {str(price).ljust(6)}` {change}'
+                for stock, (price, change) in stock_cache.items()
+            ]
+            reply.append(market_closed_message)  # Add market status message if closed
+
             await ctx.reply("\n".join(reply))
 
         except Exception:
