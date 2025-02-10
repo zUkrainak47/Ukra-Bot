@@ -8,8 +8,10 @@ from datetime import datetime, timedelta, UTC
 from datetime import time as datetime_time
 import os
 import random
-
 import pytz
+import matplotlib.pyplot as plt
+import mplfinance as mpf  # For candlestick charts
+import pandas as pd
 from dotenv import load_dotenv
 import discord
 from discord import Intents, Client, Message, app_commands
@@ -21,6 +23,7 @@ from pathlib import Path
 import math
 from rapidfuzz import process
 from stockdex import Ticker
+import yfinance
 
 start = time.perf_counter()
 
@@ -2913,8 +2916,8 @@ class Currency(commands.Cog):
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.hybrid_command(name="stock", description="Purchase or sell stock of choice")
-    @app_commands.describe(stock="The name of the stock", action="Buy or Sell", amount="How many you want to buy or sell")
-    async def stock(self, ctx, stock: str, action: str, amount: int):
+    @app_commands.describe(stock="The name of the stock", action="Inspect/Buy/Sell", amount="How many you want to buy or sell")
+    async def stock(self, ctx, stock: str, action: str, amount: int = 1):
         """
         Purchase item of choice
         Accepts a number as a parameter, so you can buy in bulk
@@ -2925,13 +2928,14 @@ class Currency(commands.Cog):
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 action = action.capitalize()
                 if action not in ('Buy', 'Sell'):
-                    await ctx.reply(f"Please provide the action - Buy or Sell. There is no `{action}`")
-                    return
+                    # await ctx.reply(f"Please provide the action - Buy or Sell. There is no `{action}`")
+                    # return
+                    action = 'Inspect'
                 stock = stock.upper()
                 if stock not in available_stocks:
                     await ctx.reply(f"Please provide the stock. Available stocks are `{'` `'.join(available_stocks)}`")
                     return
-                if amount < 1:
+                if amount < 1 and action in ('Buy', 'Sell'):
                     await ctx.reply(f"You can't {action.lower()} {amount} stock {icant}")
                     return
                 stock_message = ctx
@@ -2942,10 +2946,55 @@ class Currency(commands.Cog):
                 price = Ticker(ticker=stock).yahoo_api_price()['close'].iloc[-1]
                 if action == 'Buy':
                     await buy_stock(ctx, ctx.author, stock=stock, stock_message=stock_message, amount=amount, price=price)
-                else:
+                elif action == 'Sell':
                     await sell_stock(ctx, ctx.author, stock=stock, stock_message=stock_message, amount=amount, price=price)
+                else:
+                    try:
+                        stock_tick = Ticker(ticker=stock)
+
+                        # Get the last month's data
+                        df = stock_tick.yahoo_api_price()
+                        if df.empty:
+                            return await ctx.reply(f"❌ No data found for `{stock}`")
+
+                        df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+                        # Set the 'timestamp' column as the index
+                        df.set_index('timestamp', inplace=True)
+
+                        # Check the first few rows to ensure the index is datetime
+                        print(df.head())
+
+                        # Ensure the index is in the correct timezone (America/New_York)
+                        df.index = df.index.tz_localize("America/New_York", ambiguous='NaT')
+
+                        # Get data for the last 30 days
+                        one_month_ago = datetime.now(pytz.timezone('America/New_York')) - timedelta(days=30)
+                        df = df[df.index >= one_month_ago]
+
+                        if df.empty:
+                            return await ctx.reply(f"❌ No data available for `{stock}` in the last day.")
+
+                        # Plot using mplfinance (candlestick chart)
+                        fig, ax = plt.subplots(figsize=(8, 4))
+                        mpf.plot(df, type='candle', style='charles', ax=ax, ylabel='Price')
+
+                        # Save the image
+                        image_path = f"stocks/{stock}_chart.png"
+                        plt.savefig(image_path, bbox_inches="tight")
+                        plt.close(fig)
+
+                        # Send the chart as a file
+                        file = discord.File(image_path, filename=image_path)
+                        await ctx.reply(f"📊 **`{stock}` - Last Day's Chart**", file=file)
+
+                    except Exception:
+                        await ctx.reply(f"❌ Error fetching chart for `{stock}`")
+                        print(traceback.format_exc())
+
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
+
         except Exception:
             print(traceback.format_exc())
 
@@ -2982,7 +3031,7 @@ class Currency(commands.Cog):
         # Filter the available item names based on the current input (case-insensitive)
         choices = [
             app_commands.Choice(name=action, value=action)
-            for action in ['Buy', 'Sell']
+            for action in ['Inspect', 'Buy', 'Sell']
             if current.lower() in action.lower()
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices

@@ -5,6 +5,8 @@ name = "pypi"
 
 [packages]
 rapidfuzz = "*"
+matplotlib = "*"
+yfinance = "*"
 
 [dev-packages]
 
