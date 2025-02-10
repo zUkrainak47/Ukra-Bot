@@ -10,7 +10,7 @@ import random
 from dotenv import load_dotenv
 import discord
 from discord import Intents, Client, Message, app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 import json
 import time
 import atexit
@@ -40,6 +40,7 @@ allowed_users = [369809123925295104]
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 fetched_users = {}
+stock_cache = {}
 allow_dict = {True:  "Enabled ",
               False: "Disabled"}
 
@@ -2436,6 +2437,10 @@ class Currency(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+        self.update_stock_prices.start()  # Start the background task
+
+    def cog_unload(self):
+        self.update_stock_prices.cancel()  # Stop task when the cog is unloaded
 
     async def get_user(self, id_: int):
         global fetched_users
@@ -2929,20 +2934,47 @@ class Currency(commands.Cog):
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
+    @tasks.loop(seconds=15)
+    async def update_stock_prices(self):
+        """Fetch stock prices every 15 seconds and cache them."""
+        global stock_cache
+        try:
+            async def fetch_price(stock):
+                try:
+                    ticker = Ticker(ticker=stock)
+                    price = ticker.yahoo_api_price()['close'].iloc[-1]
+                    return stock, round(price, 5)
+                except Exception:
+                    return stock, "Error"
+
+            stock_data = await asyncio.gather(*[fetch_price(stock) for stock in available_stocks])
+            stock_cache = {stock: price for stock, price in stock_data}
+
+        except Exception:
+            print("Error updating stock prices:")
+            print(traceback.format_exc())
+
     @commands.hybrid_command(name="stock_prices", description="Sends a list of stock prices")
     async def stock_prices(self, ctx):
         """
-        Sends a list of stock prices
+        Sends a list of stock prices (updated every 15 seconds)
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
-            if currency_allowed(ctx) and bot_down_check(guild_id):
-                reply = [f'`{stock}{' '*(5-len(stock))}`: {round(Ticker(ticker=stock).yahoo_api_price()['close'].iloc[-1], 5)}' for stock in available_stocks]
-                await ctx.reply('\n'.join(reply))
-            elif currency_allowed(ctx):
+
+            if not currency_allowed(ctx):
+                return
+
+            if not bot_down_check(guild_id):
                 await ctx.reply(f'{reason}, currency commands are disabled')
+                return
+
+            reply = [f'`{stock.ljust(5)}`: {price}' for stock, price in stock_cache.items()]
+            await ctx.reply("\n".join(reply))
+
         except Exception:
             print(traceback.format_exc())
+            await ctx.reply("An error occurred while retrieving stock prices.")
 
     @commands.hybrid_command(name="title", description="Change the title in your profile", aliases=['titles'])
     @app_commands.describe(title="The title you want to set")
