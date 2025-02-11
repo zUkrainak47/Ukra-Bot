@@ -2674,12 +2674,12 @@ class Currency(commands.Cog):
                     profile_embed.set_thumbnail(url=target.avatar.url)
 
                     # profile_embed.add_field(name="Balance", value=f"{num:,} {coin}{laundry_msg}", inline=True)
-                    profile_embed.add_field(name="Net worth", value=f"{num:,} {coin}", inline=True)
+                    profile_embed.add_field(name="Net Worth", value=f"{num:,} {coin}", inline=True)
                     profile_embed.add_field(name="Global Rank", value=f"#{global_rank:,}", inline=True)
                     profile_embed.add_field(name="Daily Streak", value=d_msg, inline=True)
 
                     if full_info:
-                        profile_embed.add_field(name="Max Balance", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
+                        profile_embed.add_field(name="Highest Net Worth", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
                         profile_embed.add_field(name="Highest Global Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
                         profile_embed.add_field(name="Total Given Away", value=f"{target_profile['num_1']:,} {coin}", inline=True)
 
@@ -3891,17 +3891,19 @@ class Currency(commands.Cog):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)
+            make_sure_user_profile_exists(guild_id, author_id)
             example = 'Example: `give @user 100` gives @user 100 coins'
 
             if user.id in ignored_users:
                 await ctx.reply(f"{user.display_name} is banned from Ukra Bot")
                 return
             target_id = str(user.id)
+
             if user.id == ctx.author.id:
                 await ctx.reply(f"You can't send {coin} to yourself, silly")
                 return
 
+            make_sure_user_profile_exists(guild_id, target_id)
             number, _, _ = convert_msg_to_number([number], guild_id, author_id)
             if number == -1:
                 await ctx.reply(f"Please include the amount you'd like the give\n\n{example}")
@@ -3909,10 +3911,24 @@ class Currency(commands.Cog):
             if not number:
                 await ctx.reply("You gotta send something at least")
                 return
-            has_access = user_has_access_to_channel(ctx, user)
-            if not has_access:
-                await ctx.reply(f"{user.display_name} doesn't have access to this channel\nTransaction failed")
+            if sum(global_profiles[target_id]['commands'].values()) == 0:
+                await ctx.reply(f"{user.display_name} is not an Ukra Bot user\nTransaction failed")
                 return
+            has_access = user_has_access_to_channel(ctx, user)
+
+            if not has_access:
+                now = datetime.now()
+                last_used = user_last_used.get(target_id, None)
+                # print(last_used)
+                # if last_used is not None:
+                #     print(last_used < now - timedelta(days=3))
+                if (last_used is None) or (last_used < now - timedelta(days=3)):
+                    await ctx.reply(f"{user.display_name} doesn't have access to this channel and is not an active Ukra Bot User\nTransaction failed")
+                    return
+
+                if number < 500:
+                    await ctx.reply(f"{user.display_name} doesn't have access to this channel and you're sending less than 500 {coin}\nTransaction failed")
+                    return
 
             try:
                 make_sure_user_has_currency(guild_id, target_id)
@@ -3920,8 +3936,6 @@ class Currency(commands.Cog):
                     num1 = remove_coins_from_user(guild_id, author_id, number, save=False)
                     num2 = add_coins_to_user(guild_id, target_id, number, save=False)
                     answer = f"**{ctx.author.display_name}:** -{number:,} {coin} ({num1:,} {coin})\n**{user.display_name if (ctx.message.mentions or not has_access) else user.mention}:** +{number:,} {coin} ({num2:,} {coin})"
-                    make_sure_user_profile_exists(guild_id, author_id)
-                    make_sure_user_profile_exists(guild_id, target_id)
                     loan_money = number
                     loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                     for loan_id in loans:
