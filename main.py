@@ -86,6 +86,7 @@ deadge = '<:deadge:1323075561089929300>'
 teripoint = '<:teripoint:1322718769679827024>'
 pepela = '<:pepela:1322718719977197671>'
 okaygebusiness = '<:okaygebusiness:1325818583011426406>'
+suskaygebusiness = '<:suskaygebusiness:1338825366671720520>'
 sadgebusiness = '<:sadgebusiness:1326527481636978760>'
 fishinge = '<:Fishinge:1325810706393596035>'
 prayge = '<:prayge:1326268872990523492>'
@@ -104,7 +105,8 @@ rare_items_to_emoji = {'gold': gold_emoji, 'fool': '✨', 'diamonds': '💎', 't
 slot_options = [yay, o7, peeposcheme, sunfire2, stare, HUH, wicked, deadge, teripoint, pepela]
 available_stocks = ['AAPL', 'AMD', 'AMZN', 'F', 'GOOGL', 'INTC', 'NVDA', 'RIOT', 'TSLA', 'UBER']
 
-SPECIAL_CODES = {'genshingift': [3, 'https://cdn.discordapp.com/attachments/696842659989291130/1335602103460036639/image.png?ex=67a0c3e3&is=679f7263&hm=d91c7f72d6dcb4576948d98ea6206395c1da900f08d2ba8982ccb48f719b73ac&']}
+SPECIAL_CODES = {'genshingift': [3, 'https://cdn.discordapp.com/attachments/696842659989291130/1335602103460036639/image.png?ex=67a0c3e3&is=679f7263&hm=d91c7f72d6dcb4576948d98ea6206395c1da900f08d2ba8982ccb48f719b73ac&'],
+                 'rigged': [10000, 'https://tenor.com/view/gamblecore-stickman-casino-gamble-gif-7118676210396292522']}
 SECRET_CODES = {code: lis.split(',') for (code, lis) in [x.split(':-:') for x in os.getenv('SECRET_CODES').split(', ')]}
 SPECIAL_CODES.update(SECRET_CODES)
 titles = [
@@ -1735,12 +1737,17 @@ class PaginationView(discord.ui.View):
                     item, info = item
                     if isinstance(info, dict):
                         found = False
+                        total = 0
                         for s in sorted(info):
+                            stock_cost = int(info[s] * stock_cache[s][0])
+                            total += stock_cost
                             if info[s]:
-                                stock += f'`{s.ljust(5)}` ─ `{format(info[s], ",").center(10)}` ─ {coin} {int(info[s] * stock_cache[s][0]):,}\n'
+                                stock += f'`{s.ljust(5)}` ─ `{format(info[s], ",").center(10)}` ─ {coin} {stock_cost:,}\n'
                                 found = True
                         if not found:
                             stock = "You don't own any Stock Shares!\nRun `/stock` to get some"
+                        else:
+                            stock += f'\nTotal: {total:,} {coin}'
                     else:
                         emoji, name = items[item].emoji, items[item].name
                         desc += f'{emoji} **{name}** ─ {info:,}\n'
@@ -3390,6 +3397,12 @@ class Currency(commands.Cog):
                     if len(code_info) == 3 and code_info[2] not in call_:
                         await ctx.reply(clueless)
                         return
+                    if code_ == 'rigged':
+                        win, lose = global_profiles[author_id]['gamble_win_ratio']
+                        if win > lose or win+lose < 500:
+                            answer = f"{suskaygebusiness} You can only use this code when your win rate is below 50%" + " (with 500+ gambles)" * (win+lose < 500)
+                            await ctx.reply(answer)
+                            return
                     num = add_coins_to_user(guild_id, author_id, int(code_info[0]))
                     highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
                     if len(code_info) > 1 and code_info[1]:
@@ -4145,12 +4158,14 @@ class Currency(commands.Cog):
         else:
             await ctx.reply(f"Result is `{random.choice(results)}`!")
 
+    @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
     @commands.hybrid_command(name="gamble", description="Takes a bet, 50% win rate", aliases=['g'])
     @app_commands.describe(number="How many coins you're betting")
     async def gamble(self, ctx, *, number: str = ''):
         """
         Takes a bet, 50% win rate
         !gamble 2.5k
+        Has a 1-second cooldown
         """
         results = [1, 0]
         result = random.choice(results)
