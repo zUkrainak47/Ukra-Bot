@@ -684,6 +684,7 @@ async def on_ready():
         client.add_command(botafk)
         client.add_command(save)
         client.add_command(source)
+        client.add_command(donate)
         client.add_command(server)
         client.add_command(uptime)
         client.add_command(ping)
@@ -865,6 +866,17 @@ async def source(ctx):
     Sends the GitHub link to this bot's repo
     """
     await ctx.reply("https://github.com/zUkrainak47/Ukra-Bot")
+
+
+@commands.hybrid_command(name="donate", description="$1 per 10k coins, payment methods include kofi and a monobank jar", aliases=['jar', 'ko-fi', 'kofi'])
+async def donate(ctx):
+    """
+    I accept donations! $1 per 10k coins is the current rate
+    """
+    await ctx.reply(f"## I accept donations! {sunfire2}\n"
+                    f"**Current rate: $1 per 10k** {coin}\n"
+                    "Jar: <https://send.monobank.ua/jar/kqXuAdT1G>\n"
+                    "Ko-fi: <https://ko-fi.com/zukrainak47>")
 
 
 @commands.hybrid_command(name="server", description="DM's the sender an invite link to Ukra Bot Server", aliases=['invite'])
@@ -1470,6 +1482,19 @@ def get_user_balance(guild_: str, user_: str):
     return global_currency.get(user_)
 
 
+def get_user_net(guild_: str, user_: str, make_sure=True):
+    if make_sure:
+        make_sure_user_profile_exists(guild_, user_)
+    num = get_user_balance(guild_, user_)
+    laundry = global_profiles[user_]['items'].setdefault('laundry_machine', 0)
+    num += laundry * 10000
+    if 'stock' in global_profiles[user_]['items']:
+        user_stocks = global_profiles[user_]['items']['stock']
+        for s in user_stocks:
+            num += int(user_stocks[s] * stock_cache[s][0])
+    return num
+
+
 def get_net_leaderboard(members=[]):
     net_worth_list = []
     for user_id, balance in global_currency.items():
@@ -1533,13 +1558,14 @@ def remove_coins_from_user(guild_: str, user_: str, coin_: int, save=True):
 #             save_profiles()
 
 
-def highest_balance_check(guild_: str, user_: str, user_bal=0, save=True, make_sure=True):
+def highest_net_check(guild_: str, user_: str, user_net=0, save=True, make_sure=True):
     if make_sure:
         make_sure_user_profile_exists(guild_, user_)
-    if not user_bal:
-        user_bal = get_user_balance(guild_, user_)
-    if user_bal > global_profiles[user_]['highest_balance']:
-        global_profiles[user_]['highest_balance'] = user_bal
+    if not user_net:
+        # user_bal = get_user_balance(guild_, user_)
+        user_net = get_user_net(guild_, user_, make_sure=False)
+    if user_net > global_profiles[user_]['highest_balance']:
+        global_profiles[user_]['highest_balance'] = user_net
         if save:
             save_profiles()
 
@@ -2133,7 +2159,7 @@ async def rigged_potion_func(message, castor, amount, additional_context=[]):
             f"**{castor.display_name}**: +{bal:,} {coin}\n"
             f"Balance: {bal2:,} {coin}"
         )
-        highest_balance_check(guild_id, castor_id, bal2, save=False, make_sure=False)
+        highest_net_check(guild_id, castor_id, save=False, make_sure=False)
         save_profiles()
     except Exception:
         print(traceback.format_exc())
@@ -2185,7 +2211,7 @@ async def funny_item_func(message, castor, amount, additional_context=[]):
                 f"**{castor.display_name}**: +{1000000:,} {coin}\n"
                 f"Balance: {bal:,} {coin}"
             )
-            highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
+            highest_net_check(guild_id, castor_id, save=False, make_sure=False)
             save_profiles()
     except Exception:
         print(traceback.format_exc())
@@ -2205,7 +2231,7 @@ async def laundry_machine_func(message, castor, amount, additional_context=[]):
             f"**-{amount:,} {items['laundry_machine']}{'s' if amount != 1 else ''}**\n"
             f"Owned: {global_profiles[castor_id]['items']['laundry_machine']} {laundry_machine}"
         )
-        highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
+        highest_net_check(guild_id, castor_id, save=False, make_sure=False)
         save_profiles()
     except Exception:
         print(traceback.format_exc())
@@ -2228,7 +2254,7 @@ async def twisted_orb_func(message, castor, amount, additional_context=[]):
                 f"**{castor.display_name}**: +{bal * 4:,} {coin}\n"
                 f"Balance: {bal2:,} {coin}"
             )
-            highest_balance_check(guild_id, castor_id, bal2, save=False, make_sure=False)
+            highest_net_check(guild_id, castor_id, save=False, make_sure=False)
 
         else:
             for loan in global_profiles[str(bot_id)]['dict_1'].setdefault('out', []):
@@ -2274,7 +2300,7 @@ async def the_catch_func(message, castor, amount, additional_context=[]):
             f"Balance: {bal:,} {coin}"
         )
         global_profiles[castor_id]['items']['the_catch'] -= 1
-        highest_balance_check(guild_id, castor_id, bal, save=False, make_sure=False)
+        highest_net_check(guild_id, castor_id, save=False, make_sure=False)
         save_profiles()
     except Exception:
         print(traceback.format_exc())
@@ -2601,8 +2627,6 @@ class Currency(commands.Cog):
             else:
                 embed_color = 0xffd000
 
-            highest_balance_check(guild_id, str(target_id), 0)
-
             async def get_profile_embed():
                 try:
                     make_sure_user_profile_exists(guild_id, str(target_id))
@@ -2614,6 +2638,7 @@ class Currency(commands.Cog):
                         user_stocks = global_profiles[str(target_id)]['items']['stock']
                         for s in user_stocks:
                             num += int(user_stocks[s] * stock_cache[s][0])
+                    highest_net_check(guild_id, str(target_id), num, save=True, make_sure=False)
                     user_streak = daily_streaks.setdefault(str(target_id), 0)
                     now = datetime.now()
                     last_used = user_last_used.setdefault(str(target_id), datetime.today() - timedelta(days=2))
@@ -2685,6 +2710,7 @@ class Currency(commands.Cog):
                     return profile_embed
                 except Exception:
                     print(traceback.format_exc())
+                    return
 
             await ctx.send(embed=await get_profile_embed())
 
@@ -2998,7 +3024,7 @@ class Currency(commands.Cog):
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.cooldown(rate=2, per=10, type=commands.BucketType.user)
-    @commands.hybrid_command(name="stock", description="Purchase or sell stocks of choice", alias=['stocks'])
+    @commands.hybrid_command(name="stock", description="Inspect, buy or sell stocks of choice", alias=['stocks'])
     @app_commands.describe(stock="The name of the stock", action="Inspect/Buy/Sell", amount="How many you want to buy or sell")
     async def stock(self, ctx, stock: str, action: str = 'Inspect - day', amount: int = 1):
         """
@@ -3343,7 +3369,7 @@ class Currency(commands.Cog):
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
-    @commands.hybrid_command(name="balance", description="Check your or someone else's balance", aliases=['b', 'bal'])
+    @commands.hybrid_command(name="balance", description="Check your or someone else's balance and net worth", aliases=['b', 'bal', 'net', 'networth', 'nw'])
     @app_commands.describe(user="Whose balance you want to check")
     async def balance(self, ctx, *, user: discord.User = None):
         """
@@ -3364,9 +3390,10 @@ class Currency(commands.Cog):
                     stock_total += int(user_stocks[s] * stock_cache[s][0])
             stock_total = stock_total
             stock_msg = f" +{stock_total:,} {coin} in `STOCK`" if stock_total else ''
+            net_worth = num + laundry * 10000 + stock_total
             # await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}{laundry_msg}")
-            await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}{stock_msg}{laundry_msg}\n**Net worth:** {num + laundry * 10000 + stock_total:,} {coin}")
-            highest_balance_check(guild_id, str(user.id), num)
+            await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}{stock_msg}{laundry_msg}\n**Net worth:** {net_worth:,} {coin}")
+            highest_net_check(guild_id, str(user.id), net_worth, save=True, make_sure=False)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -3404,7 +3431,7 @@ class Currency(commands.Cog):
                             await ctx.reply(answer)
                             return
                     num = add_coins_to_user(guild_id, author_id, int(code_info[0]))
-                    highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
+                    highest_net_check(guild_id, author_id, save=False, make_sure=False)
                     if len(code_info) > 1 and code_info[1]:
                         await ctx.reply(code_info[1])
                         func_ = ctx.send
@@ -3500,7 +3527,7 @@ class Currency(commands.Cog):
                 dig_message = f'## Digging successful! {shovel}'
             if dig_coins != 2500 or (dig_coins == 2500 and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
                 num = add_coins_to_user(guild_id, author_id, dig_coins)  # save file
-                highest_balance_check(guild_id, author_id, num, save=False, make_sure=dig_coins != 2500)  # make sure profile exists only if gold wasn't found
+                highest_net_check(guild_id, author_id, save=False, make_sure=dig_coins != 2500)  # make sure profile exists only if gold wasn't found
                 command_count_increment(guild_id, author_id, 'dig', True, False)
                 await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
             else:
@@ -3519,7 +3546,7 @@ class Currency(commands.Cog):
                         break
                 else:
                     num = add_coins_to_user(guild_id, author_id, dig_coins)  # save file
-                    highest_balance_check(guild_id, author_id, num, save=False, make_sure=dig_coins != 2500)  # make sure profile exists only if gold wasn't found
+                    highest_net_check(guild_id, author_id, save=False, make_sure=False)
                     command_count_increment(guild_id, author_id, 'dig', True, False)
                     await ctx.reply(
                         f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
@@ -3582,7 +3609,7 @@ class Currency(commands.Cog):
                 mine_message = f"## Mining successful! ⛏️\n"
             if t not in (1, 625) or (t in (1, 625) and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
                 num = add_coins_to_user(guild_id, author_id, mine_coins)  # save file
-                highest_balance_check(guild_id, author_id, num, save=False, make_sure=True)
+                highest_net_check(guild_id, author_id, save=False, make_sure=t not in (1, 625))
                 command_count_increment(guild_id, author_id, 'mine', True, False)
                 await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
             else:
@@ -3601,7 +3628,7 @@ class Currency(commands.Cog):
                         break
                 else:
                     num = add_coins_to_user(guild_id, author_id, mine_coins)  # save file
-                    highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
+                    highest_net_check(guild_id, author_id, save=False, make_sure=False)
                     command_count_increment(guild_id, author_id, 'mine', True, False)
                     await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
         else:
@@ -3637,8 +3664,8 @@ class Currency(commands.Cog):
             work_coins = random.randint(45, 55)
             add_coins_to_user(guild_id, author_id, work_coins)  # save file
             num = get_user_balance(guild_id, author_id)
-            highest_balance_check(guild_id, author_id, num, False)
-            command_count_increment(guild_id, author_id, 'work', True, False)
+            highest_net_check(guild_id, author_id, save=False, make_sure=True)
+            command_count_increment(guild_id, author_id, 'work', save=True, make_sure=False)
             await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {num:,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
         else:
             if currency_allowed(ctx):
@@ -3720,7 +3747,7 @@ class Currency(commands.Cog):
                 ps_message = ''
             if fish_coins < 200 or (fish_coins > 200 and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
                 num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
-                highest_balance_check(guild_id, author_id, num, save=False, make_sure=fish_coins < 200)
+                highest_net_check(guild_id, author_id, save=False, make_sure=fish_coins < 200)
                 command_count_increment(guild_id, author_id, 'fishinge', True, False)
                 await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
             else:
@@ -3739,7 +3766,7 @@ class Currency(commands.Cog):
                         break
                 else:
                     num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
-                    highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
+                    highest_net_check(guild_id, author_id, save=False, make_sure=False)
                     command_count_increment(guild_id, author_id, 'fishinge', True, False)
                     await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
         else:
@@ -3807,7 +3834,7 @@ class Currency(commands.Cog):
                     break
 
             num = add_coins_to_user(guild_id, author_id, today_coins + today_coins_bonus)  # save file
-            highest_balance_check(guild_id, author_id, num, save=False, make_sure=False)
+            highest_net_check(guild_id, author_id, save=False, make_sure=False)
             save_profiles()
             await ctx.reply(f"{message}**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{today_coins_bonus:,} {coin} streak bonus = {today_coins + today_coins_bonus:,} {coin})\nBalance: {num:,} {coin}{item_msg}\n\nYou can use this command again <t:{get_daily_reset_timestamp()}:R>")
 
@@ -3883,8 +3910,8 @@ class Currency(commands.Cog):
                 await ctx.reply("You gotta send something at least")
                 return
             has_access = user_has_access_to_channel(ctx, user)
-            if not has_access and number < 500:
-                await ctx.reply(f"{user.display_name} doesn't have access to this channel and you're sending less than 500 {coin}\nTransaction failed")
+            if not has_access:
+                await ctx.reply(f"{user.display_name} doesn't have access to this channel\nTransaction failed")
                 return
 
             try:
@@ -3908,7 +3935,7 @@ class Currency(commands.Cog):
                             break
 
                     save_currency()  # save file
-                    highest_balance_check(guild_id, target_id, num2)
+                    highest_net_check(guild_id, target_id, make_sure=False)
                     await ctx.reply("## Transaction successful!\n\n" + answer)
                     if not has_access:
                         await user.send(f"## You have been given {number:,} {coin}\n\n" + answer)
@@ -4456,7 +4483,7 @@ class Currency(commands.Cog):
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 author_id = str(ctx.author.id)
-                make_sure_user_has_currency(guild_id, author_id)
+                make_sure_user_profile_exists(guild_id, author_id)
                 example = 'Examples: `loan @user 7.5k 50%` / `loan @user 7.5k 3.75k` - both of these mean the following: you give @user 7500 coins now and they will have to pay you back 11250 coins later'
                 # contents = ctx.message.content.split()[1:]
                 # if not contents:
@@ -4488,7 +4515,7 @@ class Currency(commands.Cog):
                         await ctx.reply('You literally owe them coins bro pay back the loan first')
                         return
 
-                make_sure_user_has_currency(guild_id, target_id)
+                make_sure_user_profile_exists(guild_id, target_id)
                 number, source, msg = convert_msg_to_number([number], guild_id, author_id, ignored_sources=['%', 'all', 'half'])
                 if number <= 0:
                     await ctx.reply(f"You need to input the amount you'd like to loan\n\n{example}")
@@ -4581,7 +4608,7 @@ class Currency(commands.Cog):
                             author_bal = remove_coins_from_user(guild_id, author_id, number, save=False)
                             target_bal = add_coins_to_user(guild_id, target_id, number, save=False)
                             save_currency()  # save file
-                            highest_balance_check(guild_id, target_id, target_bal)
+                            highest_net_check(guild_id, target_id, save=False, make_sure=False)
 
                             for loan in global_profiles[author_id]['dict_1'].setdefault('out', []):
                                 if user.id in active_loans[loan]:
@@ -4855,7 +4882,7 @@ class Currency(commands.Cog):
         winner = await self.bot.fetch_user(random.choice(lottery_participants))
         winnings = len(lottery_participants) * payout
         add_coins_to_user(guild_id, str(winner.id), winnings)
-        highest_balance_check(guild_id, str(ctx.author.id), 0, False)
+        highest_net_check(guild_id, str(ctx.author.id), save=False, make_sure=True)
         global_profiles[str(winner.id)]['lotteries_won'] += 1
         if 'Lottery Winner' not in global_profiles[str(winner.id)]['items'].setdefault('titles', []):
             global_profiles[str(winner.id)]['items']['titles'].append('Lottery Winner')
@@ -5072,9 +5099,9 @@ class Currency(commands.Cog):
                 return
 
             try:
-                make_sure_user_has_currency(guild_id, target_id)
+                make_sure_user_profile_exists(guild_id, target_id)
                 num = add_coins_to_user(guild_id, target_id, number)  # save file
-                highest_balance_check(guild_id, target_id, num)
+                highest_net_check(guild_id, target_id, make_sure=False)
                 perform_backup(f'{mentions[0].name} was blessed')
                 await ctx.reply(f"## Blessing successful!\n\n**{mentions[0].display_name}:** +{number:,} {coin}\nBalance: {num:,} {coin}")
             except:
