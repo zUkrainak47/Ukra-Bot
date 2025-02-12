@@ -1729,6 +1729,19 @@ class PaginationView(discord.ui.View):
         self.message = None
         self.page_size = 5 if (self.footer and self.footer_icon) else 8
 
+    def total_pages(self) -> int:
+        """
+        Returns the total number of pages. If the last element of self.data
+        is a stock entry (i.e. its first element equals 'stock'), then we treat
+        that as a separate page and compute the normal pages from all other items.
+        """
+        if self.data and self.data[-1][0] == 'stock':
+            # Exclude the stock item from the pagination of normal items.
+            normal_items = len(self.data) - 1
+            # Calculate how many pages the normal items need.
+            return math.ceil(normal_items / self.page_size) + 1
+        return math.ceil(len(self.data) / self.page_size)
+
     async def send_embed(self):
         # Prepare the embed with the first page's data
         current_data = self.get_current_page_data()
@@ -1743,7 +1756,7 @@ class PaginationView(discord.ui.View):
     def create_embed(self, data):
         # Use one embed style if footer and footer_icon are provided
         if self.footer and self.footer_icon:
-            embed = discord.Embed(title=f"{self.title.capitalize()} - Page {self.current_page} / {math.ceil(len(self.data) / self.page_size)}", color=self.color)
+            embed = discord.Embed(title=f"{self.title.capitalize()} - Page {self.current_page} / {self.total_pages()}", color=self.color)
             for item in data:
                 embed.add_field(name=item['label'], value=item['item'], inline=False)
             if self.stickied_msg:
@@ -1795,7 +1808,7 @@ class PaginationView(discord.ui.View):
                 embed.add_field(name='', value='')
                 for i in self.stickied_msg:
                     embed.add_field(name='', value=i, inline=False)
-            embed.set_footer(text=f"Page {self.current_page} / {math.ceil(len(self.data) / self.page_size) + (self.data[-1][0] == 'stock')}")
+            embed.set_footer(text=f"Page {self.current_page} / {self.total_pages()}")
 
         return embed
 
@@ -1815,9 +1828,9 @@ class PaginationView(discord.ui.View):
                 elif child.label == "<":
                     child.disabled = self.current_page == 1
                 elif child.label == ">":
-                    child.disabled = self.current_page == math.ceil(len(self.data) / self.page_size) + (self.data[-1][0] == 'stock')
+                    child.disabled = self.current_page == self.total_pages()
                 elif child.label == ">|":
-                    child.disabled = self.current_page == math.ceil(len(self.data) / self.page_size) + (self.data[-1][0] == 'stock')
+                    child.disabled = self.current_page == self.total_pages()
 
     def get_current_page_data(self):
         from_item = (self.current_page - 1) * self.page_size
@@ -1825,7 +1838,7 @@ class PaginationView(discord.ui.View):
         # print(self.data[min(until_item, len(self.data))-1][0])
         # print(until_item)
         if self.data[until_item-1][0] == 'stock':
-            if self.current_page != math.ceil(len(self.data) / self.page_size) + 1:
+            if self.current_page != self.total_pages():
                 until_item -= 1
                 # print(until_item)
             else:
@@ -1966,9 +1979,9 @@ class PaginationView(discord.ui.View):
     @discord.ui.button(label=">|", style=discord.ButtonStyle.green, row=0, custom_id='right_full')
     async def last_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        self.current_page = math.ceil(len(self.data) / self.page_size) + (self.data[-1][0] == 'stock')
+        self.current_page = self.total_pages()
         current_title = global_profiles[str(interaction.user.id)]['title']
-        self.footer = f'Your current title is {'not set' if not current_title else current_title}'
+        self.footer = f'Your current title is {"not set" if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
     async def on_timeout(self):
@@ -3492,7 +3505,7 @@ class Currency(commands.Cog):
                 daily_reset = get_daily_reset_timestamp()
                 cooldowns_status.append(f"`Daily: ` <t:{daily_reset}:R>, your current streak is **{user_streak}**")
             else:
-                cooldowns_status.append(f"`Daily: ` no cooldown!, your current streak is **{user_streak}**")
+                cooldowns_status.append(f"`Daily: ` no cooldown! Your current streak is **{user_streak}**")
 
             last_used_w = user_last_used_w.setdefault(author_id, datetime.today() - timedelta(weeks=1))
             start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
