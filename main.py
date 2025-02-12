@@ -3881,12 +3881,12 @@ class Currency(commands.Cog):
                 reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
                 await ctx.reply(f"You can use `weekly` again <t:{reset_timestamp}:R>")
                 return
+            user_last_used_w[author_id] = now
+            save_last_used_w()
 
             # Award coins and update settings
             weekly_coins = random.randint(1500, 2500)  # Adjust reward range as desired
             num = add_coins_to_user(guild_id, author_id, weekly_coins)  # save file
-            user_last_used_w[author_id] = now
-            save_last_used_w()
             message = f"# Weekly {coin} claimed!\n"
 
             item_msg = add_item_to_user(guild_id, author_id, 'weekly_item', save=True, make_sure=False)
