@@ -35,8 +35,8 @@ start = time.perf_counter()
 # num_1 - total funded giveaways
 
 bot_name = 'Ukra Bot'
-bot_down = False
-reason = f'{bot_name} is in Development Mode'
+bot_down = True
+reason = f'{bot_name} is starting up'
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -66,6 +66,7 @@ evil_potion = '<:evil_potion:1336641208885186601>'
 funny_item = '<:funny_item:1336705286953635902>'
 twisted_orb = '<:twisted_orb:1337165700309061715>'
 laundry_machine = '<:laundry_machine:1337205545471315992>'
+streak_freeze = '<:streak_freeze:1339194109633757184>'
 daily_item = '<:daily_item:1336399274476306646>'
 weekly_item = '<:weekly_item:1336631591543373854>'
 
@@ -445,6 +446,7 @@ items = {
     'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing 69 Funny Items grants you 1,000,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
     'twisted_orb': Item('twisted_orb', "Twisted Orb", f"Using this orb has a 50% chance to 5x your balance and a 50% chance for you to lose all coins and owe Ukra Bot 3x your current balance\n\nPurchasable for 3 {daily_item}", twisted_orb, "https://cdn.discordapp.com/attachments/696842659989291130/1337165843359993926/twisted_orb.png?ex=67a6743c&is=67a522bc&hm=161c5d30fd3de60d086db3d4d09c325cb0768a89cfa46804c7db0d55db2beac5&", [3, 'daily_item']),
     'laundry_machine': Item('laundry_machine', "Laundry Machine", f"It's what you think it is.\nUsing this item grants you 10,000 {coin}\n\nPurchasable for 10,000 {coin}", laundry_machine, "https://cdn.discordapp.com/attachments/696842659989291130/1337206253784535101/laundry_machine.png?ex=67a699de&is=67a5485e&hm=3e7dd2b88acaee2d9c82d86285bcde8d40a809006f7945c9112e610e6afc5f38&", [10000, 'coin']),
+    'streak_freeze': Item('streak_freeze', "Streak Freeze", f"Freezes your streak!\nComsumed automatically when you forgot to run !daily yesterday\nProtects from a maximum of 1 missed day\n\nPurchasable for 1 {daily_item}", streak_freeze, "https://cdn.discordapp.com/attachments/696842659989291130/1339193669802131456/streak_freeze.png?ex=67add4cb&is=67ac834b&hm=73f5ec0e426647940adfa34d3174074e976b04ec78093a95ce7fc855a9dbb207&", [1, 'daily_item']),
 
     'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future\nUsed as shop currency", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
     'weekly_item': Item('weekly_item', "Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
@@ -695,12 +697,16 @@ async def on_ready():
         # for s in server_settings:
         #     if s:
         #         print(s, client.get_guild(int(s)).name)
-        global log_channel, rare_channel, lottery_channel
+        global log_channel, up_channel, rare_channel, lottery_channel
         log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
+        up_channel = client.get_guild(696311992973131796).get_channel(1339183561135357972)
         rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
         lottery_channel = client.get_guild(696311992973131796).get_channel(1326949510336872458)
-        await log_channel.send(f'{yay} {bot_name} has connected to Discord!')
+        await up_channel.send(f'{yay} {bot_name} has connected to Discord! <@&{1339183730019008513}>')
         print('Bot is up!')
+        global bot_down, reason
+        bot_down = False
+        reason = f'{bot_name} is in Development Mode'
         # print(get_global_net_lb()[:25])
         role_dict = {'backshots_role': distributed_backshots,
                      'segs_role': distributed_segs}
@@ -2401,11 +2407,12 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
                 bal = remove_coins_from_user(guild_id, author_id, price[0] * amount)
                 last_line = f"Balance: {bal:,} {coin}"
             save_profiles()
+            author_msg = f"{author.display_name}: " if price[1] == 'coin' else ''
             await msg.reply(f"## Purchase successful\n"
                             f"**+{amount:,} {item}{'s' if amount != 1 else ''}**\n"
                             f"Owned: {global_profiles[author_id]['items'][item.real_name]:,} {item.emoji}\n"
                             f"\n"
-                            f"**{author.display_name}: -{price[0] * amount:,} {coin if price[1] == 'coin' else price[1]}**\n"
+                            f"**{author_msg}-{price[0] * amount:,} {coin if price[1] == 'coin' else price[1]}**\n"
                             f"{last_line}")
         else:
             # Optionally, handle cancellation here
@@ -2572,11 +2579,11 @@ async def fetch_price(stock):
 
         # Calculate percentage change
         percent_change = ((current_price - previous_close) / previous_close) * 100
-        percent_sign = "📈" if percent_change > 0 else "📉"
+        percent_sign = "📈" if percent_change >= 0 else "📉"
 
         # Return the stock, current price rounded to 2 decimals, and a formatted change string
         print(stock, current_price, previous_close, percent_change)
-        return stock, round(current_price, 2), f"{percent_sign} `{'+' if current_price > previous_close else ''}{format(percent_change, ".2f")}%`"
+        return stock, round(current_price, 2), f"{percent_sign} `{'+' if current_price >= previous_close else ''}{format(percent_change, ".2f")}%`"
     except Exception:
         print(traceback.format_exc())
         return stock, "Error", ""
@@ -3226,7 +3233,7 @@ class Currency(commands.Cog):
             print("Error updating stock prices:")
             print(traceback.format_exc())
 
-    @commands.hybrid_command(name="stock_prices", description="Sends a list of stock prices", aliases=['stock_price', 'stocks_price', 'stocks_prices'])
+    @commands.hybrid_command(name="stock_prices", description="Sends a list of stock prices", aliases=['stock_price', 'stocks_price', 'stocks_prices', 'sp'])
     async def stock_prices(self, ctx):
         """
         Sends a list of stock prices (updated every 15 seconds)
@@ -3806,10 +3813,21 @@ class Currency(commands.Cog):
                 await ctx.reply(f"You can use `daily` again <t:{get_daily_reset_timestamp()}:R>\nYour current streak is **{user_streak:,}**")
                 return
             if last_used.date() == (now - timedelta(days=1)).date():
+                user_last_used[author_id] = now
+                save_last_used()
                 daily_streaks[author_id] += 1
                 save_daily()
                 streak_msg = f"Streak extended to `{user_streak+1}`"
+            elif (last_used.date() == (now - timedelta(days=2)).date()) and (global_profiles[author_id]['items'].setdefault('streak_freeze', 0)):
+                user_last_used[author_id] = now
+                save_last_used()
+                daily_streaks[author_id] += 1
+                global_profiles[author_id]['items']['streak_freeze'] -= 1
+                save_daily()
+                streak_msg = f"Streak extended to `{user_streak+1}`\n**{items['streak_freeze']} consumed!**\nOwned: {global_profiles[author_id]['items']['streak_freeze']:,} {streak_freeze}\n"
             else:
+                user_last_used[author_id] = now
+                save_last_used()
                 daily_streaks[author_id] = 1
                 save_daily()
                 streak_msg = "Streak set to `1`"
@@ -3838,8 +3856,6 @@ class Currency(commands.Cog):
             save_profiles()
             await ctx.reply(f"{message}**{ctx.author.display_name}:** +{today_coins:,} {coin} (+{today_coins_bonus:,} {coin} streak bonus = {today_coins + today_coins_bonus:,} {coin})\nBalance: {num:,} {coin}{item_msg}\n\nYou can use this command again <t:{get_daily_reset_timestamp()}:R>")
 
-            user_last_used[author_id] = now
-            save_last_used()
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
