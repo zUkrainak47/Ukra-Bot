@@ -95,6 +95,8 @@ stopbeingmean = '<:stopbeingmean:1326525905199435837>'
 peepositbusiness = '<:peepositbusiness:1327594898844684288>'
 shovel = '<:shovel:1325823488216268801>'
 puppy = '<:puppy:1327588192282480670>'
+murmheart = '<:murmheart:1339935292739686400>'
+gladge = '<:gladge:1340021932707549204>'
 icant = '<:ICANT:1337236086941941762>'
 clueless = '<:clueless:1335599640279515167>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
@@ -117,7 +119,9 @@ titles = [
     'Gave away 25M', 'Gave away 50M', 'Gave away 100M',
     'Gave away 250M', 'Gave away 500M', 'Gave away 1B',
 
-    'Lottery Winner', 'Bug Hunter', 'Reached #1', 'Top Contributor', 'Ukra Bot Dev',
+    'Lottery Winner', 'Bug Hunter', 'Reached #1', 'Donator',  'Top Contributor',
+    'lea :3',
+    'Ukra Bot Dev',
 ]
 sorted_titles = {title: number for number, title in enumerate(reversed(titles))}
 num_to_title = {25000: 'Gave away 25k', 50000: 'Gave away 50k', 100000: 'Gave away 100k',
@@ -445,8 +449,8 @@ items = {
     'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion requires you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins\n\nDrops alongside Fool's Gold ✨", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
     'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing 69 Funny Items grants you 1,000,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
     'twisted_orb': Item('twisted_orb', "Twisted Orb", f"Using this orb has a 50% chance to 5x your balance and a 50% chance for you to lose all coins and owe Ukra Bot 3x your current balance\n\nPurchasable for 3 {daily_item}", twisted_orb, "https://cdn.discordapp.com/attachments/696842659989291130/1337165843359993926/twisted_orb.png?ex=67a6743c&is=67a522bc&hm=161c5d30fd3de60d086db3d4d09c325cb0768a89cfa46804c7db0d55db2beac5&", [3, 'daily_item']),
-    'laundry_machine': Item('laundry_machine', "Laundry Machine", f"It's what you think it is.\nUsing this item grants you 10,000 {coin}\n\nPurchasable for 10,000 {coin}", laundry_machine, "https://cdn.discordapp.com/attachments/696842659989291130/1337206253784535101/laundry_machine.png?ex=67a699de&is=67a5485e&hm=3e7dd2b88acaee2d9c82d86285bcde8d40a809006f7945c9112e610e6afc5f38&", [10000, 'coin']),
     'streak_freeze': Item('streak_freeze', "Streak Freeze", f"Freezes your streak!\nComsumed automatically when you forgot to run !daily yesterday\nProtects from a maximum of 1 missed day\n\nPurchasable for 1 {daily_item}", streak_freeze, "https://cdn.discordapp.com/attachments/696842659989291130/1339193669802131456/streak_freeze.png?ex=67add4cb&is=67ac834b&hm=73f5ec0e426647940adfa34d3174074e976b04ec78093a95ce7fc855a9dbb207&", [1, 'daily_item']),
+    'laundry_machine': Item('laundry_machine', "Laundry Machine", f"It's what you think it is.\nUsing this item grants you 10,000 {coin}\n\nPurchasable for 10,000 {coin}", laundry_machine, "https://cdn.discordapp.com/attachments/696842659989291130/1337206253784535101/laundry_machine.png?ex=67a699de&is=67a5485e&hm=3e7dd2b88acaee2d9c82d86285bcde8d40a809006f7945c9112e610e6afc5f38&", [10000, 'coin']),
 
     'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future\nUsed as shop currency", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
     'weekly_item': Item('weekly_item', "Weekly Item", "It's a Weekly Item!\nIt doesn't do anything yet either but it will in the future", weekly_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336631028017532978/weekly_item.png?ex=67a48226&is=67a330a6&hm=9bf14f7a0899d1d7ed6fdfe87d64e7f26e49eb5ba99c91b6ccf6dfc92794e044&"),
@@ -517,7 +521,8 @@ async def loan_payment(id_: str, payment: int, pay_loaner=True):
                     loanee = None
 
             if loaner and loanee and loaner.id != bot_id:
-                await loaner.send(f'## Loan `#{id_}` of {amount:,} {coin} from {loanee.name} (<@{loanee_id}>) has been repaid!\nBalance: {get_user_balance('', str(loaner_id)):,} {coin}')
+                # await loaner.send(f'## Loan `#{id_}` of {amount:,} {coin} from {loanee.name} (<@{loanee_id}>) has been repaid!\nBalance: {get_user_balance('', str(loaner_id)):,} {coin}')
+                await loaner.send(f'## Loan of {amount:,} {coin} from {loanee.name} (<@{loanee_id}>) has been repaid!\nBalance: {get_user_balance('', str(loaner_id)):,} {coin}')
 
             return True, loaner_id, amount, left_over, paid
 
@@ -878,11 +883,14 @@ async def source(ctx):
 async def donate(ctx):
     """
     I accept donations! $1 per 10k coins is the current rate
+    Your first donation is doubled!!
     """
+    make_sure_user_profile_exists('', str(ctx.author.id))
     await ctx.reply(f"## I accept donations! {sunfire2}\n"
                     f"**Current rate: $1 per 10k** {coin}\n"
                     "Jar: <https://send.monobank.ua/jar/kqXuAdT1G>\n"
-                    "Ko-fi: <https://ko-fi.com/zukrainak47>")
+                    "Ko-fi: <https://ko-fi.com/zukrainak47>" +
+                    f"\nThe first donation yields twice as many coins as the usual rate {murmheart}" * (not global_profiles[str(ctx.author.id)]['num_5']))
 
 
 @commands.hybrid_command(name="server", description="DM's the sender an invite link to Ukra Bot Server", aliases=['invite'])
@@ -1735,7 +1743,7 @@ class PaginationView(discord.ui.View):
         is a stock entry (i.e. its first element equals 'stock'), then we treat
         that as a separate page and compute the normal pages from all other items.
         """
-        if self.data and self.data[-1][0] == 'stock':
+        if self.title != 'Titles' and self.data and self.data[-1][0] == 'stock':
             # Exclude the stock item from the pagination of normal items.
             normal_items = len(self.data) - 1
             # Calculate how many pages the normal items need.
@@ -1837,7 +1845,7 @@ class PaginationView(discord.ui.View):
         until_item = min(self.current_page * self.page_size,  len(self.data))
         # print(self.data[min(until_item, len(self.data))-1][0])
         # print(until_item)
-        if self.data[until_item-1][0] == 'stock':
+        if self.title != 'Titles' and self.data[until_item-1][0] == 'stock':
             if self.current_page != self.total_pages():
                 until_item -= 1
                 # print(until_item)
@@ -2279,11 +2287,13 @@ async def twisted_orb_func(message, castor, amount, additional_context=[]):
             for loan in global_profiles[str(bot_id)]['dict_1'].setdefault('out', []):
                 if castor.id in active_loans[loan]:
                     active_loans[loan][2] += bal * 3
-                    ps = f"You now owe **Ukra Bot** {bal * 3:,} {coin} more - `#{loan}`\n(that's {active_loans[loan][3]:,}/{active_loans[loan][2]:,} {coin} total)"
+                    # ps = f"You now owe **Ukra Bot** {bal * 3:,} {coin} more - `#{loan}`\n(that's {active_loans[loan][3]:,}/{active_loans[loan][2]:,} {coin} total)"
+                    ps = f"You now owe **Ukra Bot** {bal * 3:,} {coin} more\n(that's {active_loans[loan][3]:,}/{active_loans[loan][2]:,} {coin} total)"
                     break
             else:
                 active_loans[str(message.id)] = [bot_id, castor.id, bal * 3, 0]
-                ps = f"You owe **Ukra Bot** {bal * 3:,} {coin} - `#{message.id}`\nFind it in `!loans`"
+                # ps = f"You owe **Ukra Bot** {bal * 3:,} {coin} - `#{message.id}`\nFind it in `!loans`"
+                ps = f"You owe **Ukra Bot** {bal * 3:,} {coin}\nFind it in `!loans`"
                 global_profiles[str(bot_id)]['dict_1'].setdefault('out', []).append(str(message.id))
                 global_profiles[str(castor.id)]['dict_1'].setdefault('in', []).append(str(message.id))
                 save_profiles()
@@ -2723,7 +2733,8 @@ class Currency(commands.Cog):
                         profile_embed.add_field(name="Lotteries Won", value=f'{target_profile['lotteries_won']:,}', inline=True)
 
                     profile_embed.add_field(name="Rare Items Showcase", value=', '.join(f"{rare_items_to_emoji[item]}: {target_profile['rare_items_found'].get(item, 0)}" for item in rare_items_to_emoji), inline=False)
-
+                    if target_profile['num_5']:
+                        profile_embed.add_field(name="Total Donated", value=f"${target_profile['num_5']:,.2f}", inline=False)
                     if full_info:
                         profile_embed.add_field(name="Commands used", value=f"{sum(target_profile['commands'].values()):,}", inline=False)
 
@@ -2778,10 +2789,10 @@ class Currency(commands.Cog):
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         make_sure_user_profile_exists(guild_id, str(ctx.author.id))
-        known_data = ("```\n"
+        known_data = ("```json\n"
                       f"{global_profiles[str(ctx.author.id)]}\n"
                       "```\n\n"
-                      "`dict_1` - loans, `list_1` - used codes, `num_1` - total funded giveaways")
+                      "`dict_1` - loans, `list_1` - used codes, `num_1` - total funded giveaways, `num_5` - total donated")
         if guild_id:
             await ctx.reply('Check your DMs', ephemeral=True)
             await ctx.author.send(known_data)
@@ -3234,7 +3245,7 @@ class Currency(commands.Cog):
             is_open, next_open_time = is_market_open()
 
             if not is_open:
-                market_closed_message = f"\n📌 The stock market is closed. Next opening: {next_open_time}"
+                market_closed_message = f"\n📌 The stock market is closed\nNext opening: {next_open_time}"
                 return  # Skip updating prices
 
             market_closed_message = ""  # Clear message when market is open
@@ -3520,15 +3531,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.hybrid_command(name="dig", description="Dig and get a very small number of coins", aliases=['d', 'в'])
-    @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
-    async def dig(self, ctx):
-        """
-        Dig and get a very small number of coins
-        Choose random number from 1-400, sqrt(number) is the payout
-        If number is 400 you win 2,500 coins
-        Has a 20-second cooldown
-        """
+    async def d(self, ctx):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
@@ -3555,13 +3558,16 @@ class Currency(commands.Cog):
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, dig_coins, paid = await loan_payment(loan_id, dig_coins)
                     if not loan_size:
-                        dig_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        # dig_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        dig_message += f'- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         continue
 
                     if finalized:
-                        dig_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
+                        # dig_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
+                        dig_message += f'- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
-                        dig_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
+                        # dig_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
+                        dig_message += f'- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not dig_coins:
                         break
                 else:
@@ -3575,10 +3581,22 @@ class Currency(commands.Cog):
                 await ctx.reply(f'{reason}, currency commands are disabled')
             ctx.command.reset_cooldown(ctx)
 
+    @commands.hybrid_command(name="dig", description="Dig and get a very small number of coins", aliases=['d', 'в'])
+    @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
+    async def dig(self, ctx):
+        """
+        Dig and get a very small number of coins
+        Choose random number from 1-400, sqrt(number) is the payout
+        If number is 400 you win 2,500 coins
+        Has a 20-second cooldown
+        """
+        await self.d(ctx)
+
     @dig.error
     async def dig_error(self, ctx, error):
         """Handle errors for the command, including cooldowns."""
-        if currency_allowed(ctx) and bot_down_check(str(ctx.guild.id)):
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
             if isinstance(error, commands.CommandOnCooldown):
                 retry_after = round(error.retry_after, 1)
                 await print_reset_time(retry_after, ctx, f"Gotta wait until you can dig again buhh\n")
@@ -3587,18 +3605,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.hybrid_command(name="mine", description="Mine and get a small number of coins", aliases=['m', 'ь'])
-    @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
-    async def mine(self, ctx):
-        """
-        Mine and get a small number of coins
-        Choose random number from 1-625, 2*sqrt(number) is the payout
-
-        If number is 625 you win 7,500 coins (Diamonds)
-        If number is 1 you get Fool's Gold and an Evil Potion
-
-        Has a 2-minute cooldown
-        """
+    async def m(self, ctx):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
@@ -3637,13 +3644,16 @@ class Currency(commands.Cog):
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, mine_coins, paid = await loan_payment(loan_id, mine_coins)
                     if not loan_size:
-                        mine_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        # mine_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        mine_message += f'- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         continue
 
                     if finalized:
-                        mine_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
+                        # mine_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
+                        mine_message += f'- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
-                        mine_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
+                        # mine_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
+                        mine_message += f'- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not mine_coins:
                         break
                 else:
@@ -3656,10 +3666,25 @@ class Currency(commands.Cog):
                 await ctx.reply(f'{reason}, currency commands are disabled')
             ctx.command.reset_cooldown(ctx)
 
+    @commands.hybrid_command(name="mine", description="Mine and get a small number of coins", aliases=['m', 'ь'])
+    @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
+    async def mine(self, ctx):
+        """
+        Mine and get a small number of coins
+        Choose random number from 1-625, 2*sqrt(number) is the payout
+
+        If number is 625 you win 7,500 coins (Diamonds)
+        If number is 1 you get Fool's Gold and an Evil Potion
+
+        Has a 2-minute cooldown
+        """
+        await self.m(ctx)
+
     @mine.error
     async def mine_error(self, ctx, error):
         """Handle errors for the command, including cooldowns."""
-        if currency_allowed(ctx) and bot_down_check(str(ctx.guild.id)):
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
             if isinstance(error, commands.CommandOnCooldown):
                 retry_after = round(error.retry_after, 1)
                 await print_reset_time(retry_after, ctx, f"Gotta wait until you can mine again buhh\n")
@@ -3669,14 +3694,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.hybrid_command(name="work", description="Work and get a moderate number of coins", aliases=['w', 'ц'])
-    @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
-    async def work(self, ctx):
-        """
-        Work and get a moderate number of coins
-        Choose random number from 45-55, that's the payout
-        Has a 5-minute cooldown
-        """
+    async def w(self, ctx):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
@@ -3692,10 +3710,21 @@ class Currency(commands.Cog):
                 await ctx.reply(f'{reason}, currency commands are disabled')
             ctx.command.reset_cooldown(ctx)
 
+    @commands.hybrid_command(name="work", description="Work and get a moderate number of coins", aliases=['w', 'ц'])
+    @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
+    async def work(self, ctx):
+        """
+        Work and get a moderate number of coins
+        Choose random number from 45-55, that's the payout
+        Has a 5-minute cooldown
+        """
+        await self.w(ctx)
+
     @work.error
     async def work_error(self, ctx, error):
-        if currency_allowed(ctx) and bot_down_check(str(ctx.guild.id)):
-            """Handle errors for the command, including cooldowns."""
+        """Handle errors for the command, including cooldowns."""
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
             if isinstance(error, commands.CommandOnCooldown):
                 retry_after = round(error.retry_after, 1)
                 await print_reset_time(retry_after, ctx, f"Gotta wait until you can work again buhh\n")
@@ -3705,19 +3734,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.hybrid_command(name="fish", description="Fish and get a random number of coins from 1 to 167", aliases=['fishinge', 'f', 'а'])
-    @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
-    async def fishinge(self, ctx):
-        """
-        Fish and get a random number of coins from 1 to 167
-        If the amount of coins chosen was 167, you get a random number of coins from 7,500 to 12,500 (Treasure Chest)
-        If the amount chosen was 12,500 you win 25,000,000 coins (The Catch)
-
-        Getting 69 coins drops a Funny Item
-        Treasure Chests have a 5% chance to drop a Rigged Potion
-
-        Has a 10-minute cooldown
-        """
+    async def f(self, ctx):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
@@ -3761,7 +3778,7 @@ class Currency(commands.Cog):
                     cast_command = ctx.message.content.split()[0].lower().lstrip('!')
                 else:
                     cast_command = 'f'
-                if cast_command in ('fish', 'f', 'а'):
+                if cast_command in ('fish', 'f', 'а', 'e'):
                     cast_command = 'fishing'
                 fish_message = f"## {cast_command.capitalize()} successful! {'🎣' * (cast_command == 'fishing') + fishinge * (cast_command == 'fishinge')}\n"
                 ps_message = ''
@@ -3775,13 +3792,16 @@ class Currency(commands.Cog):
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, fish_coins, paid = await loan_payment(loan_id, fish_coins)
                     if not loan_size:
-                        fish_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        # fish_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        fish_message += f'- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         continue
 
                     if finalized:
-                        fish_message += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
+                        # fish_message += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
+                        fish_message += f'\n- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
-                        fish_message += f'\n- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
+                        # fish_message += f'\n- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
+                        fish_message += f'\n- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not fish_coins:
                         break
                 else:
@@ -3794,10 +3814,26 @@ class Currency(commands.Cog):
                 await ctx.reply(f'{reason}, currency commands are disabled')
             ctx.command.reset_cooldown(ctx)
 
+    @commands.hybrid_command(name="fish", description="Fish and get a random number of coins from 1 to 167", aliases=['fishinge', 'f', 'а'])
+    @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
+    async def fishinge(self, ctx):
+        """
+        Fish and get a random number of coins from 1 to 167
+        If the amount of coins chosen was 167, you get a random number of coins from 7,500 to 12,500 (Treasure Chest)
+        If the amount chosen was 12,500 you win 25,000,000 coins (The Catch)
+
+        Getting 69 coins drops a Funny Item
+        Treasure Chests have a 5% chance to drop a Rigged Potion
+
+        Has a 10-minute cooldown
+        """
+        await self.f(ctx)
+
     @fishinge.error
     async def fishinge_error(self, ctx, error):
         """Handle errors for the command, including cooldowns."""
-        if currency_allowed(ctx) and bot_down_check(str(ctx.guild.id)):
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
             if isinstance(error, commands.CommandOnCooldown):
                 retry_after = round(error.retry_after, 1)
                 await print_reset_time(retry_after, ctx, f"Gotta wait until you can fish again buhh\n")
@@ -3806,6 +3842,34 @@ class Currency(commands.Cog):
                 raise error  # Re-raise other errors to let the default handler deal with them
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
+
+    @commands.hybrid_command(name="e", description="Dig, mine, work and fish in one command")
+    async def e(self, ctx):
+        """
+        Dig, mine, work and fish in one command.
+        Unlocks after funding 250k worth of official giveaways.
+        """
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
+            make_sure_user_profile_exists('', str(ctx.author.id))
+            if global_profiles[str(ctx.author.id)]['num_1'] >= 250000:
+                tracked_commands = ['dig', 'mine', 'work', 'fish']  # List of command names
+                tracked_func = {'dig': self.d, 'mine': self.m, 'work': self.w, 'fish': self.f}
+
+                found_one = False
+                for command_name in tracked_commands:
+                    command = self.bot.get_command(command_name)
+                    bucket = command._buckets.get_bucket(ctx.message)
+                    retry_after = bucket.update_rate_limit()
+                    if retry_after is None:
+                        found_one = True
+                        await tracked_func[command_name](ctx)
+                if not found_one:
+                    await ctx.reply('All commands are on cooldown wyd', ephemeral=True)
+
+            else:
+                await ctx.reply("This command becomes available once you funded 250k worth of official giveaways!\n"
+                                "Contact @zukrainak47 to fund one", ephemeral=True)
 
     @commands.hybrid_command(name="daily", description="Claim 1 Daily Item and daily coins!")
     async def daily(self, ctx):
@@ -3855,12 +3919,15 @@ class Currency(commands.Cog):
             for loan_id in loans:
                 finalized, loaner_id, loan_size, today_coins_bonus, paid = await loan_payment(loan_id, today_coins_bonus)
                 if not loan_size:
-                    message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                    # message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                    message += f'- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                     continue
                 if finalized:
-                    message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)\n'
+                    # message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)\n'
+                    message += f'- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)\n'
                 else:
-                    message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)\n'
+                    # message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)\n'
+                    message += f'- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)\n'
                 if not today_coins_bonus:
                     break
 
@@ -3940,7 +4007,7 @@ class Currency(commands.Cog):
             if not number:
                 await ctx.reply("You gotta send something at least")
                 return
-            if sum(global_profiles[target_id]['commands'].values()) == 0:
+            if sum(global_profiles[target_id]['commands'].values()) == 0 and user.id != bot_id:
                 await ctx.reply(f"{user.display_name} is not an Ukra Bot user\nTransaction failed")
                 return
             has_access = user_has_access_to_channel(ctx, user)
@@ -3972,9 +4039,11 @@ class Currency(commands.Cog):
                             finalized, loaner_id, loan_size, loan_money, paid = await loan_payment(loan_id, loan_money, False)
 
                             if finalized:
-                                answer += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} has been fully paid back ({paid:,} {coin} were paid now)'
+                                # answer += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} has been fully paid back ({paid:,} {coin} were paid now)'
+                                answer += f'\n- Loan of {loan_size:,} {coin} has been fully paid back ({paid:,} {coin} were paid now)'
                             else:
-                                answer += f'\n- Loan `#{loan_id}`: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
+                                # answer += f'\n- Loan `#{loan_id}`: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
+                                answer += f'\n- Loan: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                             break
 
                     save_currency()  # save file
@@ -4669,7 +4738,8 @@ class Currency(commands.Cog):
 
                             save_active_loans()
 
-                            await msg2.reply(f"## Loan successful! - `#{loan_info[0]}`\n" +
+                            # await msg2.reply(f"## Loan successful! - `#{loan_info[0]}`\n" +
+                            await msg2.reply(f"## Loan successful!\n" +
                                              f"**{user.display_name}:** +{number:,} {coin}, balance: {target_bal:,} {coin}\n" +
                                              f"**{ctx.author.display_name}:** -{number:,} {coin}, balance: {author_bal:,} {coin}\n\n"
                                              f"{ps}")
@@ -4732,11 +4802,13 @@ class Currency(commands.Cog):
                     loaner = await self.get_user(loaner_id)
                     if loaner_id in ignored_users:
                         _, _, _, _, _ = await loan_payment(i, 0)
-                        await ctx.reply(f'Loan `#{i}` to <@{loaner_id}> has been closed. {loaner.display_name} is banned from Ukra Bot')
+                        # await ctx.reply(f'Loan `#{i}` to <@{loaner_id}> has been closed. {loaner.display_name} is banned from Ukra Bot')
+                        await ctx.reply(f'Loan to <@{loaner_id}> has been closed. {loaner.display_name} is banned from Ukra Bot')
                         continue
                     loans_found2 += 1
                     total_left_to_pay += active_loans[i][2]-active_loans[i][3]
-                    answer += f"{loans_found2}. `#{i}` - **{user.display_name}** owes **{loaner.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+                    # answer += f"{loans_found2}. `#{i}` - **{user.display_name}** owes **{loaner.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+                    answer += f"{loans_found2}. **{user.display_name}** owes **{loaner.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
                 if loans_found2:
                     answer += f"Total left to pay back: {total_left_to_pay:,} {coin}\n"
                 for i in global_profiles[str(user_id)]['dict_1'].setdefault('out', []):
@@ -4746,11 +4818,13 @@ class Currency(commands.Cog):
                     loanee = await self.get_user(loanee_id)
                     if loanee_id in ignored_users:
                         _, _, _, _, paid = await loan_payment(i, active_loans[i][2]-active_loans[i][3])
-                        await ctx.reply(f'Loan `#{i}` from <@{loanee_id}> has been closed. {loanee.display_name} is banned from Ukra Bot\n**{user.display_name}:** +{paid:,} {coin}, balance: {get_user_balance('', user_id)} {coin}')
+                        # await ctx.reply(f'Loan `#{i}` from <@{loanee_id}> has been closed. {loanee.display_name} is banned from Ukra Bot\n**{user.display_name}:** +{paid:,} {coin}, balance: {get_user_balance('', user_id)} {coin}')
+                        await ctx.reply(f'Loan from <@{loanee_id}> has been closed. {loanee.display_name} is banned from Ukra Bot\n**{user.display_name}:** +{paid:,} {coin}, balance: {get_user_balance('', user_id)} {coin}')
                         continue
                     loans_found1 += 1
                     total_left_owed += active_loans[i][2]-active_loans[i][3]
-                    answer += f"{loans_found1}. `#{i}` - **{loanee.display_name}** owes **{user.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+                    # answer += f"{loans_found1}. `#{i}` - **{loanee.display_name}** owes **{user.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
+                    answer += f"{loans_found1}. **{loanee.display_name}** owes **{user.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
                 if loans_found1:
                     answer += f"Total left to be paid back: {total_left_owed:,} {coin}\n"
                 if loans_found1 or loans_found2:
@@ -4792,7 +4866,8 @@ class Currency(commands.Cog):
                             global_profiles[str(user_id)]['dict_1']['out'].remove(loan_id)
                             global_profiles[author_id]['dict_1']['in'].remove(loan_id)
                             del active_loans[loan_id]
-                            await ctx.reply(f'Loan `#{loan_id}` from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
+                            # await ctx.reply(f'Loan `#{loan_id}` from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
+                            await ctx.reply(f'Loan from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
                             return
                     return
 
@@ -4803,13 +4878,15 @@ class Currency(commands.Cog):
                         user = await self.get_user(user_id)
                         finalized, loaner_id, loan_size, _, paid = await loan_payment(loan_id, get_user_balance(guild_id, author_id))
                         if not loan_size:
-                            await ctx.reply(f'Loan `#{loan_id}` from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
+                            # await ctx.reply(f'Loan `#{loan_id}` from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
+                            await ctx.reply(f'Loan from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
                             return
 
                         num1 = remove_coins_from_user(guild_id, author_id, paid)
                         num2 = get_user_balance(guild_id, str(user_id))
                         user = await self.get_user(user_id)
-                        await ctx.reply(f'Loan `#{loan_id}` of {loan_size:,} {coin}<@{user_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
+                        # await ctx.reply(f'Loan `#{loan_id}` of {loan_size:,} {coin}<@{user_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
+                        await ctx.reply(f'Loan of {loan_size:,} {coin}<@{user_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
                                         f'**{ctx.author.display_name}:** {num1:,} {coin}\n**{user.display_name}:** {num2:,} {coin}')
                         return
                     elif active_loans[loan_id][0] == user_id:
@@ -5005,7 +5082,7 @@ class Currency(commands.Cog):
                     f"You've joined today's lottery {yay} {join_server_msg}" * (not not_joined), view=view)
                 view.message = message
 
-    async def run_giveaway(self, ctx, admin=False):
+    async def run_giveaway(self, ctx, amount, duration, admin=False):
         """
         Starts a giveaway for some coins of some duration, taking admin as a parameter
         """
@@ -5019,23 +5096,25 @@ class Currency(commands.Cog):
             if not guild_id:
                 await ctx.reply("Can't host giveaways in DMs!")
                 return
-            contents = ctx.message.content.split()[1:]
             (t, remind) = ('regular', True) if ctx.channel.id != 1326949579848941710 else ('official', False)
-            if admin and len(contents) == 3:
-                if contents[2] == 'noremind':
-                    remind = False
-                    contents = contents[:-1]
-                else:
-                    await ctx.reply("The format is `!giveaway <amount> <duration> (noremind)`\nExample: `!giveaway 2.5k 5m30s`")
+
+            if getattr(ctx, "interaction", None) is None:
+                contents = ctx.message.content.split()[1:]
+                if admin and len(contents) == 3:
+                    if contents[2] == 'noremind':
+                        remind = False
+                        contents = contents[:-1]
+                    else:
+                        await ctx.reply("The format is `!giveaway <amount> <duration> (noremind)`\nExample: `!giveaway 2.5k 5m30s`")
+                        return
+
+                if len(contents) != 2:
+                    await ctx.reply("The format is `!giveaway <amount> <duration>`\nExample: `!giveaway 2.5k 5m30s`")
                     return
 
-            if len(contents) != 2:
-                await ctx.reply("The format is `!giveaway <amount> <duration>`\nExample: `!giveaway 2.5k 5m30s`")
-                return
-
             sources_ignored = ['all', 'half', '%'] if admin else []
-            amount, _, _ = convert_msg_to_number(contents[0:1], guild_id, author_id, sources_ignored)
-            duration = convert_msg_to_seconds(contents[1])
+            amount, _, _ = convert_msg_to_number([amount], guild_id, author_id, sources_ignored)
+            duration = convert_msg_to_seconds(duration)
             if amount == -1:
                 await ctx.reply("Input amount properly\nThe format is `!giveaway <amount> <duration>`")
                 return
@@ -5088,22 +5167,23 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['ga'])
-    async def giveaway(self, ctx):
-        """
-        Starts a giveaway for some coins of some duration
-        !giveaway <amount> <time>
-        """
-        await self.run_giveaway(ctx, admin=False)
+    # @commands.command(aliases=['ga'])
+    # async def giveaway(self, ctx):
+    #     """
+    #     Starts a giveaway for some coins of some duration
+    #     !giveaway <amount> <time>
+    #     """
+    #     await self.run_giveaway(ctx, admin=False)
 
-    @commands.command(aliases=['aga'])
-    async def admin_giveaway(self, ctx):
+    @commands.hybrid_command(name="admin_giveaway", description="Starts a giveaway using coins out of thin air", aliases=['aga'])
+    @app_commands.describe(amount="How much you're giving away", duration="How long the giveaway will last - in 1h30m45s format")
+    async def admin_giveaway(self, ctx, amount: str, duration: str):
         """
         Starts a giveaway using coins out of thin air
         Only usable by bot developer
         !giveaway <amount> <time>
         """
-        await self.run_giveaway(ctx, admin=True)
+        await self.run_giveaway(ctx, amount, duration, admin=True)
 
     @commands.command()
     async def bless(self, ctx):
@@ -5204,6 +5284,8 @@ class Currency(commands.Cog):
                             additional_msg += f"\n\n{mentions[0].mention}, you've unlocked new Titles: *{', '.join(new_titles)}*.\nRun `!title` to change your Titles!"
                         else:
                             additional_msg += f"\n\n{mentions[0].mention}, you've unlocked the *{new_titles[0]}* Title!\nRun `!title` to change it!"
+                    if 'Gave away 250k' in new_titles:
+                        additional_msg += f'\n\nYou have also unlocked the `!e` command! Thank you for funding so many giveaways {gladge}'
                 else:
                     additional_msg = ''
                 perform_backup(f'{mentions[0].name} was cursed')
