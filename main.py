@@ -4227,6 +4227,71 @@ class Currency(commands.Cog):
     async def global_leaderboard_error(self, ctx, error):
         await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
 
+    @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
+    @commands.hybrid_command(name="funders", description="View the top 10 giveaway funders globally")
+    @app_commands.describe(page="Leaderboard page")
+    async def funders(self, ctx, *, page: int = 1):
+        """
+        View the top 10 giveaway funders globally (optionally accepts a page)
+        In order to get on this leaderboard contact @zukrainak47 to fund a giveaway
+
+        Reaching 250k given away unlocks the !e command
+        !help e for more info
+        """
+        global fetched_users
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            funder_list = {funder_id: global_profiles[funder_id]['num_1'] for funder_id in global_profiles if global_profiles[funder_id]['num_1']}
+            sorted_members = sorted(funder_list.items(), key=lambda x: x[1], reverse=True)
+            # sorted_members = get_net_leaderboard()
+            #  FIXME probably not the best approach
+            top_users = []
+            found_author = False
+            if getattr(ctx, "interaction", None) is None:
+                contents = ctx.message.content.split()[1:]
+                if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
+                    page = contents[0]
+                else:
+                    page = 1
+            page = min(int(page), math.ceil(len(sorted_members)/10))
+
+            if page == 1:
+                page_msg = ''
+            else:
+                page_msg = f' - page #{page}'
+
+            page -= 1
+            for user_id, coins in sorted_members[page*10:page*10+10]:
+                try:
+                    user = await self.get_user(int(user_id))
+
+                    if int(user_id) != ctx.author.id:
+                        name_ = user.global_name or user.name
+                        top_users.append([name_, coins])
+                    else:
+                        top_users.append([f"{user.mention}", coins])
+                        found_author = True
+                except discord.NotFound:
+                    global_currency.remove(user_id)
+                    save_currency()
+            if not found_author and author_id in funder_list.keys():
+                # rank = sorted_members.index((str(ctx.author.id), global_currency[str(ctx.author.id)]))+1
+                user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
+                rank = user_to_index[str(ctx.author.id)] + 1
+                you = f"\n\nYou're at **#{rank}**"
+            else:
+                you = ''
+            number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
+            await ctx.send(f"# Giveaway Funding Leaderboard{page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
+        elif currency_allowed(ctx):
+            await ctx.reply(f'{reason}, currency commands are disabled')
+
+    @funders.error
+    async def funders_error(self, ctx, error):
+        await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
+
     @commands.command(aliases=['coin', 'c'])
     async def coinflip(self, ctx):
         """
