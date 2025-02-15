@@ -46,6 +46,7 @@ daily_streaks = {}
 user_last_used = {}
 user_last_used_w = {}
 allowed_users = [369809123925295104]
+dev_mode_users = [694664131000795307]
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 fetched_users = {}
@@ -1514,6 +1515,8 @@ def get_net_leaderboard(members=[]):
     for user_id, balance in global_currency.items():
         if members and user_id not in members:
             continue
+        if int(user_id) in ignored_users + dev_mode_users:
+            continue
         # Start with the user's balance
         total_worth = balance
 
@@ -2511,7 +2514,7 @@ async def sell_stock(ctx: commands.Context, author: discord.User, stock: str, st
         print(traceback.format_exc())
 
 
-def add_item_to_user(guild_id: str, user_id: str, item: str, amount: int = 1, save=True, make_sure=True):
+def add_item_to_user(guild_id: str, user_id: str, item: str, newline_placements=True, amount: int = 1, save=True, make_sure=True):
     """
     Adds an item to a user
     Returns the amount they own of this item
@@ -2526,9 +2529,11 @@ def add_item_to_user(guild_id: str, user_id: str, item: str, amount: int = 1, sa
 
     if save:
         save_profiles()
-
-    return (f"\n\n**+{amount:,} {items[item]}{'s' if amount != 1 else ''}**\n"
-            f"Owned: {global_profiles[user_id]['items'][item]:,} {items[item].emoji}")
+    if newline_placements:
+        return (f"\n\n**+{amount:,} {items[item]}{'s' if amount != 1 else ''}**\n"
+                f"Owned: {global_profiles[user_id]['items'][item]:,} {items[item].emoji}")
+    return (f"\n**+{amount:,} {items[item]}{'s' if amount != 1 else ''}**\n"
+            f"Owned: {global_profiles[user_id]['items'][item]:,} {items[item].emoji}\n")
 
 
 def user_has_access_to_channel(ctx, user):
@@ -2684,19 +2689,23 @@ class Currency(commands.Cog):
 
                     target_profile = get_profile(str(target_id))
 
-                    # global_rank = sorted(global_currency.items(), key=lambda x: x[1], reverse=True).index((str(target_id), global_currency[str(target_id)])) + 1
-                    global_rank = get_net_leaderboard().index((str(target_id), num)) + 1
-                    if target_profile['highest_global_rank'] > global_rank or target_profile['highest_global_rank'] == -1:
-                        target_profile['highest_global_rank'] = global_rank
-                        if global_rank == 1:
-                            if 'Reached #1' not in global_profiles[str(target_id)]['items'].setdefault('titles', []):
-                                global_profiles[str(target_id)]['items']['titles'].append('Reached #1')
-                                if ctx.guild:
-                                    await ctx.send(f"{target.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
-                                else:
-                                    await target.send("You've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
-                        save_profiles()
-                    embed_title = ' - info' if full_info else "'s profile"
+                    if target_id not in ignored_users + dev_mode_users:
+                        global_rank = get_net_leaderboard().index((str(target_id), num)) + 1
+                        if target_profile['highest_global_rank'] > global_rank or target_profile['highest_global_rank'] == -1:
+                            target_profile['highest_global_rank'] = global_rank
+                            if global_rank == 1:
+                                if 'Reached #1' not in global_profiles[str(target_id)]['items'].setdefault('titles', []):
+                                    global_profiles[str(target_id)]['items']['titles'].append('Reached #1')
+                                    if ctx.guild:
+                                        await ctx.send(f"{target.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
+                                    else:
+                                        await target.send("You've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
+                            save_profiles()
+                    else:
+                        global_rank = 0
+                    embed_title = ' - Info' if full_info else "'s profile"
+                    embed_title += ' (banned)' if target_id in ignored_users else ''
+                    embed_title += ' (Dev Mode)' if target_id in dev_mode_users else ''
                     if target_profile['title']:
                         profile_embed = discord.Embed(title=f"{target.display_name}{embed_title}", description=f"*{target_profile['title']}*", color=embed_color)
                     else:
@@ -3489,96 +3498,120 @@ class Currency(commands.Cog):
         """
         Displays cooldowns for farming commands
         """
-        guild_id = '' if not ctx.guild else str(ctx.guild.id)
-        if currency_allowed(ctx) and bot_down_check(guild_id):
-            author_id = str(ctx.author.id)
-            tracked_commands = ['dig', 'mine', 'work', 'fish']  # Commands to include in the cooldown list
-            cooldowns_status = []
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                author_id = str(ctx.author.id)
+                tracked_commands = ['dig', 'mine', 'work', 'fish']  # Commands to include in the cooldown list
+                cooldowns_status = []
 
-            for command_name in tracked_commands:
-                command = self.bot.get_command(command_name)
-                if command and command.cooldown:  # Ensure command exists and has a cooldown
-                    bucket = command._buckets.get_bucket(ctx.message)
-                    retry_after = bucket.get_retry_after()
-                    if retry_after > 0:
-                        cooldowns_status.append(f"`{command_name.capitalize()}:{' '*(command_name == 'dig')}` {get_timestamp(int(retry_after))}")
-                    else:
-                        cooldowns_status.append(f"`{command_name.capitalize()}:{' '*(command_name == 'dig')}` no cooldown!")
-            cooldowns_status.append('')
-            now = datetime.now()
+                for command_name in tracked_commands:
+                    command = self.bot.get_command(command_name)
+                    if command and command.cooldown:  # Ensure command exists and has a cooldown
+                        bucket = command._buckets.get_bucket(ctx.message)
+                        retry_after = bucket.get_retry_after()
+                        if retry_after > 0:
+                            cooldowns_status.append(f"`{command_name.capitalize()}:{' '*(command_name == 'dig')}` {get_timestamp(int(retry_after))}")
+                        else:
+                            cooldowns_status.append(f"`{command_name.capitalize()}:{' '*(command_name == 'dig')}` no cooldown!")
+                cooldowns_status.append('')
+                now = datetime.now()
 
-            last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=2))
-            # user_streak = server_settings.get(guild_id).get('daily_streak').setdefault(author_id, 0)
-            user_streak = daily_streaks.setdefault(author_id, 0)
-            if user_streak == 0:
-                save_daily()
-            if last_used.date() == now.date():
-                daily_reset = get_daily_reset_timestamp()
-                cooldowns_status.append(f"`Daily: ` <t:{daily_reset}:R>, your current streak is **{user_streak}**")
-            else:
-                cooldowns_status.append(f"`Daily: ` no cooldown! Your current streak is **{user_streak}**")
+                last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=2))
+                # user_streak = server_settings.get(guild_id).get('daily_streak').setdefault(author_id, 0)
+                user_streak = daily_streaks.setdefault(author_id, 0)
+                if user_streak == 0:
+                    save_daily()
+                if last_used.date() == now.date():
+                    daily_reset = get_daily_reset_timestamp()
+                    cooldowns_status.append(f"`Daily: ` <t:{daily_reset}:R>, your current streak is **{user_streak}**")
+                else:
+                    cooldowns_status.append(f"`Daily: ` no cooldown! Your current streak is **{user_streak}**")
 
-            last_used_w = user_last_used_w.setdefault(author_id, datetime.today() - timedelta(weeks=1))
-            start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
-            if last_used_w >= start_of_week:
-                reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
-                cooldowns_status.append(f"`Weekly:` <t:{reset_timestamp}:R>")
-            else:
-                cooldowns_status.append(f"`Weekly:` no cooldown!")
+                last_used_w = user_last_used_w.setdefault(author_id, datetime.today() - timedelta(weeks=1))
+                start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
+                if last_used_w >= start_of_week:
+                    reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
+                    cooldowns_status.append(f"`Weekly:` <t:{reset_timestamp}:R>")
+                else:
+                    cooldowns_status.append(f"`Weekly:` no cooldown!")
 
-            cooldowns_message = "## Cooldowns:\n" + "\n".join(cooldowns_status)
-            await ctx.reply(cooldowns_message)
-        elif currency_allowed(ctx):
-            await ctx.reply(f'{reason}, currency commands are disabled')
+                cooldowns_message = "## Cooldowns:\n" + "\n".join(cooldowns_status)
+                await ctx.reply(cooldowns_message)
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
 
-    async def d(self, ctx):
+    async def d(self, ctx, standalone=True, farm_msg=None, rare_msg=None, item_msg='', loan_msg='', total_gained=0):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             dig_coins = int(random.randint(1, 400)**0.5)
+            if not standalone:
+                farm_msg += f'Dig {shovel}'
             if dig_coins == 20:
                 dig_coins = 2500
                 dig_message = f'# You found Gold! {gold_emoji}'
-                rare_finds_increment(guild_id, author_id, 'gold', False)
-                if ctx.guild:
-                    link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
-                else:
-                    link = '(in DMs)'
-                await rare_channel.send(f"**{ctx.author.mention}** found Gold {gold_emoji} {link}")
+                if not standalone:
+                    rare_msg.append(('Gold', f'{gold_emoji}'))
+                if ctx.author.id not in dev_mode_users:
+                    rare_finds_increment(guild_id, author_id, 'gold', False)
+                    if ctx.guild:
+                        link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
+                    else:
+                        link = '(in DMs)'
+                    await rare_channel.send(f"**{ctx.author.mention}** found Gold {gold_emoji} {link}")
             else:
                 dig_message = f'## Digging successful! {shovel}'
             if dig_coins != 2500 or (dig_coins == 2500 and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
                 num = add_coins_to_user(guild_id, author_id, dig_coins)  # save file
+                total_gained += dig_coins
                 highest_net_check(guild_id, author_id, save=False, make_sure=dig_coins != 2500)  # make sure profile exists only if gold wasn't found
                 command_count_increment(guild_id, author_id, 'dig', True, False)
-                await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
+                if standalone:
+                    await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
+                else:
+                    farm_msg += f' +{dig_coins:,} {coin}\n'
+                    if ctx.author.id in dev_mode_users:
+                        ctx.bot.get_command("dig").reset_cooldown(ctx)
+                    return farm_msg, rare_msg, item_msg, loan_msg, total_gained
+
             else:
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, dig_coins, paid = await loan_payment(loan_id, dig_coins)
                     if not loan_size:
                         # dig_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
-                        dig_message += f'- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        loan_msg += f'\n- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         continue
 
                     if finalized:
                         # dig_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
-                        dig_message += f'- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
+                        loan_msg += f'\n- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
                         # dig_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
-                        dig_message += f'- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
+                        loan_msg += f'\n- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not dig_coins:
                         break
+                # else:
+                num = add_coins_to_user(guild_id, author_id, dig_coins)  # save file
+                total_gained += dig_coins
+                highest_net_check(guild_id, author_id, save=False, make_sure=False)
+                command_count_increment(guild_id, author_id, 'dig', True, False)
+                if standalone:
+                    await ctx.reply(f"{dig_message}{loan_msg}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
                 else:
-                    num = add_coins_to_user(guild_id, author_id, dig_coins)  # save file
-                    highest_net_check(guild_id, author_id, save=False, make_sure=False)
-                    command_count_increment(guild_id, author_id, 'dig', True, False)
-                    await ctx.reply(
-                        f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
+                    farm_msg += f' +{dig_coins:,} {coin}\n'
+                    if ctx.author.id in dev_mode_users:
+                        ctx.bot.get_command("dig").reset_cooldown(ctx)
+                    return farm_msg, rare_msg, item_msg, loan_msg, total_gained
         else:
             if currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
+            ctx.command.reset_cooldown(ctx)
+        if ctx.author.id in dev_mode_users:
             ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="dig", description="Dig and get a very small number of coins", aliases=['d', 'в'])
@@ -3605,65 +3638,88 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    async def m(self, ctx):
+    async def m(self, ctx, standalone=True, farm_msg=None, rare_msg=None, item_msg='', loan_msg='', total_gained=0):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             t = random.randint(1, 625)
             mine_coins = int(t**0.5 * 2)
-            item_msg = ''
+            if not standalone:
+                farm_msg += 'Mine ⛏️'
             if t == 625:
                 mine_coins = 7500
                 mine_message = f'# You found Diamonds! 💎'
-                rare_finds_increment(guild_id, author_id, 'diamonds', False)
-                if ctx.guild:
-                    link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
-                else:
-                    link = '(in DMs)'
-                await rare_channel.send(f"**{ctx.author.mention}** found Diamonds 💎 {link}")
+                if not standalone:
+                    rare_msg.append(("Diamonds", "💎"))
+                if ctx.author.id not in dev_mode_users:
+                    rare_finds_increment(guild_id, author_id, 'diamonds', False)
+                    if ctx.guild:
+                        link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
+                    else:
+                        link = '(in DMs)'
+                    await rare_channel.send(f"**{ctx.author.mention}** found Diamonds 💎 {link}")
             elif t == 1:
                 mine_coins = 1
-                item_msg = add_item_to_user(guild_id, author_id, 'evil_potion')
+                item_msg += add_item_to_user(guild_id, author_id, 'evil_potion', standalone)
                 mine_message = f"# You struck Fool's Gold! ✨"
-                rare_finds_increment(guild_id, author_id, 'fool', False)
-                if ctx.guild:
-                    link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
-                else:
-                    link = '(in DMs)'
-                await rare_channel.send(f"**{ctx.author.mention}** struck Fool's Gold ✨ {link}")
+                if not standalone:
+                    rare_msg.append(("Fool's Gold", "✨"))
+                if ctx.author.id not in dev_mode_users:
+                    rare_finds_increment(guild_id, author_id, 'fool', False)
+                    if ctx.guild:
+                        link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
+                    else:
+                        link = '(in DMs)'
+                    await rare_channel.send(f"**{ctx.author.mention}** struck Fool's Gold ✨ {link}")
             else:
-                mine_message = f"## Mining successful! ⛏️\n"
+                mine_message = f"## Mining successful! ⛏️"
             if t not in (1, 625) or (t in (1, 625) and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
                 num = add_coins_to_user(guild_id, author_id, mine_coins)  # save file
+                total_gained += mine_coins
                 highest_net_check(guild_id, author_id, save=False, make_sure=t not in (1, 625))
                 command_count_increment(guild_id, author_id, 'mine', True, False)
-                await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
+                if standalone:
+                    await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
+                else:
+                    farm_msg += f' +{mine_coins:,} {coin}\n'
+                    if ctx.author.id in dev_mode_users:
+                        ctx.bot.get_command("mine").reset_cooldown(ctx)
+                    return farm_msg, rare_msg, item_msg, loan_msg, total_gained
             else:
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, mine_coins, paid = await loan_payment(loan_id, mine_coins)
                     if not loan_size:
                         # mine_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
-                        mine_message += f'- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        loan_msg += f'\n- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         continue
 
                     if finalized:
                         # mine_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
-                        mine_message += f'- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
+                        loan_msg += f'\n- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
                         # mine_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
-                        mine_message += f'- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
+                        loan_msg += f'\n- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not mine_coins:
                         break
+                # else:
+                num = add_coins_to_user(guild_id, author_id, mine_coins)  # save file
+                total_gained += mine_coins
+                highest_net_check(guild_id, author_id, save=False, make_sure=False)
+                command_count_increment(guild_id, author_id, 'mine', True, False)
+                if standalone:
+                    await ctx.reply(f"{mine_message}{loan_msg}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
                 else:
-                    num = add_coins_to_user(guild_id, author_id, mine_coins)  # save file
-                    highest_net_check(guild_id, author_id, save=False, make_sure=False)
-                    command_count_increment(guild_id, author_id, 'mine', True, False)
-                    await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
+                    farm_msg += f' +{mine_coins:,} {coin}\n'
+                    if ctx.author.id in dev_mode_users:
+                        ctx.bot.get_command("mine").reset_cooldown(ctx)
+                    return farm_msg, rare_msg, item_msg, loan_msg, total_gained
         else:
             if currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
+            ctx.command.reset_cooldown(ctx)
+        if ctx.author.id in dev_mode_users:
             ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="mine", description="Mine and get a small number of coins", aliases=['m', 'ь'])
@@ -3694,20 +3750,28 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    async def w(self, ctx):
+    async def w(self, ctx, standalone=True, farm_msg=None, rare_msg=None, item_msg='', loan_msg='', total_gained=0):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             work_coins = random.randint(45, 55)
-            add_coins_to_user(guild_id, author_id, work_coins)  # save file
-            num = get_user_balance(guild_id, author_id)
+            num = add_coins_to_user(guild_id, author_id, work_coins)  # save file
+            total_gained += work_coins
             highest_net_check(guild_id, author_id, save=False, make_sure=True)
             command_count_increment(guild_id, author_id, 'work', save=True, make_sure=False)
-            await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {num:,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
+            if standalone:
+                await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {num:,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
+            else:
+                farm_msg += f'Work {okaygebusiness} +{work_coins} {coin}\n'
+                if ctx.author.id in dev_mode_users:
+                    ctx.bot.get_command("work").reset_cooldown(ctx)
+                return farm_msg, rare_msg, item_msg, loan_msg, total_gained
         else:
             if currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
+            ctx.command.reset_cooldown(ctx)
+        if ctx.author.id in dev_mode_users:
             ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="work", description="Work and get a moderate number of coins", aliases=['w', 'ц'])
@@ -3734,46 +3798,53 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    async def f(self, ctx):
+    async def f(self, ctx, standalone=True, farm_msg=None, rare_msg=None, item_msg='', loan_msg='', total_gained=0):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
             make_sure_user_has_currency(guild_id, author_id)
             fish_coins = random.randint(1, 167)
-            item_msg = ''
+            if not standalone:
+                farm_msg += 'Fish 🎣'
             if fish_coins == 167:
                 fish_coins = random.randint(7500, 12500)
                 if fish_coins == 12500:
-                    item_msg = add_item_to_user(guild_id, author_id, 'the_catch')
+                    item_msg += add_item_to_user(guild_id, author_id, 'the_catch', standalone)
                     fish_message = f"# You found *The Catch*{The_Catch}\n"
-                    rare_finds_increment(guild_id, author_id, 'the_catch', False)
-                    ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag to your friends'
-                    if ctx.guild:
-                        link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
-                    else:
-                        link = '(in DMs)'
+                    if not standalone:
+                        rare_msg.append(('*The Catch*', f'{The_Catch}'))
+                    if ctx.author.id not in dev_mode_users:
+                        rare_finds_increment(guild_id, author_id, 'the_catch', False)
+                        ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag to your friends'
+                        if ctx.guild:
+                            link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
+                        else:
+                            link = '(in DMs)'
 
-                    await rare_channel.send(f"<@&1326967584821612614> **{ctx.author.mention}** JUST FOUND *THE CATCH* {The_Catch} {link}")
+                        await rare_channel.send(f"<@&1326967584821612614> **{ctx.author.mention}** JUST FOUND *THE CATCH* {The_Catch} {link}")
                 else:
                     fish_message = f'# You found a huge Treasure Chest!!! {treasure_chest}'
-                    rare_finds_increment(guild_id, author_id, 'treasure_chest', False)
+                    if not standalone:
+                        rare_msg.append(('a huge Treasure Chest', f'{treasure_chest}'))
                     rig_chance = random.random()
                     print(rig_chance)
                     if rig_chance >= 0.95:
-                        item_msg = add_item_to_user(guild_id, author_id, 'rigged_potion')
+                        item_msg += add_item_to_user(guild_id, author_id, 'rigged_potion', standalone)
                         rig = f' - **AND A {rigged_potion} RIGGED POTION**'
                     else:
                         rig = ''
-                    ps_message = ''
-                    if ctx.guild:
-                        link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
-                    else:
-                        link = '(in DMs)'
+                    if ctx.author.id not in dev_mode_users:
+                        rare_finds_increment(guild_id, author_id, 'treasure_chest', False)
+                        ps_message = ''
+                        if ctx.guild:
+                            link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
+                        else:
+                            link = '(in DMs)'
 
-                    await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest {treasure_chest}{rig} {link}")
+                        await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest {treasure_chest}{rig} {link}")
             else:
                 if fish_coins == 69:
-                    item_msg = add_item_to_user(guild_id, author_id, 'funny_item')
+                    item_msg += add_item_to_user(guild_id, author_id, 'funny_item', standalone)
                 if ctx.message.content:
                     cast_command = ctx.message.content.split()[0].lower().lstrip('!')
                 else:
@@ -3784,34 +3855,50 @@ class Currency(commands.Cog):
                 ps_message = ''
             if fish_coins < 200 or (fish_coins > 200 and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
                 num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
+                total_gained += fish_coins
                 highest_net_check(guild_id, author_id, save=False, make_sure=fish_coins < 200)
                 command_count_increment(guild_id, author_id, 'fishinge', True, False)
-                await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
+                if standalone:
+                    await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
+                else:
+                    farm_msg += f' +{fish_coins:,} {coin}\n'
+                    if ctx.author.id in dev_mode_users:
+                        ctx.bot.get_command("fish").reset_cooldown(ctx)
+                    return farm_msg, rare_msg, item_msg, loan_msg, total_gained
             else:
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, fish_coins, paid = await loan_payment(loan_id, fish_coins)
                     if not loan_size:
                         # fish_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
-                        fish_message += f'- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
+                        loan_msg += f'\n- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         continue
 
                     if finalized:
                         # fish_message += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
-                        fish_message += f'\n- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
+                        loan_msg += f'\n- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
                         # fish_message += f'\n- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
-                        fish_message += f'\n- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
+                        loan_msg += f'\n- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not fish_coins:
                         break
+                # else:
+                num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
+                total_gained += fish_coins
+                highest_net_check(guild_id, author_id, save=False, make_sure=False)
+                command_count_increment(guild_id, author_id, 'fishinge', True, False)
+                if standalone:
+                    await ctx.reply(f"{fish_message}{loan_msg}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
                 else:
-                    num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
-                    highest_net_check(guild_id, author_id, save=False, make_sure=False)
-                    command_count_increment(guild_id, author_id, 'fishinge', True, False)
-                    await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
+                    farm_msg += f' +{fish_coins:,} {coin}\n'
+                    if ctx.author.id in dev_mode_users:
+                        ctx.bot.get_command("fish").reset_cooldown(ctx)
+                    return farm_msg, rare_msg, item_msg, loan_msg, total_gained
         else:
             if currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
+            ctx.command.reset_cooldown(ctx)
+        if ctx.author.id in dev_mode_users:
             ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="fish", description="Fish and get a random number of coins from 1 to 167", aliases=['fishinge', 'f', 'а'])
@@ -3852,10 +3939,14 @@ class Currency(commands.Cog):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             make_sure_user_profile_exists('', str(ctx.author.id))
-            if global_profiles[str(ctx.author.id)]['num_1'] >= 250000:
+            if global_profiles[str(ctx.author.id)]['num_1'] >= 250000 or ctx.author.id == 694664131000795307:
                 tracked_commands = ['dig', 'mine', 'work', 'fish']  # List of command names
                 tracked_func = {'dig': self.d, 'mine': self.m, 'work': self.w, 'fish': self.f}
-
+                reply_msg = f'## Farming successful {wicked}\n'
+                rare_message = []
+                item_message = ''
+                loan_message = ''
+                total_gained = 0
                 found_one = False
                 for command_name in tracked_commands:
                     command = self.bot.get_command(command_name)
@@ -3863,13 +3954,32 @@ class Currency(commands.Cog):
                     retry_after = bucket.update_rate_limit()
                     if retry_after is None:
                         found_one = True
-                        await tracked_func[command_name](ctx)
+                        reply_msg, rare_message, item_message, loan_message, total_gained = await tracked_func[command_name](ctx, False, reply_msg, rare_message, item_message, loan_message, total_gained)
                 if not found_one:
                     await ctx.reply('All commands are on cooldown wyd', ephemeral=True)
-
+                    return
+                rare = ''
+                if rare_message:
+                    rare = '# You found '
+                    amount_of_items = len(rare_message)
+                    for ind in range(amount_of_items):
+                        name, emoji = rare_message[ind]
+                        if ind != amount_of_items - 1:
+                            rare += f"{name} {emoji} and "
+                        else:
+                            rare += f"{name}! {emoji}\n\n"
+                await ctx.reply(f"{reply_msg}"
+                                f"{rare}"
+                                f"{item_message}"
+                                f"{loan_message}{'\n' if loan_message else ''}"
+                                f"\n"
+                                f"**{ctx.author.display_name}:** +{total_gained:,} {coin}\n"
+                                f"Balance: {get_user_balance('', str(ctx.author.id)):,} {coin}")
             else:
                 await ctx.reply("This command becomes available once you funded 250k worth of official giveaways!\n"
                                 "Contact @zukrainak47 to fund one", ephemeral=True)
+        elif currency_allowed(ctx):
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.hybrid_command(name="daily", description="Claim 1 Daily Item and daily coins!")
     async def daily(self, ctx):
@@ -3977,7 +4087,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.hybrid_command(name="give", description="Give someone an amount of coins", aliases=['pay, gift'])
+    @commands.hybrid_command(name="give", description="Give someone an amount of coins", aliases=['pay', 'gift'])
     @app_commands.describe(user="Who you'd like to give coins to", number="How many coins you'd like to give")
     async def give(self, ctx, user: discord.User, number: str):
         """
@@ -4225,6 +4335,7 @@ class Currency(commands.Cog):
 
     @global_leaderboard.error
     async def global_leaderboard_error(self, ctx, error):
+        print(error)
         await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
@@ -4284,7 +4395,7 @@ class Currency(commands.Cog):
             else:
                 you = ''
             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-            await ctx.send(f"# Giveaway Funding Leaderboard{page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
+            await ctx.send(f"# Giveaway Funding Leaderboard{page_msg}:\n{'\n'.join([f"{'**' if top_user_coins >= 250000 else ''}{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:{'**' if top_user_coins >= 250000 else ''} {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
