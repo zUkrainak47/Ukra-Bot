@@ -3612,7 +3612,7 @@ class Currency(commands.Cog):
                 if standalone:
                     await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
                 else:
-                    farm_msg += f' +{dig_coins:,} {coin}\n'
+                    farm_msg += f' +{dig_coins:,} {coin} - {get_timestamp(20)}\n'
                     if ctx.author.id in dev_mode_users:
                         ctx.bot.get_command("dig").reset_cooldown(ctx)
                     return farm_msg, rare_msg, item_msg, loan_msg, total_gained
@@ -3642,7 +3642,7 @@ class Currency(commands.Cog):
                 if standalone:
                     await ctx.reply(f"{dig_message}{loan_msg}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
                 else:
-                    farm_msg += f' +{dig_coins:,} {coin}\n'
+                    farm_msg += f' +{dig_coins:,} {coin} - {get_timestamp(20)}\n'
                     if ctx.author.id in dev_mode_users:
                         ctx.bot.get_command("dig").reset_cooldown(ctx)
                     return farm_msg, rare_msg, item_msg, loan_msg, total_gained
@@ -3721,7 +3721,7 @@ class Currency(commands.Cog):
                 if standalone:
                     await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
                 else:
-                    farm_msg += f' +{mine_coins:,} {coin}\n'
+                    farm_msg += f' +{mine_coins:,} {coin} - {get_timestamp(60)}\n'
                     if ctx.author.id in dev_mode_users:
                         ctx.bot.get_command("mine").reset_cooldown(ctx)
                     return farm_msg, rare_msg, item_msg, loan_msg, total_gained
@@ -3750,7 +3750,7 @@ class Currency(commands.Cog):
                 if standalone:
                     await ctx.reply(f"{mine_message}{loan_msg}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
                 else:
-                    farm_msg += f' +{mine_coins:,} {coin}\n'
+                    farm_msg += f' +{mine_coins:,} {coin} - {get_timestamp(60)}\n'
                     if ctx.author.id in dev_mode_users:
                         ctx.bot.get_command("mine").reset_cooldown(ctx)
                     return farm_msg, rare_msg, item_msg, loan_msg, total_gained
@@ -3802,7 +3802,7 @@ class Currency(commands.Cog):
             if standalone:
                 await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {num:,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
             else:
-                farm_msg += f'Work {okaygebusiness} +{work_coins} {coin}\n'
+                farm_msg += f'Work {okaygebusiness} +{work_coins} {coin} - {get_timestamp(300)}\n'
                 if ctx.author.id in dev_mode_users:
                     ctx.bot.get_command("work").reset_cooldown(ctx)
                 return farm_msg, rare_msg, item_msg, loan_msg, total_gained
@@ -3900,7 +3900,7 @@ class Currency(commands.Cog):
                 if standalone:
                     await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
                 else:
-                    farm_msg += f' +{fish_coins:,} {coin}\n'
+                    farm_msg += f' +{fish_coins:,} {coin} - {get_timestamp(600)}\n'
                     if ctx.author.id in dev_mode_users:
                         ctx.bot.get_command("fish").reset_cooldown(ctx)
                     return farm_msg, rare_msg, item_msg, loan_msg, total_gained
@@ -3929,7 +3929,7 @@ class Currency(commands.Cog):
                 if standalone:
                     await ctx.reply(f"{fish_message}{loan_msg}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
                 else:
-                    farm_msg += f' +{fish_coins:,} {coin}\n'
+                    farm_msg += f' +{fish_coins:,} {coin} - {get_timestamp(600)}\n'
                     if ctx.author.id in dev_mode_users:
                         ctx.bot.get_command("fish").reset_cooldown(ctx)
                     return farm_msg, rare_msg, item_msg, loan_msg, total_gained
@@ -3980,8 +3980,10 @@ class Currency(commands.Cog):
             make_sure_user_profile_exists('', str(ctx.author.id))
             if global_profiles[str(ctx.author.id)]['num_1'] >= 250000 or ctx.author.id == 694664131000795307:
                 tracked_commands = ['dig', 'mine', 'work', 'fish']  # List of command names
+                tracked_commands_emojis = {'dig': shovel, 'mine': '⛏️', 'work': okaygebusiness, 'fish': '🎣'}
                 tracked_func = {'dig': self.d, 'mine': self.m, 'work': self.w, 'fish': self.f}
                 reply_msg = f'## Farming successful {wicked}\n'
+                cd_msg = ''
                 rare_message = []
                 item_message = ''
                 loan_message = ''
@@ -3994,6 +3996,8 @@ class Currency(commands.Cog):
                     if retry_after is None:
                         found_one = True
                         reply_msg, rare_message, item_message, loan_message, total_gained = await tracked_func[command_name](ctx, False, reply_msg, rare_message, item_message, loan_message, total_gained)
+                    else:
+                        cd_msg += f'{command_name.capitalize()} {tracked_commands_emojis[command_name]} - {get_timestamp(retry_after)}\n'
                 if not found_one:
                     await ctx.reply('All commands are on cooldown wyd', ephemeral=True)
                     return
@@ -4008,6 +4012,7 @@ class Currency(commands.Cog):
                         else:
                             rare += f"{name}! {emoji}\n\n"
                 await ctx.reply(f"{reply_msg}"
+                                f"{'\n**Commands on cooldown:**\n' if cd_msg else ''}{cd_msg}"
                                 f"{rare}"
                                 f"{item_message}"
                                 f"{loan_message}{'\n' if loan_message else ''}"
