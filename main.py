@@ -67,6 +67,7 @@ evil_potion = '<:evil_potion:1336641208885186601>'
 funny_item = '<:funny_item:1336705286953635902>'
 twisted_orb = '<:twisted_orb:1337165700309061715>'
 laundry_machine = '<:laundry_machine:1337205545471315992>'
+scratch_off_ticket = '<:scratch_off_ticket:1340678427518177361>'
 streak_freeze = '<:streak_freeze:1339194109633757184>'
 daily_item = '<:daily_item:1336399274476306646>'
 weekly_item = '<:weekly_item:1336631591543373854>'
@@ -451,6 +452,7 @@ items = {
     'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing 69 Funny Items grants you 1,000,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
     'twisted_orb': Item('twisted_orb', "Twisted Orb", f"Using this orb has a 50% chance to 5x your balance and a 50% chance for you to lose all coins and owe Ukra Bot 3x your current balance\n\nPurchasable for 3 {daily_item}", twisted_orb, "https://cdn.discordapp.com/attachments/696842659989291130/1337165843359993926/twisted_orb.png?ex=67a6743c&is=67a522bc&hm=161c5d30fd3de60d086db3d4d09c325cb0768a89cfa46804c7db0d55db2beac5&", [3, 'daily_item']),
     'streak_freeze': Item('streak_freeze', "Streak Freeze", f"Freezes your streak!\nComsumed automatically when you forgot to run !daily yesterday\nProtects from a maximum of 1 missed day\n\nPurchasable for 1 {daily_item}", streak_freeze, "https://cdn.discordapp.com/attachments/696842659989291130/1339193669802131456/streak_freeze.png?ex=67add4cb&is=67ac834b&hm=73f5ec0e426647940adfa34d3174074e976b04ec78093a95ce7fc855a9dbb207&", [1, 'daily_item']),
+    'scratch_off_ticket': Item('scratch_off_ticket', "Scratch-off Ticket", f"Using this ticket has a\n- 0.1% chance to grant 300,000 {coin}\n- 10% chance to grant 1,000 {coin}\n- 89.9% chance to grant 100 {coin}\n\nPurchasable for 500 {coin}", scratch_off_ticket, "https://cdn.discordapp.com/attachments/696842659989291130/1340678358652026910/scratch_off_ticket.png?ex=67b33b85&is=67b1ea05&hm=d117ecfc6890d182c31774a09091225bc55336e24ed4f71792648a723644482d&", [500, 'coin']),
     'laundry_machine': Item('laundry_machine', "Laundry Machine", f"It's what you think it is.\nUsing this item grants you 10,000 {coin}\n\nPurchasable for 10,000 {coin}", laundry_machine, "https://cdn.discordapp.com/attachments/696842659989291130/1337206253784535101/laundry_machine.png?ex=67a699de&is=67a5485e&hm=3e7dd2b88acaee2d9c82d86285bcde8d40a809006f7945c9112e610e6afc5f38&", [10000, 'coin']),
 
     'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future\nUsed as shop currency", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
@@ -2267,6 +2269,42 @@ async def laundry_machine_func(message, castor, amount, additional_context=[]):
         print(traceback.format_exc())
 
 
+async def scratch_off_ticket_func(message, castor, amount, additional_context=[]):
+    try:
+        guild_id = '' if not message.guild else str(message.guild.id)
+        castor_id = str(castor.id)
+        tier1, tier2, tier3 = 0, 0, 0
+        for i in range(amount):
+            c = random.randint(1, 1000)
+            if c <= 899:
+                tier1 += 1
+            elif 900 <= c <= 999:
+                tier2 += 1
+            else:
+                tier3 += 1
+        bal = add_coins_to_user(guild_id, castor_id, 300000 * tier3 + 1000 * tier2 + 100 * tier1)
+        global_profiles[castor_id]['items']['scratch_off_ticket'] -= amount
+        results = ''
+        if amount > 1:
+            results = (f'## Results:\n'
+                       f'`300,000` {coin} x{tier3}\n'
+                       f'`  1,000` {coin} x{tier2}\n'
+                       f'`    100` {coin} x{tier1}\n\n')
+        await message.reply(
+            f"# {amount:,} {items['scratch_off_ticket']}{'s' if amount != 1 else ''} used successfully\n"
+            f"{results}"
+            f"**{castor.display_name}: +{300000 * tier3 + 1000 * tier2 + 100 * tier1:,} {coin}**\n"
+            f"Balance: {bal:,} {coin}\n"
+            f"\n"
+            f"**-{amount:,} {items['scratch_off_ticket']}{'s' if amount != 1 else ''}**\n"
+            f"Owned: {global_profiles[castor_id]['items']['scratch_off_ticket']} {scratch_off_ticket}"
+        )
+        highest_net_check(guild_id, castor_id, save=False, make_sure=False)
+        save_profiles()
+    except Exception:
+        print(traceback.format_exc())
+
+
 async def twisted_orb_func(message, castor, amount, additional_context=[]):
     try:
         guild_id = '' if not message.guild else str(message.guild.id)
@@ -2343,6 +2381,7 @@ item_use_functions = {
     'evil_potion': evil_potion_func,
     'funny_item': funny_item_func,
     'laundry_machine': laundry_machine_func,
+    'scratch_off_ticket': scratch_off_ticket_func,
     'twisted_orb': twisted_orb_func,
     'the_catch': the_catch_func
 }
@@ -2957,7 +2996,7 @@ class Currency(commands.Cog):
                     await interaction.response.send_message(f"{items[item_name]} is not usable", ephemeral=True)
                     return
 
-                if amount < 1 or item_name not in ['laundry_machine', 'funny_item']:
+                if amount < 1 or item_name not in ['laundry_machine', 'funny_item', 'scratch_off_ticket']:
                     amount = 1
 
                 context = []
