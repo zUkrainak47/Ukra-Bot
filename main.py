@@ -2977,11 +2977,11 @@ class Currency(commands.Cog):
             print(traceback.format_exc())
 
     @app_commands.command(name="use", description="Use item of choice")
-    @app_commands.describe(item="The name of the item", amount="How many you want to use. Only used for some items", target="For items that are used on someone else", number="For items that are used on someone else")
-    async def use(self, interaction, item: str, amount: int = 1, target: discord.Member = None, number: str = '0'):
+    @app_commands.describe(item="The name of the item", amount="How many you want to use. Only used for some items", target="For items like evil potion", coins="For items like evil potion")
+    async def use(self, interaction, item: str, amount: int = 1, target: discord.Member = None, coins: str = '0'):
         """
         Use item of choice
-        Accepts a number as a parameter for some items where it makes sense, so you can use those in bulk
+        Accepts amount as a parameter for some items where it makes sense, so you can use those in bulk
         """
         try:
             guild_id = '' if not interaction.guild else str(interaction.guild.id)
@@ -3013,9 +3013,9 @@ class Currency(commands.Cog):
                     if target.id in (interaction.user.id, bot_id):
                         await interaction.response.send_message(f"Pick someone else please {icant}", ephemeral=True)
                         return
-                    num, _, _ = convert_msg_to_number([number], '', author_id, ignored_sources=['%', 'all', 'half'])
+                    num, _, _ = convert_msg_to_number([coins], '', author_id, ignored_sources=['%', 'all', 'half'])
                     if num < 1:
-                        await interaction.response.send_message("Make sure that the `number` you're providing is an actual, positive number", ephemeral=True)
+                        await interaction.response.send_message("Make sure that the `coins` parameter you're providing is an actual, positive number", ephemeral=True)
                         return
                     context = [target, num]
                 elif item_name in ['funny_item']:
@@ -3650,8 +3650,8 @@ class Currency(commands.Cog):
             if currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
             ctx.command.reset_cooldown(ctx)
-        if ctx.author.id in dev_mode_users:
-            ctx.command.reset_cooldown(ctx)
+        # if ctx.author.id in dev_mode_users:
+        #     ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="dig", description="Dig and get a very small number of coins", aliases=['d', 'в'])
     @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
@@ -3758,8 +3758,8 @@ class Currency(commands.Cog):
             if currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
             ctx.command.reset_cooldown(ctx)
-        if ctx.author.id in dev_mode_users:
-            ctx.command.reset_cooldown(ctx)
+        # if ctx.author.id in dev_mode_users:
+        #     ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="mine", description="Mine and get a small number of coins", aliases=['m', 'ь'])
     @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
@@ -3810,8 +3810,8 @@ class Currency(commands.Cog):
             if currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
             ctx.command.reset_cooldown(ctx)
-        if ctx.author.id in dev_mode_users:
-            ctx.command.reset_cooldown(ctx)
+        # if ctx.author.id in dev_mode_users:
+        #     ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="work", description="Work and get a moderate number of coins", aliases=['w', 'ц'])
     @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
@@ -3937,8 +3937,8 @@ class Currency(commands.Cog):
             if currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
             ctx.command.reset_cooldown(ctx)
-        if ctx.author.id in dev_mode_users:
-            ctx.command.reset_cooldown(ctx)
+        # if ctx.author.id in dev_mode_users:
+        #     ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="fish", description="Fish and get a random number of coins from 1 to 167", aliases=['fishinge', 'f', 'а'])
     @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
@@ -3998,9 +3998,9 @@ class Currency(commands.Cog):
                         reply_msg, rare_message, item_message, loan_message, total_gained = await tracked_func[command_name](ctx, False, reply_msg, rare_message, item_message, loan_message, total_gained)
                     else:
                         cd_msg += f'{command_name.capitalize()} {tracked_commands_emojis[command_name]} - {get_timestamp(retry_after)}\n'
-                if not found_one:
-                    await ctx.reply('All commands are on cooldown wyd', ephemeral=True)
-                    return
+                # if not found_one:
+                #     await ctx.reply('All commands are on cooldown wyd', ephemeral=True)
+                #     return
                 rare = ''
                 if rare_message:
                     rare = '# You found '
@@ -4011,14 +4011,14 @@ class Currency(commands.Cog):
                             rare += f"{name} {emoji} and "
                         else:
                             rare += f"{name}! {emoji}\n\n"
-                await ctx.reply(f"{reply_msg}"
+                await ctx.reply(f"{reply_msg if found_one else ''}"
                                 f"{'\n**Commands on cooldown:**\n' if cd_msg else ''}{cd_msg}"
                                 f"{rare}"
                                 f"{item_message}"
                                 f"{loan_message}{'\n' if loan_message else ''}"
-                                f"\n"
-                                f"**{ctx.author.display_name}:** +{total_gained:,} {coin}\n"
-                                f"Balance: {get_user_balance('', str(ctx.author.id)):,} {coin}")
+                                f"\n" +
+                                f"**{ctx.author.display_name}:** +{total_gained:,} {coin}\nBalance: {get_user_balance('', str(ctx.author.id)):,} {coin}" * found_one
+                                )
             else:
                 await ctx.reply("This command becomes available once you funded 250k worth of official giveaways!\n"
                                 "Contact @zukrainak47 to fund one", ephemeral=True)
@@ -5190,7 +5190,7 @@ class Currency(commands.Cog):
                     command_count_increment(guild_id, author_id, 'slots', True, False)
                     messages_dict = {True: f"# {' | '.join(results)}\n## You win{' **BIG**' * (results[0] == sunfire2)}!", False: f"# {' | '.join(results)}\n## You lose!"}
                     await ctx.reply(f"{messages_dict[result]}\n" + f"**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number != 0))
-                    if result:
+                    if result and number:
                         if ctx.guild:
                             link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
                         else:
