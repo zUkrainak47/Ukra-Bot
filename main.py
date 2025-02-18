@@ -3550,9 +3550,9 @@ class Currency(commands.Cog):
                         bucket = command._buckets.get_bucket(ctx.message)
                         retry_after = bucket.get_retry_after()
                         if retry_after > 0:
-                            cooldowns_status.append(f"`{command_name.capitalize()}:{' '*(command_name == 'dig')}` {get_timestamp(int(retry_after))}")
+                            cooldowns_status.append(f"`{command_name.capitalize().ljust(4)}` {get_timestamp(int(retry_after))}")
                         else:
-                            cooldowns_status.append(f"`{command_name.capitalize()}:{' '*(command_name == 'dig')}` no cooldown!")
+                            cooldowns_status.append(f"`{command_name.capitalize().ljust(4)}` no cooldown!")
                 cooldowns_status.append('')
                 now = datetime.now()
 
@@ -3592,7 +3592,7 @@ class Currency(commands.Cog):
             if currency_allowed(ctx) and bot_down_check(guild_id):
                 author_id = str(ctx.author.id)
                 tracked_commands = ['dig', 'mine', 'work', 'fish']  # Commands to include in the cooldown list
-                tracked_commands_emojis = {'dig': shovel, 'mine': '⛏️', 'work': okaygebusiness, 'fish': '🎣'}
+                tracked_commands_emojis = {'dig': shovel, 'mine': '⛏️', 'work': '💼', 'fish': '🎣'}
                 cooldowns_status = []
 
                 for command_name in tracked_commands:
@@ -3601,9 +3601,9 @@ class Currency(commands.Cog):
                         bucket = command._buckets.get_bucket(ctx.message)
                         retry_after = bucket.get_retry_after()
                         if retry_after > 0:
-                            cooldowns_status.append(f"{command_name.capitalize()} {tracked_commands_emojis[command_name]} - {get_timestamp(int(retry_after))}")
+                            cooldowns_status.append(f"{command_name.capitalize().ljust(4)} {tracked_commands_emojis[command_name]} - {get_timestamp(int(retry_after))}")
                         else:
-                            cooldowns_status.append(f"{command_name.capitalize()} {tracked_commands_emojis[command_name]} -  no cooldown!")
+                            cooldowns_status.append(f"{command_name.capitalize().ljust(4)} {tracked_commands_emojis[command_name]} -  no cooldown!")
                 cooldowns_status.append('')
                 now = datetime.now()
 
@@ -3640,7 +3640,7 @@ class Currency(commands.Cog):
             make_sure_user_has_currency(guild_id, author_id)
             dig_coins = int(random.randint(1, 400)**0.5)
             if not standalone:
-                farm_msg += f'Dig {shovel}'
+                farm_msg += f'Dig  {shovel}'
             if dig_coins == 20:
                 dig_coins = 2500
                 dig_message = f'# You found Gold! {gold_emoji}'
@@ -3853,7 +3853,7 @@ class Currency(commands.Cog):
             if standalone:
                 await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {num:,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
             else:
-                farm_msg += f'Work {okaygebusiness} +{work_coins} {coin} - {get_timestamp(300)}\n'
+                farm_msg += f'Work 💼 +{work_coins} {coin} - {get_timestamp(300)}\n'
                 if ctx.author.id in dev_mode_users:
                     ctx.bot.get_command("work").reset_cooldown(ctx)
                 return farm_msg, rare_msg, item_msg, loan_msg, total_gained
@@ -4031,7 +4031,7 @@ class Currency(commands.Cog):
             make_sure_user_profile_exists('', str(ctx.author.id))
             if global_profiles[str(ctx.author.id)]['num_1'] >= 250000 or ctx.author.id == 694664131000795307:
                 tracked_commands = ['dig', 'mine', 'work', 'fish']  # List of command names
-                tracked_commands_emojis = {'dig': shovel, 'mine': '⛏️', 'work': okaygebusiness, 'fish': '🎣'}
+                tracked_commands_emojis = {'dig': shovel, 'mine': '⛏️', 'work': '💼', 'fish': '🎣'}
                 tracked_func = {'dig': self.d, 'mine': self.m, 'work': self.w, 'fish': self.f}
                 reply_msg = f'## Farming successful {wicked}\n'
                 cd_msg = ''
@@ -4048,7 +4048,7 @@ class Currency(commands.Cog):
                         found_one = True
                         reply_msg, rare_message, item_message, loan_message, total_gained = await tracked_func[command_name](ctx, False, reply_msg, rare_message, item_message, loan_message, total_gained)
                     else:
-                        cd_msg += f'{command_name.capitalize()} {tracked_commands_emojis[command_name]} - {get_timestamp(retry_after)}\n'
+                        cd_msg += f'{command_name.capitalize().ljust(4)} {tracked_commands_emojis[command_name]} - {get_timestamp(retry_after)}\n'
                 # if not found_one:
                 #     await ctx.reply('All commands are on cooldown wyd', ephemeral=True)
                 #     return
@@ -4697,7 +4697,7 @@ class Currency(commands.Cog):
     async def twodice_error(self, ctx, error):
         pass
 
-    @commands.hybrid_command(name="pvp", description="Takes a user mention and a bet, one of the users wins")
+    @commands.hybrid_command(name="pvp", description="Takes a user mention and a bet, one of the users wins", aliases=['fight', 'battle'])
     @app_commands.describe(user="The member you want to PVP", number="How many coins you're betting")
     async def pvp(self, ctx, user: discord.User, number: str = '0'):
         """
