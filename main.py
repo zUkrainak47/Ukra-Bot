@@ -3582,6 +3582,57 @@ class Currency(commands.Cog):
         except Exception:
             print(traceback.format_exc())
 
+    @commands.hybrid_command(name="cd_", description="Displays cooldowns for farming commands")
+    async def cd_(self, ctx):
+        """
+        Displays cooldowns for farming commands
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                author_id = str(ctx.author.id)
+                tracked_commands = ['dig', 'mine', 'work', 'fish']  # Commands to include in the cooldown list
+                tracked_commands_emojis = {'dig': shovel, 'mine': '⛏️', 'work': okaygebusiness, 'fish': '🎣'}
+                cooldowns_status = []
+
+                for command_name in tracked_commands:
+                    command = self.bot.get_command(command_name)
+                    if command and command.cooldown:  # Ensure command exists and has a cooldown
+                        bucket = command._buckets.get_bucket(ctx.message)
+                        retry_after = bucket.get_retry_after()
+                        if retry_after > 0:
+                            cooldowns_status.append(f"{command_name.capitalize()} {tracked_commands_emojis[command_name]} - {get_timestamp(int(retry_after))}")
+                        else:
+                            cooldowns_status.append(f"{command_name.capitalize()} {tracked_commands_emojis[command_name]} -  no cooldown!")
+                cooldowns_status.append('')
+                now = datetime.now()
+
+                last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=2))
+                # user_streak = server_settings.get(guild_id).get('daily_streak').setdefault(author_id, 0)
+                user_streak = daily_streaks.setdefault(author_id, 0)
+                if user_streak == 0:
+                    save_daily()
+                if last_used.date() == now.date():
+                    daily_reset = get_daily_reset_timestamp()
+                    cooldowns_status.append(f"`Daily: ` <t:{daily_reset}:R>, your current streak is **{user_streak}**")
+                else:
+                    cooldowns_status.append(f"`Daily: ` no cooldown! Your current streak is **{user_streak}**")
+
+                last_used_w = user_last_used_w.setdefault(author_id, datetime.today() - timedelta(weeks=1))
+                start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
+                if last_used_w >= start_of_week:
+                    reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
+                    cooldowns_status.append(f"`Weekly:` <t:{reset_timestamp}:R>")
+                else:
+                    cooldowns_status.append(f"`Weekly:` no cooldown!")
+
+                cooldowns_message = "## Cooldowns:\n" + "\n".join(cooldowns_status)
+                await ctx.reply(cooldowns_message)
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
+
     async def d(self, ctx, standalone=True, farm_msg=None, rare_msg=None, item_msg='', loan_msg='', total_gained=0):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
@@ -3721,7 +3772,7 @@ class Currency(commands.Cog):
                 if standalone:
                     await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
                 else:
-                    farm_msg += f' +{mine_coins:,} {coin} - {get_timestamp(60)}\n'
+                    farm_msg += f' +{mine_coins:,} {coin} - {get_timestamp(120)}\n'
                     if ctx.author.id in dev_mode_users:
                         ctx.bot.get_command("mine").reset_cooldown(ctx)
                     return farm_msg, rare_msg, item_msg, loan_msg, total_gained
@@ -3750,7 +3801,7 @@ class Currency(commands.Cog):
                 if standalone:
                     await ctx.reply(f"{mine_message}{loan_msg}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
                 else:
-                    farm_msg += f' +{mine_coins:,} {coin} - {get_timestamp(60)}\n'
+                    farm_msg += f' +{mine_coins:,} {coin} - {get_timestamp(120)}\n'
                     if ctx.author.id in dev_mode_users:
                         ctx.bot.get_command("mine").reset_cooldown(ctx)
                     return farm_msg, rare_msg, item_msg, loan_msg, total_gained
