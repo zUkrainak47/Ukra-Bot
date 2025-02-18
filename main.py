@@ -1508,7 +1508,9 @@ def get_user_net(guild_: str, user_: str, make_sure=True):
     if 'stock' in global_profiles[user_]['items']:
         user_stocks = global_profiles[user_]['items']['stock']
         for s in user_stocks:
-            num += int(user_stocks[s] * stock_cache[s][0])
+            # print(stock_cache[s])
+            if stock_cache[s][1] != "":
+                num += int(user_stocks[s] * stock_cache[s][0])
     return num
 
 
@@ -1534,7 +1536,7 @@ def get_net_leaderboard(members=[]):
         if isinstance(stocks, dict):
             for stock_name, shares in stocks.items():
                 # Get the price from stock_cache; default to 0 if not found.
-                price = stock_cache.get(stock_name, (0,))[0]
+                price = 0 if stock_cache[stock_name][1] == "" else stock_cache[stock_name][0]
                 # Multiply shares by price and take the integer part.
                 total_worth += int(shares * price)
 
@@ -1589,7 +1591,7 @@ def highest_net_check(guild_: str, user_: str, user_net=0, save=True, make_sure=
             save_profiles()
 
 
-def profile_update_after_any_gamble(guild_: str, user_: str, delta: int, user_bal=0, save=True, make_sure=True):
+def profile_update_after_any_gamble(guild_: str, user_: str, delta: int, save=True, make_sure=True):
     if make_sure:
         make_sure_user_profile_exists(guild_, user_)
 
@@ -1603,12 +1605,12 @@ def profile_update_after_any_gamble(guild_: str, user_: str, delta: int, user_ba
             global_profiles[user_]['highest_single_win'] = delta
         global_profiles[user_]['total_won'] += delta
 
-    # balance check
-    if not user_bal:
-        user_bal = get_user_balance(guild_, user_)
-    if user_bal > global_profiles[user_]['highest_balance']:
-        global_profiles[user_]['highest_balance'] = user_bal
-
+    # # balance check
+    # if not user_bal:
+    #     user_bal = get_user_balance(guild_, user_)
+    # if user_bal > global_profiles[user_]['highest_balance']:
+    #     global_profiles[user_]['highest_balance'] = user_bal
+    highest_net_check(guild_, user_, save, save=False, make_sure=False)
     if save:
         save_profiles()
 
@@ -1797,7 +1799,7 @@ class PaginationView(discord.ui.View):
                         found = False
                         total = 0
                         for s in sorted(info):
-                            stock_cost = int(info[s] * stock_cache[s][0])
+                            stock_cost = 0 if stock_cache[s][1] == "" else int(info[s] * stock_cache[s][0])
                             total += stock_cost
                             if info[s]:
                                 stock += f'`{s.ljust(5)}` ─ `{format(info[s], ",").center(10)}` ─ {coin} {stock_cost:,}\n'
@@ -2711,7 +2713,8 @@ class Currency(commands.Cog):
                     if 'stock' in global_profiles[str(target_id)]['items']:
                         user_stocks = global_profiles[str(target_id)]['items']['stock']
                         for s in user_stocks:
-                            num += int(user_stocks[s] * stock_cache[s][0])
+                            if stock_cache[s][1] != "":
+                                num += int(user_stocks[s] * stock_cache[s][0])
                     highest_net_check(guild_id, str(target_id), num, save=True, make_sure=False)
                     user_streak = daily_streaks.setdefault(str(target_id), 0)
                     now = datetime.now()
@@ -3297,10 +3300,7 @@ class Currency(commands.Cog):
                 return  # Skip updating prices
 
             market_closed_message = ""  # Clear message when market is open
-            stock_data = await asyncio.gather(*[fetch_price(stock) for stock in available_stocks])
-            stock_cache = {stock: (price, change) for stock, price, change in stock_data}
-            print()
-
+            await update_stock_cache()
         except Exception:
             print("Error updating stock prices:")
             print(traceback.format_exc())
@@ -3466,7 +3466,8 @@ class Currency(commands.Cog):
             if 'stock' in global_profiles[str(user.id)]['items']:
                 user_stocks = global_profiles[str(user.id)]['items']['stock']
                 for s in user_stocks:
-                    stock_total += int(user_stocks[s] * stock_cache[s][0])
+                    if stock_cache[s][1] != "":
+                        stock_total += int(user_stocks[s] * stock_cache[s][0])
             stock_total = stock_total
             stock_msg = f" +{stock_total:,} {coin} in `STOCK`" if stock_total else ''
             net_worth = num + laundry * 10000 + stock_total
@@ -4555,7 +4556,7 @@ class Currency(commands.Cog):
                     delta = int(number * 2 * (did_you_win - 0.5))
                     add_coins_to_user(guild_id, author_id, delta)  # save file
                     num = get_user_balance(guild_id, author_id)
-                    profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
+                    profile_update_after_any_gamble(guild_id, author_id, delta, save=False)
                     command_count_increment(guild_id, author_id, 'coinflip', True, False)
                     messages_dict = {True: f"You win! The result was `{result.capitalize()}` {yay}", False: f"You lose! The result was `{result.capitalize()}` {o7}"}
                     await ctx.reply(f"## {messages_dict[did_you_win]}\n\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}")
@@ -4595,7 +4596,7 @@ class Currency(commands.Cog):
                     delta = int(number * 2 * (result - 0.5))
                     add_coins_to_user(guild_id, author_id, delta)  # save file
                     num = get_user_balance(guild_id, author_id)
-                    profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
+                    profile_update_after_any_gamble(guild_id, author_id, delta, save=False)
                     adjust_gamble_winrate(guild_id, author_id, result == 1, False, False)
                     command_count_increment(guild_id, author_id, 'gamble', True, False)
                     messages_dict = {1: f"You win! {yay}", 0: f"You lose! {o7}"}
@@ -4636,7 +4637,7 @@ class Currency(commands.Cog):
                         delta = number * 5 * result - number * (not result)
                         add_coins_to_user(guild_id, author_id, delta)  # save file
                         num = get_user_balance(guild_id, author_id)
-                        profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
+                        profile_update_after_any_gamble(guild_id, author_id, delta, save=False)
                         command_count_increment(guild_id, author_id, 'dice', True, False)
                         messages_dict = {1: f"You win! The dice rolled `{dice_roll}` {yay}", 0: f"You lose! The dice rolled `{dice_roll}` {o7}"}
                         await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
@@ -4682,7 +4683,7 @@ class Currency(commands.Cog):
                     delta = number * 35 * result - number * (not result)
                     add_coins_to_user(guild_id, author_id, delta)  # save file
                     num = get_user_balance(guild_id, author_id)
-                    profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
+                    profile_update_after_any_gamble(guild_id, author_id, delta, save=False)
                     command_count_increment(guild_id, author_id, 'twodice', True, False)
                     messages_dict = {1: f"You win! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {yay}", 0: f"You lose! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {o7}"}
                     await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
@@ -4797,8 +4798,8 @@ class Currency(commands.Cog):
                         save_currency()  # save file
                         num1 = get_user_balance(guild_id, str(winner.id))
                         num2 = get_user_balance(guild_id, str(loser.id))
-                        profile_update_after_any_gamble(guild_id, str(winner.id), number, num1)
-                        profile_update_after_any_gamble(guild_id, str(loser.id), -number, num2)
+                        profile_update_after_any_gamble(guild_id, str(winner.id), number)
+                        profile_update_after_any_gamble(guild_id, str(loser.id), -number)
                         command_count_increment(guild_id, author_id, 'pvp', True, False)
                         await ctx.reply(
                             f"## PVP winner is **{winner.display_name}**!\n" +
@@ -5156,8 +5157,8 @@ class Currency(commands.Cog):
                         num1 = remove_coins_from_user(guild_id, author_id, paid)
                         num2 = get_user_balance(guild_id, str(user_id))
                         user = await self.get_user(user_id)
-                        # await ctx.reply(f'Loan `#{loan_id}` of {loan_size:,} {coin}<@{user_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
-                        await ctx.reply(f'Loan of {loan_size:,} {coin}<@{user_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
+                        # await ctx.reply(f'Loan `#{loan_id}` of {loan_size:,} {coin} from <@{user_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
+                        await ctx.reply(f'Loan of {loan_size:,} {coin} from <@{user_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
                                         f'**{ctx.author.display_name}:** {num1:,} {coin}\n**{user.display_name}:** {num2:,} {coin}')
                         return
                     elif active_loans[loan_id][0] == user_id:
@@ -5237,7 +5238,7 @@ class Currency(commands.Cog):
                     delta = 500 * number if ((results[0] == sunfire2) and result) else 50 * number if result else -number
                     add_coins_to_user(guild_id, author_id, delta)  # save file
                     num = get_user_balance(guild_id, author_id)
-                    profile_update_after_any_gamble(guild_id, author_id, delta, num, False)
+                    profile_update_after_any_gamble(guild_id, author_id, delta, save=False)
                     command_count_increment(guild_id, author_id, 'slots', True, False)
                     messages_dict = {True: f"# {' | '.join(results)}\n## You win{' **BIG**' * (results[0] == sunfire2)}!", False: f"# {' | '.join(results)}\n## You lose!"}
                     await ctx.reply(f"{messages_dict[result]}\n" + f"**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number != 0))
