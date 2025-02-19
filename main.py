@@ -9,6 +9,8 @@ from datetime import time as datetime_time
 import os
 import random
 
+import aiohttp
+import finnhub
 import numpy as np
 import pytz
 import matplotlib.pyplot as plt
@@ -26,7 +28,7 @@ from pathlib import Path
 import math
 from rapidfuzz import process
 from stockdex import Ticker
-import yfinance
+# import yfinance
 
 start = time.perf_counter()
 
@@ -40,6 +42,9 @@ reason = f'{bot_name} is starting up'
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
+ALPHAVANTAGE_API_KEY = os.getenv('ALPHAVANTAGE_API_KEY')
+finnhub_client = finnhub.Client(api_key=FINNHUB_API_KEY)
 server_settings = {}
 global_currency = {}
 daily_streaks = {}
@@ -2632,27 +2637,68 @@ def next_market_open(now):
     return f"<t:{unix_timestamp}:R>"
 
 
-async def fetch_price(stock):
+# async def fetch_price(stock):
+#     try:
+#         ticker = yfinance.Ticker(stock)
+#         # Retrieve the last 5 days of data to be safe if there are market holidays.
+#         data = ticker.history(period="5d")
+#
+#         # Ensure we have at least 2 days of data
+#         if data.shape[0] < 2:
+#             return stock, "No Data", ""
+#
+#         # Get the last two trading days
+#         current_price = data['Close'].iloc[-1]
+#         previous_close = data['Close'].iloc[-2]
+#
+#         # Calculate percentage change
+#         percent_change = ((current_price - previous_close) / previous_close) * 100
+#         percent_sign = "📈" if percent_change >= 0 else "📉"
+#
+#         # Return the stock, current price rounded to 2 decimals, and a formatted change string
+#         print(stock, current_price, previous_close, percent_change)
+#         return stock, round(current_price, 2), f"{percent_sign} `{'+' if current_price >= previous_close else ''}{format(percent_change, ".2f")}%`"
+#     except Exception:
+#         print(traceback.format_exc())
+#         return stock, "Error", ""
+
+def get_stock_price(stock):
     try:
-        ticker = yfinance.Ticker(stock)
-        # Retrieve the last 5 days of data to be safe if there are market holidays.
-        data = ticker.history(period="5d")
+        quote = finnhub_client.quote(stock)
+        if "c" in quote:  # 'c' represents the current price in Finnhub's response
+            return quote["c"]
+        else:
+            return None  # Handle cases where data isn't available
+    except Exception as e:
+        print(f"Error fetching price for {stock}: {e}")
+        return None
 
-        # Ensure we have at least 2 days of data
-        if data.shape[0] < 2:
-            return stock, "No Data", ""
 
-        # Get the last two trading days
-        current_price = data['Close'].iloc[-1]
-        previous_close = data['Close'].iloc[-2]
+async def fetch_price(stock):
+    url = f"https://finnhub.io/api/v1/quote?symbol={stock}&token={FINNHUB_API_KEY}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    print(f"Error fetching data for {stock}: HTTP {resp.status}")
+                    return stock, "Error", ""
+                data = await resp.json()
 
-        # Calculate percentage change
-        percent_change = ((current_price - previous_close) / previous_close) * 100
-        percent_sign = "📈" if percent_change >= 0 else "📉"
+                # Finnhub returns:
+                # "c": Current price
+                # "pc": Previous close
+                current_price = data.get("c")
+                previous_close = data.get("pc")
 
-        # Return the stock, current price rounded to 2 decimals, and a formatted change string
-        print(stock, current_price, previous_close, percent_change)
-        return stock, round(current_price, 2), f"{percent_sign} `{'+' if current_price >= previous_close else ''}{format(percent_change, ".2f")}%`"
+                if current_price is None or previous_close is None or previous_close == 0:
+                    return stock, "No Data", ""
+
+                # Calculate percentage change
+                percent_change = ((current_price - previous_close) / previous_close) * 100
+                percent_sign = "📈" if percent_change >= 0 else "📉"
+
+                print(stock, current_price, previous_close, percent_change)
+                return stock, round(current_price,2), f"{percent_sign} `{'+' if percent_change >= 0 else ''}{percent_change:.2f}%`"
     except Exception:
         print(traceback.format_exc())
         return stock, "Error", ""
@@ -3143,7 +3189,8 @@ class Currency(commands.Cog):
                     stock_message = ctx.message
 
                 make_sure_user_profile_exists(guild_id, author_id)
-                price = Ticker(ticker=stock).yahoo_api_price()['close'].iloc[-1]
+                # price = Ticker(ticker=stock).yahoo_api_price()['close'].iloc[-1]
+                price = get_stock_price(stock)
                 print('"' + action + '"')
                 if action == 'Buy':
                     await buy_stock(ctx, ctx.author, stock=stock, stock_message=stock_message, amount=amount, price=price)
@@ -3151,48 +3198,59 @@ class Currency(commands.Cog):
                     await sell_stock(ctx, ctx.author, stock=stock, stock_message=stock_message, amount=amount, price=price)
                 elif action == 'Inspect - month':
                     try:
-                        stock_tick = yfinance.Ticker(ticker=stock)
+                        # Define time range (last 30 days) using Eastern Time
+                        tz = pytz.timezone("America/New_York")
+                        now = datetime.now(tz)
+                        one_month_ago = now - timedelta(days=30)
 
-                        # Get the last month's data.
-                        # If you're using yfinance's history() method, you can do:
-                        df = stock_tick.history(period="1mo")
-                        if df.empty:
-                            return await ctx.reply(f"❌ No data found for `{stock}`")
+                        # Alpha Vantage endpoint for daily time series data
+                        url = "https://www.alphavantage.co/query"
+                        params = {
+                            "function": "TIME_SERIES_DAILY",
+                            "symbol": stock,
+                            "apikey": ALPHAVANTAGE_API_KEY,
+                            "outputsize": "compact"  # Last ~100 trading days
+                        }
 
-                        # Ensure the index is timezone-aware and in the 'America/New_York' timezone.
-                        if df.index.tzinfo is None:
-                            df.index = df.index.tz_localize("America/New_York")
-                        else:
-                            df.index = df.index.tz_convert("America/New_York")
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(url, params=params) as resp:
+                                if resp.status != 200:
+                                    return await ctx.reply(f"❌ Error fetching data for `{stock}` (HTTP {resp.status})")
+                                data = await resp.json()
 
-                        # Optional: Filter data explicitly to the last 30 days (in case history() returns a bit more)
-                        one_month_ago = datetime.now(pytz.timezone("America/New_York")) - timedelta(days=30)
+                        # Check if the response contains the time series data
+                        if "Time Series (Daily)" not in data:
+                            error_message = data.get("Note") or data.get("Error Message") or "Unknown error"
+                            return await ctx.reply(f"❌ Error fetching data for `{stock}`: {error_message}")
+
+                        # Convert the daily time series into a DataFrame.
+                        ts_data = data["Time Series (Daily)"]
+                        df = pd.DataFrame.from_dict(ts_data, orient="index")
+                        df.index = pd.to_datetime(df.index)
+                        df.sort_index(inplace=True)
+
+                        # Convert the closing price to float and keep only the 'Close' column.
+                        df["Close"] = df["4. close"].astype(float)
+
+                        # Localize the DataFrame index to Eastern Time (making it tz-aware)
+                        df.index = df.index.tz_localize("America/New_York")
+
+                        # Filter data to the last 30 days
                         df = df[df.index >= one_month_ago]
                         if df.empty:
                             return await ctx.reply(f"❌ No data available for `{stock}` in the last month.")
 
-                        # Create a line chart: Plot the 'Close' price using a line and markers.
+                        # Create a line chart for the 'Close' prices
                         fig, ax = plt.subplots(figsize=(8, 4))
-                        ax.plot(df.index, df['Close'], marker='o', linestyle='-', label=stock)
+                        ax.plot(df.index, df["Close"], marker='o', linestyle='-', label=stock)
                         ax.set_ylabel('Price')
-                        # ax.set_title(f"📊 **`{stock}` - Last Month's Price**")
                         ax.grid(axis='y', linestyle='--', alpha=0.7)
-
-                        # Set the x-ticks to match every data point.
                         ax.set_xticks(df.index)
-                        # Format the tick labels to show month and day (e.g., "03-15")
                         ax.set_xticklabels([dt.strftime('%m-%d') for dt in df.index], rotation=45)
-
-                        # Optionally, use AutoDateFormatter for a cleaner look (uncomment if desired):
-                        # locator = mdates.AutoDateLocator()
-                        # formatter = mdates.ConciseDateFormatter(locator)
-                        # ax.xaxis.set_major_locator(locator)
-                        # ax.xaxis.set_major_formatter(formatter)
-
                         ax.legend()
                         fig.tight_layout()
 
-                        # Save and send the plot
+                        # Save the plot and send it as a Discord file
                         image_path = f"stocks/{stock}_chart_{datetime.now().timestamp()}.png"
                         plt.savefig(image_path, bbox_inches="tight")
                         plt.close(fig)
