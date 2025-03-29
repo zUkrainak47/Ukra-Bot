@@ -2755,39 +2755,42 @@ class Currency(commands.Cog):
 
             async def get_profile_embed():
                 try:
-                    make_sure_user_profile_exists(guild_id, str(target_id))
-                    num = get_user_balance(guild_id, str(target_id))
-                    laundry = global_profiles[str(target_id)]['items'].setdefault('laundry_machine', 0)
+                    target_id_ = str(target_id)
+                    make_sure_user_profile_exists(guild_id, target_id_)
+                    num = get_user_balance(guild_id, target_id_)
+                    laundry = global_profiles[target_id_]['items'].setdefault('laundry_machine', 0)
                     num += laundry * 10000
                     # laundry_msg = f' (+{laundry:,} {laundry_machine})' if laundry else ''
-                    if 'stock' in global_profiles[str(target_id)]['items']:
-                        user_stocks = global_profiles[str(target_id)]['items']['stock']
+                    if 'stock' in global_profiles[target_id_]['items']:
+                        user_stocks = global_profiles[target_id_]['items']['stock']
                         for s in user_stocks:
                             if stock_cache[s][1] != "":
                                 num += int(user_stocks[s] * stock_cache[s][0])
-                    highest_net_check(guild_id, str(target_id), num, save=True, make_sure=False)
-                    user_streak = daily_streaks.setdefault(str(target_id), 0)
+                    highest_net_check(guild_id, target_id_, num, save=True, make_sure=False)
+                    user_streak = daily_streaks.setdefault(target_id_, 0)
                     now = datetime.now()
-                    last_used = user_last_used.setdefault(str(target_id), datetime.today() - timedelta(days=2))
+                    last_used = user_last_used.setdefault(target_id_, datetime.today() - timedelta(days=2))
                     # print((now - timedelta(days=1)).date())
                     if last_used.date() == now.date():
                         d_msg = f"{user_streak:,}"
                     elif last_used.date() == (now - timedelta(days=1)).date():
                         d_msg = f"{user_streak:,} (not claimed today)"
+                    elif last_used.date() == (now - timedelta(days=2)).date():
+                        d_msg = f"{user_streak:,} (not claimed yesterday!!!)"
                     else:
-                        daily_streaks[str(target_id)] = 0
+                        daily_streaks[target_id_] = 0
                         save_daily()
                         d_msg = 0
 
-                    target_profile = get_profile(str(target_id))
+                    target_profile = get_profile(target_id_)
 
                     if target_id not in ignored_users + dev_mode_users:
-                        global_rank = get_net_leaderboard().index((str(target_id), num)) + 1
+                        global_rank = get_net_leaderboard().index((target_id_, num)) + 1
                         if target_profile['highest_global_rank'] > global_rank or target_profile['highest_global_rank'] == -1:
                             target_profile['highest_global_rank'] = global_rank
                             if global_rank == 1:
-                                if 'Reached #1' not in global_profiles[str(target_id)]['items'].setdefault('titles', []):
-                                    global_profiles[str(target_id)]['items']['titles'].append('Reached #1')
+                                if 'Reached #1' not in global_profiles[target_id_]['items'].setdefault('titles', []):
+                                    global_profiles[target_id_]['items']['titles'].append('Reached #1')
                                     if ctx.guild:
                                         await ctx.send(f"{target.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
                                     else:
