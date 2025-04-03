@@ -214,6 +214,14 @@ else:
     distributed_backshots = {i: [] for i in server_settings}
 
 
+DISTRIBUTED_SILENCE = Path("dev", "distributed_silence.json")
+if os.path.exists(DISTRIBUTED_SILENCE):
+    with open(DISTRIBUTED_SILENCE, "r") as file:
+        distributed_silence = json.load(file)
+else:
+    distributed_silence = {i: [] for i in server_settings}
+
+
 ACTIVE_GIVEAWAYS = Path("dev", "active_giveaways.json")
 if os.path.exists(ACTIVE_GIVEAWAYS):
     with open(ACTIVE_GIVEAWAYS, "r") as file:
@@ -300,6 +308,11 @@ def save_distributed_segs():
 def save_distributed_backshots():
     with open(DISTRIBUTED_BACKSHOTS, "w") as file:
         json.dump(distributed_backshots, file, indent=4)
+
+
+def save_distributed_silence():
+    with open(DISTRIBUTED_SILENCE, "w") as file:
+        json.dump(distributed_silence, file, indent=4)
 
 
 def save_active_giveaways():
@@ -724,11 +737,14 @@ async def on_ready():
         reason = f'{bot_name} is in Development Mode'
         # print(get_global_net_lb()[:25])
         role_dict = {'backshots_role': distributed_backshots,
-                     'segs_role': distributed_segs}
+                     'segs_role': distributed_segs,
+                     'silence_role': distributed_silence}
         save_dict = {'backshots_role': save_distributed_backshots,
-                     'segs_role': save_distributed_segs}
+                     'segs_role': save_distributed_segs,
+                     'silence_role': save_distributed_silence}
 
         async def remove_all_roles(role_name):
+            print('handling', role_name)
             for guild_id in role_dict[role_name]:
                 guild = await client.fetch_guild(int(guild_id))
                 if not guild:
@@ -1090,6 +1106,8 @@ async def settings(ctx):
     segs_role = guild_settings.get("segs_role", False)
     backshots_allowed = 'backshot' in allowed_commands
     backshots_role = guild_settings.get("backshots_role", False)
+    silence_allowed = 'silence' in allowed_commands
+    silence_role = guild_settings.get("silence_role", False)
     compliments_allowed = 'compliment' in allowed_commands
     dnd_allowed = 'dnd' in allowed_commands
     currency_allowed = 'currency_system' in allowed_commands
@@ -1104,11 +1122,19 @@ async def settings(ctx):
     else:
         backshots_role_name = "N/A" + ", run `!setrole backshot @role`" * backshots_allowed
 
+    if silence_role and ctx.guild.get_role(silence_role):
+        silence_role_name = '@' + ctx.guild.get_role(silence_role).name
+    else:
+        silence_role_name = "N/A" + ", run `!setrole silence @role`" * silence_allowed
+
     await ctx.send(f"```Segs:             {allow_dict[segs_allowed]}\n" +
                    f"Segs Role:        {segs_role_name}\n" +
                    '\n' +
                    f"Backshots:        {allow_dict[backshots_allowed]}\n" +
                    f"Backshots Role:   {backshots_role_name}\n" +
+                   '\n' +
+                   f"Silence:          {allow_dict[silence_allowed]}\n" +
+                   f"Silence Role:     {silence_role_name}\n" +
                    '\n' +
                    f"Compliments:      {allow_dict[compliments_allowed]}\n" +
                    '\n' +
@@ -1125,10 +1151,10 @@ async def setrole(ctx):
     """
     Changes role that is distributed when executing !segs or !backshot
     Can only be used by administrators
-    !setrole (segs/backshot) <role id/mention>
+    !setrole (segs/backshot/silence) <role id/mention>
     example: !setrole segs @Segs Role
     """
-    allowed_roles = ['segs', 'backshot', 'backshots']
+    allowed_roles = ['segs', 'backshot', 'backshots', 'silence']
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     if not guild_id:
         await ctx.reply("Can't use this in DMs!")
@@ -1158,11 +1184,11 @@ async def setrole(ctx):
             await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
     else:
         print(split_msg)
-        await ctx.send(f"Command usage: `!setrole (segs/backshot) <role id/mention>`")
+        await ctx.send(f"Command usage: `!setrole (segs/backshot/silence) <role id/mention>`")
 
 
 # ENABLING/DISABLING
-toggleable_commands = ['segs', 'backshot', 'compliment', 'dnd', 'currency_system']
+toggleable_commands = ['segs', 'backshot', 'silence', 'compliment', 'dnd', 'currency_system']
 default_allowed_commands = ['compliment', 'dnd', 'currency_system']
 
 
@@ -1247,6 +1273,7 @@ async def enable(ctx):
         success = f"{cmd} has been enabled"
         success += '. **Please run** `!setrole segs @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('segs_role')))) * cmd == 'segs')
         success += '. **Please run** `!setrole backshot @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('backshots_role')))) * cmd == 'backshot')
+        success += '. **Please run** `!setrole silence @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('silence_role')))) * cmd == 'silence')
         await ctx.send(success)
         save_settings()
     elif cmd in toggleable_commands:
@@ -1284,11 +1311,12 @@ async def disable(ctx):
 
 # Create a cooldown
 cooldown = commands.CooldownMapping.from_cooldown(1, 120, commands.BucketType.member)
+silence_cooldown = commands.CooldownMapping.from_cooldown(1, 120, commands.BucketType.member)
 
 
-def check_cooldown(ctx):
+def check_cooldown(ctx, cd=cooldown):
     # Retrieve the cooldown bucket for the current user
-    bucket = cooldown.get_bucket(ctx.message)
+    bucket = cd.get_bucket(ctx.message)
     if bucket is None:
         return None  # No cooldown bucket found
     return bucket.update_rate_limit()  # Returns the remaining cooldown time
@@ -1469,6 +1497,70 @@ async def backshot(ctx):
         await log_channel.send(f"🫡 {caller.mention} tried to give devious backshots in {ctx.channel.mention} but backshots aren't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
         return
 
+
+# SILENCE
+@client.command()
+async def silence(ctx):
+    """
+    Distributes Silenced Role for 15 seconds with a 30% chance to backfire and silence you for 30s instead
+    !silence @victim, gives victim the Silenced Role
+    Has a 2-minute cooldown
+    """
+    caller = ctx.author
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    make_sure_server_settings_exist(guild_id)
+    if 'silence' in server_settings.get(guild_id).get('allowed_commands') and server_settings.get(guild_id).get('silence_role'):
+        mentions = ctx.message.mentions
+        role = ctx.guild.get_role(server_settings.get(guild_id).get('silence_role'))
+        if not role:
+            await ctx.send(f"*Silenced role does not exist!*\nRun `!setrole silence @role` to use silence")
+            return
+
+        role_name = role.name
+
+        if not mentions:
+            await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
+
+        else:
+            target = mentions[0]
+            if role in target.roles:
+                await ctx.send("They're already silenced bro please (btw ur still getting the 2 minute cooldown ripbozo)")
+                return
+
+            retry_after = check_cooldown(ctx, silence_cooldown)
+            if retry_after:
+                await print_reset_time(retry_after, ctx, "You can't just silence people left and right bruh\n")
+                return
+
+            try:
+                if (random.random() > 0.3 or role in caller.roles) and (target.id != bot_id):
+                    distributed_silence.setdefault(str(ctx.guild.id), []).append(target.id)
+                    save_distributed_silence()
+                    await target.add_roles(role)
+                    await ctx.send(f'{caller.mention} has silenced {target.mention} ' + f'{HUH} ' * (caller.mention == target.mention) + peeposcheme * (caller.mention != target.mention))
+                    await asyncio.sleep(15)
+                    await target.remove_roles(role)
+                    distributed_silence[str(ctx.guild.id)].remove(target.id)
+                    save_distributed_silence()
+
+                else:
+                    distributed_silence.setdefault(str(ctx.guild.id), []).append(caller.id)
+                    save_distributed_silence()
+                    await caller.add_roles(role)
+                    if target.id == bot_id:
+                        await ctx.send(f'You really thought you could silence me lol')
+                    else:
+                        await ctx.send(f'OOPS! Silencing failed {teripoint}')
+                    await asyncio.sleep(30)
+                    await caller.remove_roles(role)
+                    distributed_silence[str(ctx.guild.id)].remove(caller.id)
+                    save_distributed_silence()
+
+            except discord.errors.Forbidden:
+                await ctx.send(f"*Insufficient permissions to execute silencing*\n*Make sure I have a role that is higher than* `@{role_name}` {madgeclap}")
+
+    elif 'silence' in server_settings.get(guild_id).get('allowed_commands'):
+        await ctx.send(f"*Silence role does not exist!*\nRun `!setrole silence @role` to use silence")
 
 # CURRENCY
 active_pvp_requests = dict()
