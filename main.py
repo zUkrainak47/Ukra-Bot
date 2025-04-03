@@ -1534,7 +1534,7 @@ async def silence(ctx):
                 return
 
             try:
-                if (random.random() > 0.3 or role in caller.roles) and (target.id != bot_id):
+                if ((random.random() > 0.3 or role in caller.roles) and (target.id != bot_id)) or target.id == caller.id:
                     distributed_silence.setdefault(str(ctx.guild.id), []).append(target.id)
                     save_distributed_silence()
                     await target.add_roles(role)
@@ -1543,7 +1543,9 @@ async def silence(ctx):
                     await target.remove_roles(role)
                     distributed_silence[str(ctx.guild.id)].remove(target.id)
                     save_distributed_silence()
-
+                elif target.bot:
+                    await ctx.send(f"Sorry, can't silence bots {o7}")
+                    ctx.command.reset_cooldown(ctx)
                 else:
                     distributed_silence.setdefault(str(ctx.guild.id), []).append(caller.id)
                     save_distributed_silence()
@@ -1652,7 +1654,7 @@ async def custom_remove(ctx, name: str):
 @custom_remove.error
 async def custom_remove_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.reply(f"Usage: `!custom_remove <command_name>\nExample: `!custom_remove hello`")
+        await ctx.reply(f"Usage: `!custom_remove <command_name>`\nExample: `!custom_remove hello`")
     elif isinstance(error, commands.MissingPermissions):
         await ctx.reply("You need the 'Manage Server' permission to use this command.")
     elif isinstance(error, commands.BadArgument):
