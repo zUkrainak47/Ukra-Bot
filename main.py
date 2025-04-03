@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timedelta, UTC
 from datetime import time as datetime_time
 import os
+import sys
 import random
 
 import aiohttp
@@ -555,7 +556,7 @@ async def loan_payment(id_: str, payment: int, pay_loaner=True):
         print(traceback.format_exc())
 
 
-def make_sure_server_settings_exist(guild_id, save=True):
+def make_sure_server_settings_exist(guild_id: str, save=True):
     """
     Makes sure the server settings exist, saves them to file by default, returns list of users in server
     """
@@ -1562,6 +1563,199 @@ async def silence(ctx):
     elif 'silence' in server_settings.get(guild_id).get('allowed_commands'):
         await ctx.send(f"*Silence role does not exist!*\nRun `!setrole silence @role` to use silence")
 
+
+@client.command(aliases=['custom_add', 'add_custom'])
+@commands.has_permissions(manage_guild=True)  # Only allow users who can manage the server
+async def custom(ctx, name: str, *, response: str):
+    """
+    Adds or updates a custom command for this server.
+    Usage: !custom_add <command_name> <response_text>
+    Use <user>   if you want the command to take a user mention
+    Use <author> if you want the command to mention the author
+    Example: !custom kiss <author> kissed <user> :heart:
+    """
+    if not ctx.guild:
+        await ctx.reply("Custom commands can only be added in servers.")
+        return
+
+    guild_id = str(ctx.guild.id)
+    command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
+
+    # --- Input Validation ---
+    # if not command_name:
+    #     await ctx.reply("You need to provide a name for the custom command.")
+    #     return
+    # if not response:
+    #     await ctx.reply("You need to provide a response for the custom command.")
+    #     return
+    if len(response) > 1900:  # Leave some buffer for Discord limits
+        await ctx.reply("The response is too long (max ~1900 characters).")
+        return
+
+    # --- Check for Conflicts ---
+    if client.get_command(command_name):
+        await ctx.reply(f"`{command_name}` conflicts with a built-in bot command!")
+        return
+
+    # --- Add/Update the command ---
+    # Ensure the structure exists
+    make_sure_server_settings_exist(guild_id)
+    custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
+
+    action = "Updated" if command_name in custom_commands else "Added"
+    custom_commands[command_name] = response
+    save_settings()  # Save the updated settings
+
+    await ctx.reply(f"{action} custom command `!{command_name}` successfully.")
+
+
+@custom.error
+async def custom_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.reply(f"Usage: `!custom <command_name> <response_text>`\nExample: `!custom kiss <author> kissed <user> :heart:`")
+    elif isinstance(error, commands.MissingPermissions):
+        await ctx.reply("You need the 'Manage Server' permission to use this command.")
+    elif isinstance(error, commands.BadArgument):
+        await ctx.reply(f"Couldn't properly understand the command name or response.")
+    else:
+        print(f"Error in custom: {error}")  # Log other errors
+        await ctx.reply("An unexpected error occurred.")
+
+
+@client.command(aliases=['custom_delete', 'delete_custom', 'remove_custom', 'del_custom', 'custom_del'])
+@commands.has_permissions(manage_guild=True)  # Only allow users who can manage the server
+async def custom_remove(ctx, name: str):
+    """
+    Removes a custom command for this server.
+    Usage: !custom_remove <command_name>
+    """
+    if not ctx.guild:
+        await ctx.reply("Custom commands can only be handled in servers.")
+        return
+
+    guild_id = str(ctx.guild.id)
+    command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
+
+    # Ensure the structure exists
+    make_sure_server_settings_exist(guild_id)
+    custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
+
+    if command_name in custom_commands:
+        del custom_commands[command_name]
+        save_settings()  # Save the updated settings
+
+        await ctx.reply(f"Removed custom command `!{command_name}` successfully.")
+        return
+    await ctx.reply(f"Custom command `!{command_name}` doesn't exist.")
+
+
+@custom_remove.error
+async def custom_remove_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.reply(f"Usage: `!custom_remove <command_name>\nExample: `!custom_remove hello`")
+    elif isinstance(error, commands.MissingPermissions):
+        await ctx.reply("You need the 'Manage Server' permission to use this command.")
+    elif isinstance(error, commands.BadArgument):
+        await ctx.reply(f"Couldn't properly understand the command name or response.")
+    else:
+        print(f"Error in custom: {error}")  # Log other errors
+        await ctx.reply("An unexpected error occurred.")
+
+
+@client.command(aliases=['custom_commands'])
+async def custom_list(ctx):
+    """
+    Lists all custom commands for the server
+    """
+    if not ctx.guild:
+        await ctx.reply("Custom commands can only be handled in servers.")
+        return
+
+    guild_id = str(ctx.guild.id)
+
+    # Ensure the structure exists
+    make_sure_server_settings_exist(guild_id)
+    custom_commands = list(server_settings[guild_id].setdefault('custom_commands', {}).keys())
+    embed_color = 0xffd000
+    pagination_view = PaginationView(custom_commands, title_=f"", author_=f"Custom Commands", color_=embed_color, ctx_=ctx)
+    await pagination_view.send_embed()
+
+
+@client.event
+async def on_command_error(ctx, error):
+    # --- Custom Command Handling ---
+    if isinstance(error, commands.CommandNotFound):
+        if not ctx.guild:  # Custom commands are guild-specific
+            return
+        guild_id = str(ctx.guild.id)
+        potential_command_name = ctx.invoked_with.lower()
+
+        guild_settings = server_settings.get(guild_id, {})
+        custom_commands = guild_settings.get('custom_commands', {})
+        print(custom_commands)
+
+        if potential_command_name in custom_commands:
+            # Get the stored response template
+            response_template = custom_commands[potential_command_name]
+            # --- Argument and Mention Extraction ---
+            command_part = f"{ctx.prefix}{ctx.invoked_with}"
+            argument_string = ctx.message.content[len(command_part):].strip()
+            arguments = argument_string.split()  # Split arguments by space
+            # --- User Placeholder Replacement Logic ---
+            user_mention_to_use = ''
+
+            # Check if there are any arguments AND if the *first* argument is a user mention
+            if '<user>' in response_template:
+                if not arguments:
+                    await ctx.reply("This command requires a user mention")
+                    return
+
+                # Regex to match '<@USER_ID>' or '<@!USER_ID>' (with nickname)
+                # It captures the USER_ID in group 1, and the full mention in group 0
+                mention_pattern = r"^(<@!?(\d{17,20})>)"  # Use ^ to anchor to the start
+
+                match = re.match(mention_pattern, arguments[0])
+
+                if match:
+                    # Found a valid mention as the first argument!
+                    # Use the full matched mention string (e.g., "<@123456789012345678>")
+                    user_mention_to_use = match.group(0)
+
+                    # Optional: You could even try to resolve the user ID to a member
+                    # to ensure they are still in the server, but it adds complexity.
+                    # try:
+                    #     user_id = int(match.group(2))
+                    #     member = ctx.guild.get_member(user_id)
+                    #     if not member:
+                    #         # User mentioned isn't in the server, maybe fall back?
+                    #         user_mention_to_use = ctx.author.mention # Or keep the ID mention
+                    # except (ValueError, TypeError):
+                    #     pass # Should not happen with the regex, but safety first
+                else:
+                    await ctx.reply("This command requires a user mention")
+                    return
+            # Perform the replacement
+            # Use .replace() which is safe even if "<user>" isn't in the template
+            final_response = response_template.replace("<user>", user_mention_to_use).replace("<author>", ctx.author.mention)
+            # --- End User Placeholder Replacement Logic ---
+            try:
+                await ctx.send(final_response)
+                return  # Stop further error handling for CommandNotFound
+            except discord.Forbidden:
+                pass  # Can't send message
+            except Exception as e:
+                print(f"Error sending custom command '{potential_command_name}' with user replace: {e}")
+
+    # --- Your Existing Error Handling ---
+    elif isinstance(error, commands.MissingPermissions):
+        await ctx.reply("You can't use this command due to lack of permissions :3")
+
+    # --- Default/Fallback Error Handling ---
+    else:
+        print(f'Ignoring exception in command {ctx.command}:', file=sys.stderr)
+        traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+
+
 # CURRENCY
 active_pvp_requests = dict()
 active_loan_requests = set()
@@ -1841,7 +2035,7 @@ class PaginationView(discord.ui.View):
         self.author_icon = author_icon_
         self.ctx = ctx_
         self.message = None
-        self.page_size = 5 if (self.footer and self.footer_icon) else 8
+        self.page_size = 5 if (self.footer and self.footer_icon) else 15 if self.author == "Custom Commands" else 8
 
     def total_pages(self) -> int:
         """
@@ -1849,12 +2043,12 @@ class PaginationView(discord.ui.View):
         is a stock entry (i.e. its first element equals 'stock'), then we treat
         that as a separate page and compute the normal pages from all other items.
         """
-        if self.title != 'Titles' and self.data and self.data[-1][0] == 'stock':
+        if self.author != 'Custom Commands' and (self.title != 'Titles' and self.data and self.data[-1][0] == 'stock'):
             # Exclude the stock item from the pagination of normal items.
             normal_items = len(self.data) - 1
             # Calculate how many pages the normal items need.
             return math.ceil(normal_items / self.page_size) + 1
-        return math.ceil(len(self.data) / self.page_size)
+        return max(math.ceil(len(self.data) / self.page_size), 1)
 
     async def send_embed(self):
         # Prepare the embed with the first page's data
@@ -1892,6 +2086,8 @@ class PaginationView(discord.ui.View):
                     item, num = item
                     emoji, name = items[item].emoji, items[item].name
                     desc += f'{emoji} **{name}** ─ {num[0]:,} {coin if num[1] == 'coin' else items[num[1]].emoji}\n'
+                elif self.author == "Custom Commands":
+                    desc += f'!{item}\n'
                 else:
                     item, info = item
                     if isinstance(info, dict):
@@ -1911,11 +2107,14 @@ class PaginationView(discord.ui.View):
                         emoji, name = items[item].emoji, items[item].name
                         desc += f'{emoji} **{name}** ─ {info:,}\n'
             if not data:
-                desc = "You don't own any Items yet!"
+                if self.author == "Custom Commands":
+                    desc = "This server doesn't have any custom commands yet!"
+                else:
+                    desc = "You don't own any Items yet!"
 
-            embed = discord.Embed(title="Items" if (not data or data[-1][0] != 'stock') else 'Stock shares', color=self.color, description=desc+stock)
+            embed = discord.Embed(title="Custom Commands" if self.author == "Custom Commands" else "Items" if (not data or data[-1][0] != 'stock') else 'Stock shares', color=self.color, description=desc+stock)
 
-            if self.author:
+            if self.author and self.author != "Custom Commands":
                 embed.set_author(name=self.author, icon_url=self.author_icon)
             if self.stickied_msg:
                 embed.add_field(name='', value='')
@@ -1951,7 +2150,7 @@ class PaginationView(discord.ui.View):
         until_item = min(self.current_page * self.page_size,  len(self.data))
         # print(self.data[min(until_item, len(self.data))-1][0])
         # print(until_item)
-        if self.title != 'Titles' and self.data[until_item-1][0] == 'stock':
+        if self.author != 'Custom Commands' and (self.title != 'Titles' and self.data[until_item-1][0] == 'stock'):
             if self.current_page != self.total_pages():
                 until_item -= 1
                 # print(until_item)
@@ -1980,7 +2179,8 @@ class PaginationView(discord.ui.View):
                 if item in items:
                     button = discord.ui.Button(emoji=items[item].emoji, style=discord.ButtonStyle.secondary, row=1 + count//4, custom_id=f'item_button_{count}')
                 else:
-                    button = discord.ui.Button(label=item, style=discord.ButtonStyle.secondary, row=1 + count//4, custom_id=f'item_button_{count}')
+                    # button = discord.ui.Button(label=item, style=discord.ButtonStyle.secondary, row=1 + count//4, custom_id=f'item_button_{count}')
+                    continue
                 count += 1
                 # Mark this button as dynamic so we can remove it later.
                 button.is_item_button = True
@@ -5730,10 +5930,10 @@ async def setup():
     await client.add_cog(Currency(client))
 
 
-@client.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.reply(f"You can't use this command due to lack of permissions :3")
+# @client.event
+# async def on_command_error(ctx, error):
+#     if isinstance(error, commands.MissingPermissions):
+#         await ctx.reply(f"You can't use this command due to lack of permissions :3")
 
 
 def log_shutdown():
