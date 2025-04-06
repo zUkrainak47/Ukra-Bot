@@ -3652,20 +3652,31 @@ class Currency(commands.Cog):
         except Exception:
             print(traceback.format_exc())
 
-    @app_commands.command(name="use", description="Use item of choice")
+    @commands.hybrid_command(name="use", description="Use item of choice")
     @app_commands.describe(item="The name of the item", amount="How many you want to use. Only used for some items", target="For items like evil potion", coins="For items like evil potion")
-    async def use(self, interaction, item: str, amount: int = 1, target: discord.Member = None, coins: str = '0'):
+    async def use(self, ctx: commands.Context, item: str, amount: int = 1, target: discord.Member = None, coins: str = '0'):
         """
         Use item of choice
         Accepts amount as a parameter for some items where it makes sense, so you can use those in bulk
         """
+        # Check if the command was invoked via prefix
+        if ctx.interaction is None:
+            await ctx.reply("Please use the slash command `/use` instead.")
+            return # Stop execution for prefix command
+
+        # --- Existing Slash Command Logic (now uses ctx.interaction) ---
+        interaction = ctx.interaction # Get the interaction object from the context
         try:
+            # Use 'interaction' as before for guild, user, etc.
             guild_id = '' if not interaction.guild else str(interaction.guild.id)
             author_id = str(interaction.user.id)
+
+            # Check currency allowance using the interaction object
             if currency_allowed_slash(interaction) and bot_down_check(guild_id):
                 make_sure_user_profile_exists(guild_id, author_id)
                 item_name = find_closest_item(item)
                 if item_name is None:
+                    # Use interaction.response for slash commands
                     await interaction.response.send_message(f"Couldn't find an item from the following description: `{item}`", ephemeral=True)
                     return
                 if items[item_name].real_name not in item_use_functions:
@@ -3676,9 +3687,10 @@ class Currency(commands.Cog):
                     amount = 1
 
                 context = []
+                # Use interaction.user.id and interaction.user.display_name
                 if item_name in ['evil_potion']:
                     if global_profiles[str(interaction.user.id)]['items'].setdefault(item_name, 0) < amount:
-                        await interaction.response.send_message(f"**{interaction.user.display_name}**, you can't use **{amount:,} {items[item_name]}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(interaction.user.id)]['items'][item_name]:,} {items[item_name].emoji}")
+                        await interaction.response.send_message(f"**{interaction.user.display_name}**, you can't use **{amount:,} {items[item_name]}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(interaction.user.id)]['items'][item_name]:,} {items[item_name].emoji}", ephemeral=True)
                         return
                     if not target:
                         await interaction.response.send_message(f'Something went wrong when trying to use {items[item_name]}. Please make sure you pass a target', ephemeral=True)
@@ -3696,15 +3708,37 @@ class Currency(commands.Cog):
                     context = [target, num]
                 elif item_name in ['funny_item']:
                     if amount != 69:
-                        # await interaction.response.send_message(f"You can only use 69 of these at a time", ephemeral=True)
                         amount = 69
-                item = items[item_name]
-                await use_item(interaction.user, item, item_message=interaction, reply_func=interaction.response.send_message, amount=amount, additional_context=context)
-            elif currency_allowed_slash(interaction):
-                await interaction.response.send_message(f'{reason}, currency commands are disabled')
-        except Exception:
-            print(traceback.format_exc())
 
+                item_obj = items[item_name] # Renamed 'item' variable to avoid conflict
+                # Pass interaction.response.send_message as the reply function
+                # Pass interaction as the item_message for followups
+                await use_item(interaction.user, item_obj, item_message=interaction, reply_func=interaction.response.send_message, amount=amount, additional_context=context)
+
+            elif currency_allowed_slash(interaction):
+                 # Use interaction.response for slash commands
+                await interaction.response.send_message(f'{reason}, currency commands are disabled', ephemeral=True)
+
+        except Exception as e: # Catch potential errors during slash command processing
+            print(f"Error during slash command 'use': {e}")
+            print(traceback.format_exc())
+            # Try to send an ephemeral error message if possible
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("An error occurred while trying to use the item.", ephemeral=True)
+                else:
+                    await interaction.followup.send("An error occurred while trying to use the item.", ephemeral=True)
+            except discord.HTTPException:
+                 pass # Ignore if we can't send the error message
+
+    @use.error
+    async def use_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply("You need to provide the item name!\nExample: `/use item=Laundry Machine amount=3`")
+        else:
+            print(f"Unexpected error: {error}")  # Log other errors for debugging
+
+    # Keep the autocomplete as it was, it works with hybrid commands
     @use.autocomplete("item")
     async def use_item_input_autocomplete(self, interaction: discord.Interaction, current: str):
         """
@@ -3715,7 +3749,10 @@ class Currency(commands.Cog):
         choices = [
             app_commands.Choice(name=item_name, value=item_name)
             for item_name, item_real_name in zip(usable_items, item_use_functions.keys())
-            if current.lower() in item_name.lower() and global_profiles[str(interaction.user.id)]['items'][item_real_name]
+            # Ensure profile exists before checking items for autocomplete
+            if str(interaction.user.id) in global_profiles and \
+               current.lower() in item_name.lower() and \
+               global_profiles[str(interaction.user.id)]['items'].get(item_real_name, 0) > 0 # Use .get() for safety
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
