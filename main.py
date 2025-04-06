@@ -53,6 +53,7 @@ user_last_used = {}
 user_last_used_w = {}
 allowed_users = [369809123925295104]
 dev_mode_users = [694664131000795307]
+no_help_commands = ['backup', 'botafk', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse']
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 fetched_users = {}
@@ -2550,7 +2551,7 @@ class HelpView(discord.ui.View):
         else:
             description_lines = []
             for command in commands_on_page:
-                signature = self.help_command.get_command_signature(command)
+                # signature = self.help_command.get_command_signature(command)
                 # Try to get short_doc, fallback to help, then to "No description"
                 desc = command.short_doc or command.help or "No description provided."
                 # Use the first line of the help doc if short_doc is missing but help exists
@@ -2689,7 +2690,7 @@ class MyHelpCommand(commands.HelpCommand):
         filtered_mapping = {}
         categories = []
         for cog, cmds in mapping.items():
-            filtered_cmds = await self.filter_commands(cmds, sort=True)
+            filtered_cmds = [cmd for cmd in await self.filter_commands(cmds, sort=True) if cmd.name not in no_help_commands]
             if filtered_cmds:  # Only add if there are commands left after filtering
                 category_name = cog.qualified_name if cog else "No Category"
                 filtered_mapping[category_name] = filtered_cmds
@@ -2742,10 +2743,10 @@ class MyHelpCommand(commands.HelpCommand):
 
         filtered_commands = await self.filter_commands(cog.get_commands(), sort=True)
         if not filtered_commands:
-             embed.description += "\nNo commands available in this category."
+            embed.description += "\nNo commands available in this category."
         else:
-             for command in filtered_commands:
-                 embed.add_field(name=self.get_command_signature(command),
+            for command in filtered_commands:
+                embed.add_field(name=self.get_command_signature(command),
                                  value=command.short_doc or "No description.",
                                  inline=False)
 
@@ -2756,11 +2757,13 @@ class MyHelpCommand(commands.HelpCommand):
         return f"Command `{string}` not found."
 
     async def subcommand_not_found(self, command, string):
-         if isinstance(command, commands.Group) and len(command.all_commands) > 0:
-             return f"Subcommand `{string}` not found for command `{command.qualified_name}`."
-         return f"Command `{command.qualified_name}` has no subcommand named `{string}`."
+        if isinstance(command, commands.Group) and len(command.all_commands) > 0:
+            return f"Subcommand `{string}` not found for command `{command.qualified_name}`."
+        return f"Command `{command.qualified_name}` has no subcommand named `{string}`."
+
 
 client.help_command = MyHelpCommand()
+
 
 async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, additional_context=[], additional_msg='', interaction=None):
     """Sends a confirmation message with buttons and waits for the user's response."""
@@ -4305,56 +4308,56 @@ class Currency(commands.Cog):
         except Exception:
             print(traceback.format_exc())
 
-    @commands.hybrid_command(name="cd_", description="Displays cooldowns for farming commands")
-    async def cd_(self, ctx):
-        """
-        Displays cooldowns for farming commands
-        """
-        try:
-            guild_id = '' if not ctx.guild else str(ctx.guild.id)
-            if currency_allowed(ctx) and bot_down_check(guild_id):
-                author_id = str(ctx.author.id)
-                tracked_commands = ['dig', 'mine', 'work', 'fish']  # Commands to include in the cooldown list
-                tracked_commands_emojis = {'dig': shovel, 'mine': '⛏️', 'work': '💼', 'fish': '🎣'}
-                cooldowns_status = []
-
-                for command_name in tracked_commands:
-                    command = self.bot.get_command(command_name)
-                    if command and command.cooldown:  # Ensure command exists and has a cooldown
-                        bucket = command._buckets.get_bucket(ctx.message)
-                        retry_after = bucket.get_retry_after()
-                        if retry_after > 0:
-                            cooldowns_status.append(f"{command_name.capitalize().ljust(4)} {tracked_commands_emojis[command_name]} - {get_timestamp(int(retry_after))}")
-                        else:
-                            cooldowns_status.append(f"{command_name.capitalize().ljust(4)} {tracked_commands_emojis[command_name]} -  no cooldown!")
-                cooldowns_status.append('')
-                now = datetime.now()
-
-                last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=2))
-                # user_streak = server_settings.get(guild_id).get('daily_streak').setdefault(author_id, 0)
-                user_streak = daily_streaks.setdefault(author_id, 0)
-                if user_streak == 0:
-                    save_daily()
-                if last_used.date() == now.date():
-                    daily_reset = get_daily_reset_timestamp()
-                    cooldowns_status.append(f"`Daily: ` <t:{daily_reset}:R>, your current streak is **{user_streak}**")
-                else:
-                    cooldowns_status.append(f"`Daily: ` no cooldown! Your current streak is **{user_streak}**")
-
-                last_used_w = user_last_used_w.setdefault(author_id, datetime.today() - timedelta(weeks=1))
-                start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
-                if last_used_w >= start_of_week:
-                    reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
-                    cooldowns_status.append(f"`Weekly:` <t:{reset_timestamp}:R>")
-                else:
-                    cooldowns_status.append(f"`Weekly:` no cooldown!")
-
-                cooldowns_message = "## Cooldowns:\n" + "\n".join(cooldowns_status)
-                await ctx.reply(cooldowns_message)
-            elif currency_allowed(ctx):
-                await ctx.reply(f'{reason}, currency commands are disabled')
-        except Exception:
-            print(traceback.format_exc())
+    # @commands.hybrid_command(name="cd_", description="Displays cooldowns for farming commands")
+    # async def cd_(self, ctx):
+    #     """
+    #     Displays cooldowns for farming commands
+    #     """
+    #     try:
+    #         guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    #         if currency_allowed(ctx) and bot_down_check(guild_id):
+    #             author_id = str(ctx.author.id)
+    #             tracked_commands = ['dig', 'mine', 'work', 'fish']  # Commands to include in the cooldown list
+    #             tracked_commands_emojis = {'dig': shovel, 'mine': '⛏️', 'work': '💼', 'fish': '🎣'}
+    #             cooldowns_status = []
+    #
+    #             for command_name in tracked_commands:
+    #                 command = self.bot.get_command(command_name)
+    #                 if command and command.cooldown:  # Ensure command exists and has a cooldown
+    #                     bucket = command._buckets.get_bucket(ctx.message)
+    #                     retry_after = bucket.get_retry_after()
+    #                     if retry_after > 0:
+    #                         cooldowns_status.append(f"{command_name.capitalize().ljust(4)} {tracked_commands_emojis[command_name]} - {get_timestamp(int(retry_after))}")
+    #                     else:
+    #                         cooldowns_status.append(f"{command_name.capitalize().ljust(4)} {tracked_commands_emojis[command_name]} -  no cooldown!")
+    #             cooldowns_status.append('')
+    #             now = datetime.now()
+    #
+    #             last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=2))
+    #             # user_streak = server_settings.get(guild_id).get('daily_streak').setdefault(author_id, 0)
+    #             user_streak = daily_streaks.setdefault(author_id, 0)
+    #             if user_streak == 0:
+    #                 save_daily()
+    #             if last_used.date() == now.date():
+    #                 daily_reset = get_daily_reset_timestamp()
+    #                 cooldowns_status.append(f"`Daily: ` <t:{daily_reset}:R>, your current streak is **{user_streak}**")
+    #             else:
+    #                 cooldowns_status.append(f"`Daily: ` no cooldown! Your current streak is **{user_streak}**")
+    #
+    #             last_used_w = user_last_used_w.setdefault(author_id, datetime.today() - timedelta(weeks=1))
+    #             start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
+    #             if last_used_w >= start_of_week:
+    #                 reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
+    #                 cooldowns_status.append(f"`Weekly:` <t:{reset_timestamp}:R>")
+    #             else:
+    #                 cooldowns_status.append(f"`Weekly:` no cooldown!")
+    #
+    #             cooldowns_message = "## Cooldowns:\n" + "\n".join(cooldowns_status)
+    #             await ctx.reply(cooldowns_message)
+    #         elif currency_allowed(ctx):
+    #             await ctx.reply(f'{reason}, currency commands are disabled')
+    #     except Exception:
+    #         print(traceback.format_exc())
 
     async def d(self, ctx, standalone=True, farm_msg=None, rare_msg=None, item_msg='', loan_msg='', total_gained=0):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
