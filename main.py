@@ -2537,13 +2537,9 @@ class HelpView(discord.ui.View):
             self.last_page_button.disabled = True
 
     async def create_embed(self):
-        embed_color = self.ctx.author.color if self.ctx.guild else 0xffd000
-        if embed_color == discord.Colour.default():
-             embed_color = 0xffd000
-
         embed = discord.Embed(
             title=f"Help - {self.current_category}",
-            color=embed_color
+            color=0xffd000
         )
         embed.set_footer(text=f"Page {self.current_page} / {self.total_pages()}")
 
@@ -2564,7 +2560,7 @@ class HelpView(discord.ui.View):
                 prefix_to_show = "/" if isinstance(command, app_commands.Command) else self.ctx.prefix
                 if isinstance(command, commands.HybridCommand):
                     # Show both if it's hybrid (you might want to adjust formatting)
-                    signature_display = f"`{self.ctx.prefix}{command.name}` / `{command.name}`"
+                    signature_display = f"`{self.ctx.prefix}{command.name}`"
                 elif isinstance(command, app_commands.Command):
                      signature_display = f"`/{command.name}`" # Assuming slash command
                 else:
@@ -2572,8 +2568,8 @@ class HelpView(discord.ui.View):
 
                 # Use signature from get_command_signature for args formatting
                 # We replace the command name part to use our custom display above
-                args_part = signature.replace(f"{prefix_to_show}{command.qualified_name}", "").strip()
-                description_lines.append(f"**{signature_display} {args_part}**\n{desc}")
+                # args_part = signature.replace(f"{prefix_to_show}{command.qualified_name}", "").strip()
+                description_lines.append(f"**{signature_display}**\n{desc}")
 
             embed.description = "\n\n".join(description_lines)
 
@@ -2608,6 +2604,7 @@ class HelpView(discord.ui.View):
             # except: pass # Handle fallback error
 
         print('end of try-except block')
+
     async def select_callback(self, interaction: discord.Interaction):
         # Acknowledge interaction IMMEDIATELY
         print(f"Select callback triggered for {interaction.data['values'][0]}")
@@ -2632,16 +2629,16 @@ class HelpView(discord.ui.View):
         print("Select callback finished.")
 
     async def first_page_callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         if self.current_page == 1:
-             await interaction.response.defer() # Still need to defer if disabled
-             return
+            return
         self.current_page = 1
         await self.update_view(interaction)
 
     async def prev_page_callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         if self.current_page == 1:
-             await interaction.response.defer()
-             return
+            return
         self.current_page -= 1
         await self.update_view(interaction)
 
@@ -2654,10 +2651,10 @@ class HelpView(discord.ui.View):
         await self.update_view(interaction)
 
     async def last_page_callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         total = self.total_pages()
         if self.current_page == total:
-             await interaction.response.defer()
-             return
+            return
         self.current_page = total
         await self.update_view(interaction)
 
@@ -2679,6 +2676,7 @@ class HelpView(discord.ui.View):
             except discord.HTTPException as e:
                 print(f"Failed to edit help message on timeout: {e}")
         self.stop()
+
 
 class MyHelpCommand(commands.HelpCommand):
     # Make sure destination is the channel where command was invoked
@@ -2734,13 +2732,13 @@ class MyHelpCommand(commands.HelpCommand):
     async def send_command_help(self, command):
         embed = discord.Embed(title=self.get_command_signature(command),
                               description=command.help or "No description provided.",
-                              color=self.context.author.color if self.context.guild else 0xffd000)
+                              color=0xffd000)
         await self.get_destination().send(embed=embed)
 
     async def send_cog_help(self, cog):
         embed = discord.Embed(title=f"{cog.qualified_name} Commands",
                               description=cog.description or "",
-                              color=self.context.author.color if self.context.guild else 0xffd000)
+                              color=0xffd000)
 
         filtered_commands = await self.filter_commands(cog.get_commands(), sort=True)
         if not filtered_commands:
