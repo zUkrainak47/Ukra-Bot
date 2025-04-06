@@ -709,6 +709,9 @@ async def print_reset_time(r, ctx, custom_message=''):
 async def on_ready():
     try:
         client.add_command(rng)
+        client.add_command(custom)
+        client.add_command(custom_remove)
+        client.add_command(custom_list)
         client.add_command(dnd)
         client.add_command(choose)
         client.add_command(compliment)
@@ -1567,11 +1570,12 @@ async def silence(ctx):
         await ctx.send(f"*Silence role does not exist!*\nRun `!setrole silence @role` to use silence")
 
 
-@client.command(aliases=['custom_add', 'add_custom'])
+@commands.hybrid_command(name='custom', description='Adds a custom command to the server',  aliases=['custom_add', 'add_custom'])
+@app_commands.describe(name='Custom command name', response='Custom response (!help custom for details)')
 @commands.has_permissions(manage_guild=True)  # Only allow users who can manage the server
 async def custom(ctx, name: str, *, response: str):
     """
-    Adds or updates a custom command for this server.
+    Adds or updates a custom command for this server
     Usage: !custom_add <command_name> <response_text>
     Use <user>   if you want the command to take a user mention
     Use <author> if you want the command to mention the author
@@ -1625,11 +1629,12 @@ async def custom_error(ctx, error):
         await ctx.reply("An unexpected error occurred.")
 
 
-@client.command(aliases=['custom_delete', 'delete_custom', 'remove_custom', 'del_custom', 'custom_del'])
+@commands.hybrid_command(name='custom_remove', description='Removes a custom command for this server',  aliases=['custom_delete', 'delete_custom', 'remove_custom', 'del_custom', 'custom_del'])
+@app_commands.describe(name='Custom command name')
 @commands.has_permissions(manage_guild=True)  # Only allow users who can manage the server
 async def custom_remove(ctx, name: str):
     """
-    Removes a custom command for this server.
+    Removes a custom command for this server
     Usage: !custom_remove <command_name>
     """
     if not ctx.guild:
@@ -1665,7 +1670,22 @@ async def custom_remove_error(ctx, error):
         await ctx.reply("An unexpected error occurred.")
 
 
-@client.command(aliases=['custom_commands'])
+@custom_remove.autocomplete("name")
+async def custom_remove_autocomplete(ctx, current: str):
+    """
+    Autocomplete callback for the item_input parameter.
+    Returns a list of up to 25 app_commands.Choice objects.
+    """
+    # Filter the available item names based on the current input (case-insensitive)
+    choices = [
+        app_commands.Choice(name=cmd_name, value=cmd_name)
+        for cmd_name in server_settings[str(ctx.guild.id)]['custom_commands'].keys()
+        if current.lower() in cmd_name.lower()
+    ]
+    return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+
+
+@commands.hybrid_command(name='custom_list', description='Lists all custom commands for the server',  aliases=['custom_commands'])
 async def custom_list(ctx):
     """
     Lists all custom commands for the server
@@ -2577,18 +2597,18 @@ class HelpView(discord.ui.View):
         return embed
 
     async def update_view(self, interaction: discord.Interaction):  # Keep interaction for deferring in callbacks
-        print(f"Update view called. Current Category={self.current_category}, Page={self.current_page}")
+        # print(f"Update view called. Current Category={self.current_category}, Page={self.current_page}")
         self.update_buttons()
-        print("Buttons updated.")
+        # print("Buttons updated.")
         embed = await self.create_embed()
-        print(f"Embed created for {self.current_category}, Page {self.current_page}.")
+        # print(f"Embed created for {self.current_category}, Page {self.current_page}.")
 
         # Use the stored self.message object for editing
         if self.message:
             try:
-                print("Trying self.message.edit")
+                # print("Trying self.message.edit")
                 await self.message.edit(embed=embed, view=self)  # Use self.message.edit
-                print("Message edited via self.message.edit.")
+                # print("Message edited via self.message.edit.")
             except discord.NotFound:
                 print("HelpView: self.message not found for editing (maybe deleted?).")
                 self.stop()
@@ -2604,11 +2624,11 @@ class HelpView(discord.ui.View):
             #     await interaction.response.edit_message(embed=embed, view=self)
             # except: pass # Handle fallback error
 
-        print('end of try-except block')
+        # print('end of try-except block')
 
     async def select_callback(self, interaction: discord.Interaction):
         # Acknowledge interaction IMMEDIATELY
-        print(f"Select callback triggered for {interaction.data['values'][0]}")
+        # print(f"Select callback triggered for {interaction.data['values'][0]}")
         await interaction.response.defer()
 
         # Update internal state FIRST
@@ -2625,9 +2645,9 @@ class HelpView(discord.ui.View):
                 option.default = (option.value == self.current_category)
 
         # Now update the message content based on the new state
-        print(f"State updated: Category={self.current_category}, Page={self.current_page}")
+        # print(f"State updated: Category={self.current_category}, Page={self.current_page}")
         await self.update_view(interaction)
-        print("Select callback finished.")
+        # print("Select callback finished.")
 
     async def first_page_callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
