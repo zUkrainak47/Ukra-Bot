@@ -3170,7 +3170,7 @@ async def user_fund(ctx: commands.Context, author: discord.User, amount):
 
             bal = remove_coins_from_user(guild_id, author_id, amount)
             global_profiles[author_id]['num_1'] += amount
-            global_profiles[str(bot_id)]['num_1'] += amount
+            global_profiles[str(bot_id)]['num_2'] += amount
 
             save_profiles()
 
@@ -3200,7 +3200,7 @@ async def user_fund(ctx: commands.Context, author: discord.User, amount):
                             f"Balance: {bal:,} {coin}\n"
                             f"\n"
                             f"**{amount:,} {coin}** added to the pool\n"
-                            f"Pool: {global_profiles[str(bot_id)]['num_1']:,} {coin}"
+                            f"Pool: {global_profiles[str(bot_id)]['num_2']:,} {coin}"
                             f"{additional_msg}")  # Append the unlock messages here
 
     except Exception:
@@ -3908,7 +3908,7 @@ class Currency(commands.Cog):
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.hybrid_command(name="fund", description="Fund the global giveaway pool")
-    @app_commands.describe(coins="How many coins you're adding to the pool")
+    @app_commands.describe(amount="How many coins you're adding to the pool")
     async def fund(self, ctx, *, amount: str):
         """
         Contribute coins to the global giveaway pool.
@@ -3933,6 +3933,19 @@ class Currency(commands.Cog):
                 await ctx.reply(f'{reason}, currency commands are disabled')
         except Exception:
             print(traceback.format_exc())
+
+    @fund.error
+    async def fund_error(self, ctx, error):
+        example = 'Example: `!fund 5k`'
+        if currency_allowed(ctx) and bot_down_check(str(ctx.guild.id)):
+            if isinstance(error, commands.MissingRequiredArgument):
+                await ctx.reply(f"You need to pass a number!\n{example}")
+            elif isinstance(error, commands.BadArgument):
+                await ctx.reply(f"Invalid input!\n{example}")
+            else:
+                print(f"Unexpected error: {error}")  # Log other errors for debugging
+        elif currency_allowed(ctx):
+            await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.cooldown(rate=2, per=10, type=commands.BucketType.user)
     @commands.hybrid_command(name="stock", description="Inspect, buy or sell stocks of choice", alias=['stocks'])
@@ -6266,7 +6279,7 @@ class Currency(commands.Cog):
             if not admin:
                 await ctx.send(f"Btw {ctx.author.display_name}, your balance has been deducted {amount:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}")
             else:
-                global_profiles[str(bot_id)]['num_1'] -= amount
+                global_profiles[str(bot_id)]['num_2'] -= amount
                 save_profiles()
 
                 if not remind:
@@ -6306,7 +6319,7 @@ class Currency(commands.Cog):
 
     @commands.hybrid_command(name="giveaway_pool", description="Checks how many coins there are in the global giveaway pool", aliases=['pool'])
     async def giveaway_pool(self, ctx):
-        await ctx.reply(f"{global_profiles[str(bot_id)]['num_1']:,} {coin} currently in the giveaway pool!\n`!fund` to add more to it :)")
+        await ctx.reply(f"{global_profiles[str(bot_id)]['num_2']:,} {coin} currently in the giveaway pool!\n`!fund` to add more to it :)")
 
     @commands.command()
     async def bless(self, ctx):
