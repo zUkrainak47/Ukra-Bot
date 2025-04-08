@@ -53,7 +53,7 @@ user_last_used = {}
 user_last_used_w = {}
 allowed_users = [369809123925295104]
 dev_mode_users = [694664131000795307]
-no_help_commands = ['backup', 'botafk', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse']
+no_help_commands = {'backup', 'botafk', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse'}
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 fetched_users = {}
@@ -992,7 +992,7 @@ async def dnd(ctx, *, dice: str = ''):
 
             elif contents[1:].lstrip('-').isdecimal():  # !dnd d10  =  !dnd 1d10
                 dice_size = int(contents[1:])
-                if int(dice_size) < 0:
+                if int(dice_size) <= 0:
                     await ctx.reply(f"**{dice_size}** isn't greater than 0 {stare}")
                 elif int(dice_size) > 1000:
                     await ctx.reply(f"Let's keep dice size under 1000 {sunfire2}")
@@ -1629,12 +1629,12 @@ async def custom_error(ctx, error):
         await ctx.reply("An unexpected error occurred.")
 
 
-@commands.hybrid_command(name='custom_remove', description='Removes a custom command for this server',  aliases=['custom_delete', 'delete_custom', 'remove_custom', 'del_custom', 'custom_del'])
+@commands.hybrid_command(name='custom_remove', description='Removes a custom command from this server',  aliases=['custom_delete', 'delete_custom', 'remove_custom', 'del_custom', 'custom_del'])
 @app_commands.describe(name='Custom command name')
 @commands.has_permissions(manage_guild=True)  # Only allow users who can manage the server
 async def custom_remove(ctx, name: str):
     """
-    Removes a custom command for this server
+    Removes a custom command from this server
     Usage: !custom_remove <command_name>
     """
     if not ctx.guild:
@@ -1679,7 +1679,7 @@ async def custom_remove_autocomplete(ctx, current: str):
     # Filter the available item names based on the current input (case-insensitive)
     choices = [
         app_commands.Choice(name=cmd_name, value=cmd_name)
-        for cmd_name in server_settings[str(ctx.guild.id)]['custom_commands'].keys()
+        for cmd_name in sorted(server_settings[str(ctx.guild.id)]['custom_commands'].keys())
         if current.lower() in cmd_name.lower()
     ]
     return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
@@ -1698,7 +1698,7 @@ async def custom_list(ctx):
 
     # Ensure the structure exists
     make_sure_server_settings_exist(guild_id)
-    custom_commands = sorted(list(server_settings[guild_id].setdefault('custom_commands', {}).keys()))
+    custom_commands = sorted(server_settings[guild_id].setdefault('custom_commands', {}).keys())
     embed_color = 0xffd000
     pagination_view = PaginationView(custom_commands, title_=f"", author_=f"Custom Commands", color_=embed_color, ctx_=ctx)
     await pagination_view.send_embed()
@@ -1715,7 +1715,7 @@ async def on_command_error(ctx, error):
 
         guild_settings = server_settings.get(guild_id, {})
         custom_commands = guild_settings.get('custom_commands', {})
-        print(custom_commands)
+        # print(custom_commands)
 
         if potential_command_name in custom_commands:
             # Get the stored response template
@@ -2831,6 +2831,18 @@ async def confirm_stock(message1, author: discord.User, stock: str, amount: int,
     return view.value, message
 
 
+async def confirm_fund(reply_message, author: discord.User, number: int):
+    """Sends a confirmation message with buttons and waits for the user's response"""
+    view = ConfirmView(author, amount=number, type_=f"Funding - {number:,} {coin}")
+    message = await reply_message.reply(
+        f"## {author.display_name}, do you want to add **{number:,}** {coin} to the giveaway pool?\n\n**Balance:** {get_user_balance('', str(author.id)):,} {coin}",
+        view=view
+    )
+    view.message = message
+    await view.wait()
+    return view.value, message
+
+
 async def rigged_potion_func(message, castor, amount, additional_context=[]):
     try:
         guild_id = '' if not message.guild else str(message.guild.id)
@@ -3134,6 +3146,63 @@ async def buy_item(ctx: commands.Context, author: discord.User, item: Item, item
         else:
             # Optionally, handle cancellation here
             pass
+    except Exception:
+        print(traceback.format_exc())
+
+
+async def user_fund(ctx: commands.Context, author: discord.User, amount):
+    """
+    Funds the giveaway pool for a user
+    """
+    try:
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        author_id = str(author.id)
+        if get_user_balance(guild_id, author_id) < amount:
+            await ctx.reply(f"**{author.display_name}**, you don't own {amount:,} {coin} {sadgebusiness}")
+            return
+
+        decision, msg = await confirm_fund(ctx, author, amount)
+        if decision:
+            if get_user_balance(guild_id, author_id) < amount:
+                await ctx.reply(f"**{author.display_name}**, you don't own {amount:,} {coin} {sadgebusiness}")
+                return
+
+
+            bal = remove_coins_from_user(guild_id, author_id, amount)
+            global_profiles[author_id]['num_1'] += amount
+            global_profiles[str(bot_id)]['num_1'] += amount
+
+            save_profiles()
+
+            given_away = global_profiles[author_id]['num_1']
+            user_titles = global_profiles[author_id]['items'].setdefault('titles', [])
+            new_titles = []
+            additional_msg = f'\n\nTotal Funded: {given_away:,} {coin}'  # Start building the additional message
+
+            for ti in should_have_titles(given_away):
+                if ti not in user_titles:
+                    global_profiles[author_id]['items']['titles'].append(ti)
+                    new_titles.append(ti)
+
+            if new_titles:
+                save_profiles()
+                title_announcement = f"\n\n{author.mention}, you've unlocked new Titles: *{', '.join(new_titles)}*.\nRun `!title` to change your Titles!" \
+                    if len(new_titles) > 1 else \
+                    f"\n\n{author.mention}, you've unlocked the *{new_titles[0]}* Title!\nRun `!title` to change it!"
+                additional_msg += title_announcement
+
+                if 'Gave away 250k' in new_titles:  # Check specifically if the 250k title was *just* awarded
+                    additional_msg += f'\n\nYou have also unlocked the `!e` command! Thank you for funding so many giveaways {gladge}'
+
+            # Modify the final reply to include the additional message
+            await msg.reply(f"## Funding successful\n"
+                            f"**{author.display_name}: -{amount:,} {coin}**\n"
+                            f"Balance: {bal:,} {coin}\n"
+                            f"\n"
+                            f"**{amount:,} {coin}** added to the pool\n"
+                            f"Pool: {global_profiles[str(bot_id)]['num_1']:,} {coin}"
+                            f"{additional_msg}")  # Append the unlock messages here
+
     except Exception:
         print(traceback.format_exc())
 
@@ -3837,6 +3906,33 @@ class Currency(commands.Cog):
             if current.lower() in item_name.lower()
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+
+    @commands.hybrid_command(name="fund", description="Fund the global giveaway pool")
+    @app_commands.describe(coins="How many coins you're adding to the pool")
+    async def fund(self, ctx, *, amount: str):
+        """
+        Contribute coins to the global giveaway pool.
+        Funding milestones unlock titles and commands. Minimum 5,000 coins.
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            author_id = str(ctx.author.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                number, _, _ = convert_msg_to_number([amount], guild_id, author_id)
+                if number == -1:
+                    number = 0
+
+                if number < 5000:
+                    await ctx.reply(f"You must fund at least 5,000 {coin}")
+                    return
+
+                make_sure_user_profile_exists(guild_id, author_id)
+
+                await user_fund(ctx, ctx.author, amount=number)
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+        except Exception:
+            print(traceback.format_exc())
 
     @commands.cooldown(rate=2, per=10, type=commands.BucketType.user)
     @commands.hybrid_command(name="stock", description="Inspect, buy or sell stocks of choice", alias=['stocks'])
@@ -4817,8 +4913,8 @@ class Currency(commands.Cog):
                                 f"**{ctx.author.display_name}:** +{total_gained:,} {coin}\nBalance: {get_user_balance('', str(ctx.author.id)):,} {coin}" * found_one
                                 )
             else:
-                await ctx.reply("This command becomes available once you funded 250k worth of official giveaways!\n"
-                                "Contact @zukrainak47 to fund one", ephemeral=True)
+                await ctx.reply("This command becomes available once you fund 250k worth of official giveaways!\n"
+                                "Use `!fund` to add coins to the giveaway pool", ephemeral=True)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
@@ -5185,7 +5281,7 @@ class Currency(commands.Cog):
     async def funders(self, ctx, *, page: int = 1):
         """
         View the top 10 giveaway funders globally (optionally accepts a page)
-        In order to get on this leaderboard contact @zukrainak47 to fund a giveaway
+        In order to get on this leaderboard use !fund
 
         Reaching 250k given away unlocks the !e command
         !help e for more info
@@ -5359,8 +5455,8 @@ class Currency(commands.Cog):
     async def dice(self, ctx, *, number: str = ''):
         """
         Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet
-        There is a 1-second cooldown
-        !1d number
+        !1d 500
+        Has a 1-second cooldown
         """
         try:
             dice_roll = random.choice(range(1, 7))
@@ -5405,8 +5501,8 @@ class Currency(commands.Cog):
     async def twodice(self, ctx, *, number: str = ''):
         """
         Takes a bet, rolls 2d6, if it rolled 12 you win 35x the bet
-        There is a 1-second cooldown
-        !2d number
+        !2d 100
+        Has a 1-second cooldown
         """
         dice_roll_1 = random.choice(range(1, 7))
         dice_roll_2 = random.choice(range(1, 7))
@@ -6019,7 +6115,8 @@ class Currency(commands.Cog):
         winner = await self.bot.fetch_user(random.choice(lottery_participants))
         winnings = len(lottery_participants) * payout
         add_coins_to_user(guild_id, str(winner.id), winnings)
-        highest_net_check(guild_id, str(ctx.author.id), save=False, make_sure=True)
+        scratch_msg = add_item_to_user(guild_id, str(winner.id), 'scratch_off_ticket', amount=len(lottery_participants), save=False, make_sure=True)
+        highest_net_check(guild_id, str(ctx.author.id), save=False, make_sure=False)
         global_profiles[str(winner.id)]['lotteries_won'] += 1
         if 'Lottery Winner' not in global_profiles[str(winner.id)]['items'].setdefault('titles', []):
             global_profiles[str(winner.id)]['items']['titles'].append('Lottery Winner')
@@ -6027,7 +6124,8 @@ class Currency(commands.Cog):
         save_profiles()
         lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
                            f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
-                           f"Participants: {len(lottery_participants)}")
+                           f"Participants: {len(lottery_participants)}"
+                           f"{scratch_msg}")
         await lottery_channel.send(lottery_message)
         perform_backup('lotto finalized')
 
@@ -6068,9 +6166,9 @@ class Currency(commands.Cog):
         Lottery!
         Feeds Ukra Bot an entrance fee, the rest is added to the pool which is paid out to the winner of the lottery
         """
-        entrance_price = 500
-        ukra_bot_fee = 0
-        payout = 500
+        entrance_price = 2500
+        ukra_bot_fee = 500
+        payout = 2000
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             today_date = datetime.now().date().isoformat()
@@ -6164,20 +6262,24 @@ class Currency(commands.Cog):
             active_giveaways[str(message.id)] = [ctx.channel.id, ctx.guild.id, ctx.author.id, amount, int(end_time.timestamp()), remind, admin, t]
             save_active_giveaways()
             await message.add_reaction("🎉")
+
             if not admin:
                 await ctx.send(f"Btw {ctx.author.display_name}, your balance has been deducted {amount:,} {coin}\nBalance: {get_user_balance(guild_id, author_id):,} {coin}")
-
-            if not remind:
-                await ctx.author.send(f'No reminders will be sent for [this giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id})')
-                await asyncio.sleep(duration)
-
             else:
-                await ctx.author.send(f'Thanks for hosting a [giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}) {yay}')
-                # Calculate reminder intervals
-                reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
-                reminder_interval = duration // reminders_to_send - min(5, duration // 10)
-                remind_intervals = [reminder_interval for _ in range(1, reminders_to_send+1)]
-                await asyncio.create_task(schedule_reminders(message, amount, duration, remind_intervals))
+                global_profiles[str(bot_id)]['num_1'] -= amount
+                save_profiles()
+
+                if not remind:
+                    await ctx.author.send(f'No reminders will be sent for [this giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id})')
+                    await asyncio.sleep(duration)
+
+                else:
+                    await ctx.author.send(f'Thanks for hosting a [giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}) {yay}')
+                    # Calculate reminder intervals
+                    reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
+                    reminder_interval = duration // reminders_to_send - min(5, duration // 10)
+                    remind_intervals = [reminder_interval for _ in range(1, reminders_to_send+1)]
+                    await asyncio.create_task(schedule_reminders(message, amount, duration, remind_intervals))
 
             await finalize_giveaway(str(message.id), ctx.channel.id, guild_id, author_id, amount, admin, t)
 
@@ -6201,6 +6303,10 @@ class Currency(commands.Cog):
         !giveaway <amount> <time>
         """
         await self.run_giveaway(ctx, amount, duration, admin=True)
+
+    @commands.hybrid_command(name="giveaway_pool", description="Checks how many coins there are in the global giveaway pool", aliases=['pool'])
+    async def giveaway_pool(self, ctx):
+        await ctx.reply(f"{global_profiles[str(bot_id)]['num_1']:,} {coin} currently in the giveaway pool!\n`!fund` to add more to it :)")
 
     @commands.command()
     async def bless(self, ctx):
@@ -6250,14 +6356,14 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.command(aliases=['fund'])
+    @commands.command()
     async def curse(self, ctx):
         """
         Curse someone by magically removing a number of coins from their balance
         Only usable by bot developoer
         !curse @user <number>
         """
-        cmd = 'Funding' if 'fund' in ctx.message.content.split()[0] else 'Curse'
+        # cmd = 'Funding' if 'fund' in ctx.message.content.split()[0] else 'Curse'
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             if ctx.author.id not in allowed_users:
@@ -6285,31 +6391,31 @@ class Currency(commands.Cog):
                 current_balance = make_sure_user_profile_exists(guild_id, target_id)
                 number = min(current_balance, number)
                 num = remove_coins_from_user(guild_id, target_id, number)  # save file
-                if cmd == 'Funding':
-                    global_profiles[target_id]['num_1'] += number
-                    given_away = global_profiles[target_id]['num_1']
-                    user_titles = global_profiles[target_id]['items'].setdefault('titles', [])
-                    new_titles = []
-                    for ti in should_have_titles(given_away):
-                        if ti not in user_titles:
-                            global_profiles[target_id]['items']['titles'].append(ti)
-                            new_titles.append(ti)
-                    save_profiles()
-                    additional_msg = f'\n\nTotal Funded: {given_away:,} {coin}'
-                    if new_titles:
-                        if len(new_titles) > 1:
-                            additional_msg += f"\n\n{mentions[0].mention}, you've unlocked new Titles: *{', '.join(new_titles)}*.\nRun `!title` to change your Titles!"
-                        else:
-                            additional_msg += f"\n\n{mentions[0].mention}, you've unlocked the *{new_titles[0]}* Title!\nRun `!title` to change it!"
-                    if 'Gave away 250k' in new_titles:
-                        additional_msg += f'\n\nYou have also unlocked the `!e` command! Thank you for funding so many giveaways {gladge}'
-                else:
-                    additional_msg = ''
+                # if cmd == 'Funding':
+                #     global_profiles[target_id]['num_1'] += number
+                #     given_away = global_profiles[target_id]['num_1']
+                #     user_titles = global_profiles[target_id]['items'].setdefault('titles', [])
+                #     new_titles = []
+                #     for ti in should_have_titles(given_away):
+                #         if ti not in user_titles:
+                #             global_profiles[target_id]['items']['titles'].append(ti)
+                #             new_titles.append(ti)
+                #     save_profiles()
+                #     additional_msg = f'\n\nTotal Funded: {given_away:,} {coin}'
+                #     if new_titles:
+                #         if len(new_titles) > 1:
+                #             additional_msg += f"\n\n{mentions[0].mention}, you've unlocked new Titles: *{', '.join(new_titles)}*.\nRun `!title` to change your Titles!"
+                #         else:
+                #             additional_msg += f"\n\n{mentions[0].mention}, you've unlocked the *{new_titles[0]}* Title!\nRun `!title` to change it!"
+                #     if 'Gave away 250k' in new_titles:
+                #         additional_msg += f'\n\nYou have also unlocked the `!e` command! Thank you for funding so many giveaways {gladge}'
+                # else:
+                additional_msg = ''
                 perform_backup(f'{mentions[0].name} was cursed')
-                await ctx.reply(f"## {cmd} successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}{additional_msg}")
+                await ctx.reply(f"## Curse successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}{additional_msg}")
             except Exception:
                 print(traceback.format_exc())
-                await ctx.reply(f"{cmd} failed!")
+                await ctx.reply(f"Curse failed!")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
