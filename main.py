@@ -1903,7 +1903,7 @@ async def calc(ctx: commands.Context, *, expression: str):
         if len(result_str) > max_len:
             result_str = result_str[:max_len] + "...\n(Output truncated)"
 
-        await ctx.reply(f"```\n{expression}\n= {result_str}\n```")
+        await ctx.reply(f"```\n{expression.replace('**', '^')}\n= {result_str}\n```")
 
     except Exception as e:
         # --- Error Handling ---
@@ -1925,18 +1925,19 @@ async def calc(ctx: commands.Context, *, expression: str):
 
 
 @calc.error
-async def calc_error(self, ctx, error):
+async def calc_error(ctx, error):
     """Error handler specifically for the calc command."""
     if isinstance(error, commands.CommandOnCooldown):
-         await ctx.reply(f"This command is on cooldown. Please wait {error.retry_after:.1f} seconds.")
+        # await ctx.reply(f"This command is on cooldown. Please wait {error.retry_after:.1f} seconds.")
+        pass
     elif isinstance(error, commands.MissingRequiredArgument):
-         # This might occur if the user just types "!calc"
-         await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
+        # This might occur if the user just types "!calc"
+        await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
     else:
-         # Log other unexpected errors related to the command framework itself
-         print(f'Ignoring unexpected exception in calc command: {error}')
-         # Optionally inform the user about a generic error
-         # await ctx.reply("An unexpected error occurred while processing the command.")
+        # Log other unexpected errors related to the command framework itself
+        print(f'Ignoring unexpected exception in calc command: {error}')
+        # Optionally inform the user about a generic error
+        # await ctx.reply("An unexpected error occurred while processing the command.")
 
 
 @client.event
