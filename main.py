@@ -9,13 +9,13 @@ from datetime import time as datetime_time
 import os
 import sys
 import random
-
+from asteval import Interpreter
 import aiohttp
 import finnhub
-import numpy as np
+# import numpy as np
 import pytz
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+# import matplotlib.dates as mdates
 import mplfinance as mpf  # For candlestick charts
 import pandas as pd
 from dotenv import load_dotenv
@@ -53,7 +53,7 @@ user_last_used = {}
 user_last_used_w = {}
 allowed_users = [369809123925295104]
 dev_mode_users = [694664131000795307]
-no_help_commands = {'backup', 'botafk', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse'}
+no_help_commands = {'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse'}
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 fetched_users = {}
@@ -712,6 +712,7 @@ async def on_ready():
         client.add_command(custom)
         client.add_command(custom_remove)
         client.add_command(custom_list)
+        client.add_command(custom_inspect)
         client.add_command(dnd)
         client.add_command(choose)
         client.add_command(compliment)
@@ -856,6 +857,79 @@ async def on_ready():
 async def ignore(ctx):
     """Ignored command"""
     return
+
+
+@client.hybrid_command(name="delete_bot_message", aliases=['delbotmsg'])
+# @commands.has_permissions(manage_messages=True) # Alternative: check Discord perms
+async def delete_bot_message(ctx: commands.Context, message_id: str):
+    """Deletes a specific message sent by the bot in the current channel."""
+
+    # --- Optional: Permission Check ---
+    # Only allow specific users (like the bot owner) to use this command
+    if ctx.author.id not in allowed_users:
+        await ctx.reply("You do not have permission to use this command.", ephemeral=True, delete_after=10)
+        # Attempt to delete the command message if possible
+        try:
+            await ctx.message.delete()
+        except (discord.Forbidden, discord.NotFound):
+            pass
+        return
+    # --- End Permission Check ---
+    try:
+        message_id = int(message_id)
+    except ValueError:
+        await ctx.reply(f"`{message_id}` is not a valid message ID. Please provide a number.", ephemeral=True)
+        return
+
+    try:
+        # Fetch the message object using the ID from the current channel
+        message_to_delete = await ctx.channel.fetch_message(message_id)
+
+        # --- Validation ---
+        # 1. Check if the message was actually sent by the bot
+        if message_to_delete.author != client.user: # Or ctx.bot.user
+            await ctx.reply(f"I can only delete my own messages. Message `{message_id}` was sent by {message_to_delete.author.mention}.", ephemeral=True, delete_after=15)
+            return
+        # --- End Validation ---
+
+        # Delete the bot's message
+        await message_to_delete.delete()
+
+        # Send a confirmation message (optional, could be ephemeral or delete after delay)
+        await ctx.send(f"Successfully deleted my message with ID: `{message_id}`", ephemeral=True, delete_after=10) # Deletes confirmation after 10s
+
+        # Optionally delete the user's command message as well
+        try:
+            await ctx.message.delete()
+        except (discord.Forbidden, discord.NotFound):
+            pass # Ignore if we can't delete the user's message
+
+    except discord.NotFound:
+        await ctx.reply(f"Could not find a message with ID `{message_id}` in this channel.", ephemeral=True, delete_after=10)
+    except discord.Forbidden:
+        # This is less likely when deleting own messages, but good to handle
+        await ctx.reply(f"I don't have permission to delete messages in this channel.", ephemeral=True, delete_after=10)
+    except discord.HTTPException as e:
+        await ctx.reply(f"Failed to delete the message due to a network issue: {e}", ephemeral=True, delete_after=10)
+    except Exception as e:
+        print(f"Error in delete_bot_message command: {e}") # Log unexpected errors
+        await ctx.reply("An unexpected error occurred while trying to delete the message.", ephemeral=True, delete_after=10)
+
+
+@delete_bot_message.error
+async def delete_bot_message_error(ctx, error):
+    """Handles errors for the delete_bot_message command."""
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.reply("Please provide the ID of the message you want me to delete.\nUsage: `!delbotmsg <message_id>`", ephemeral=True, delete_after=10)
+    elif isinstance(error, commands.BadArgument):
+        # This catches if the message_id provided wasn't a valid integer
+        await ctx.reply("Invalid Message ID. Please provide a valid integer ID.", ephemeral=True, delete_after=10)
+    # Uncomment the following if using @commands.has_permissions() check instead of allowed_users
+    # elif isinstance(error, commands.CheckFailure):
+    #     await ctx.reply("You don't have the required permissions (Manage Messages) to use this command.", ephemeral=True, delete_after=10)
+    else:
+        print(f"Unhandled error in delete_bot_message: {error}") # Log other errors
+        await ctx.reply("An unexpected error occurred.", ephemeral=True, delete_after=10)
 
 
 @commands.hybrid_command(name="ping", description="Pong")
@@ -1577,12 +1651,26 @@ async def custom(ctx, name: str, *, response: str):
     """
     Adds or updates a custom command for this server
     Usage: !custom_add <command_name> <response_text>
-    Use <user>        to take a user mention
-    Use <user_name>   to take a user mention (and send the mentioned user's nickname)
-    Use <author>      to mention the author
-    Use <author_name> to send the author's nickname
-    Use r(n1, n2)     to choose a random number between n1 and n2
-    Example: !custom kiss <author> kissed <user> :heart:
+
+    Include the following for additional functionality:
+    - `<user>       ` to take a user mention
+    - `<user_name>  ` to take a user mention (and send the mentioned user's nickname)
+    - `<author>     ` to mention the author
+    - `<author_name>` to send the author's nickname
+    - `<num1>       ` to require a number input and replace <num1> with it (multiple numbers can be accepted, check example)
+    - `<num1=5>     ` to give the option to set a specific number, but default to 5 if not passed
+    - `<word1>      ` to require a word input and replace <word1> with it
+    - `<word1=hello>` to give the option to set a specific word, but default to "hello" if not passed
+    - `[option1|...]` to choose randomly from all passed options
+    - `r(n1, n2)    ` to choose a random number between n1 and n2
+    - `{r(2,5) + 5 * <num=2>}`  --  mathematical expressions are supported in {}
+
+    Example:
+    - !custom kiss <author> kissed <user> :heart:
+    - !custom food Today we are getting [burger|pizza|asian]
+    - !custom fireball <user> took {<num1=1>*(r(1,8) + r(1,8) + r(1,8) + r(1,8) + r(1,8))} fire damage
+    - !custom numbers {<num1> + <num2> * <num3>}
+    - !custom random_multiply {[10|53] * [15|25|35] * r(3, 7)}
     """
     if not ctx.guild:
         await ctx.reply("Custom commands can only be added in servers.")
@@ -1623,8 +1711,9 @@ async def custom(ctx, name: str, *, response: str):
 async def custom_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.reply(f"Usage: `!custom <command_name> <response_text>`\nExample: `!custom kiss <author> kissed <user> :heart:`")
-    # elif isinstance(error, commands.MissingPermissions):
-    #     await ctx.reply("You need the 'Manage Server' permission to use this command.")
+    elif isinstance(error, commands.MissingPermissions):
+        # await ctx.reply("You need the 'Manage Server' permission to use this command.")
+        pass
     elif isinstance(error, commands.BadArgument):
         await ctx.reply(f"Couldn't properly understand the command name or response.")
     else:
@@ -1675,11 +1764,6 @@ async def custom_remove_error(ctx, error):
 
 @custom_remove.autocomplete("name")
 async def custom_remove_autocomplete(ctx, current: str):
-    """
-    Autocomplete callback for the item_input parameter.
-    Returns a list of up to 25 app_commands.Choice objects.
-    """
-    # Filter the available item names based on the current input (case-insensitive)
     choices = [
         app_commands.Choice(name=cmd_name, value=cmd_name)
         for cmd_name in sorted(server_settings[str(ctx.guild.id)]['custom_commands'].keys())
@@ -1707,112 +1791,327 @@ async def custom_list(ctx):
     await pagination_view.send_embed()
 
 
+@commands.hybrid_command(name='custom_inspect', description='Inspect a custom command on this server',  aliases=['custom_command'])
+@app_commands.describe(name='Custom command name')
+async def custom_inspect(ctx, name: str):
+    """
+    Inspect a custom command on this server
+    Usage: !custom_inspect <command_name>
+    """
+    if not ctx.guild:
+        await ctx.reply("Custom commands can only be handled in servers.")
+        return
+
+    guild_id = str(ctx.guild.id)
+    command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
+
+    # Ensure the structure exists
+    make_sure_server_settings_exist(guild_id)
+    custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
+
+    if command_name in custom_commands:
+        await ctx.reply(f"## !{command_name}\n`{custom_commands[command_name]}`")
+        return
+
+    await ctx.reply(f"Custom command `!{command_name}` doesn't exist.")
+
+
+@custom_inspect.error
+async def custom_inspect_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.reply(f"Usage: `!custom_inspect <command_name>`")
+    elif isinstance(error, commands.BadArgument):
+        await ctx.reply(f"Couldn't properly understand the command name or response.")
+    else:
+        print(f"Error in custom: {error}")  # Log other errors
+        await ctx.reply("An unexpected error occurred.")
+
+
+@custom_inspect.autocomplete("name")
+async def custom_inspect_autocomplete(ctx, current: str):
+    choices = [
+        app_commands.Choice(name=cmd_name, value=cmd_name)
+        for cmd_name in sorted(server_settings[str(ctx.guild.id)]['custom_commands'].keys())
+        if current.lower() in cmd_name.lower()
+    ]
+    return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+
+
+# Helper data structure for placeholders
+class Placeholder:
+    def __init__(self, full_match, p_type, index, default_value):
+        self.full_match = full_match # e.g., "<num1=5>" or "<word2>"
+        self.type = p_type         # "num" or "word"
+        self.index = index         # 1, 2, 3...
+        self.default_value = default_value # The default value string, or None
+        self.is_required = default_value is None # Required if no default provided
+
+    def __repr__(self):
+        return f"Placeholder(full='{self.full_match}', type='{self.type}', index={self.index}, default='{self.default_value}', required={self.is_required})"
+
+
 @client.event
 async def on_command_error(ctx, error):
     # --- Custom Command Handling ---
     if isinstance(error, commands.CommandNotFound):
-        if not ctx.guild:  # Custom commands are guild-specific
+        if not ctx.guild: # Custom commands are guild-specific
             return
         guild_id = str(ctx.guild.id)
         potential_command_name = ctx.invoked_with.lower()
 
-        guild_settings = server_settings.get(guild_id, {})
-        custom_commands = guild_settings.get('custom_commands', {})
+        # Ensure server_settings and custom_commands structure exists
+        guild_settings = server_settings.setdefault(guild_id, {})
+        custom_commands = guild_settings.setdefault('custom_commands', {})
 
         if potential_command_name in custom_commands:
-            # Get the stored response template
             response_template = custom_commands[potential_command_name]
-            # --- Argument and Mention Extraction ---
             command_part = f"{ctx.prefix}{ctx.invoked_with}"
-            argument_string = ctx.message.content[len(command_part):].strip()
-            arguments = argument_string.split()  # Split arguments by space
-            # --- User Placeholder Replacement Logic ---
+            full_argument_string = ctx.message.content[len(command_part):].strip()
+
+            # --- 1. Extract ALL Placeholders (Determine Max Indices Needed) ---
+            placeholders = []
+            # Regex for <numX> or <numX=default_num>
+            num_pattern = r"(<num(\d+)(?:=(\d+))?>)"
+            # Regex for <wordX> or <wordX=default_word> (default can be anything not '>')
+            word_pattern = r"(<word(\d+)(?:=([^>]+))?>)"
+            max_num_index = 0
+            max_word_index = 0
+
+            for match in re.finditer(num_pattern, response_template):
+                full, index_str, default_str = match.groups()
+                index = int(index_str)
+                placeholders.append(Placeholder(full, "num", index, default_str))
+                max_num_index = max(max_num_index, index) # Track highest num index used
+
+            for match in re.finditer(word_pattern, response_template):
+                full, index_str, default_str = match.groups()
+                index = int(index_str)
+                placeholders.append(Placeholder(full, "word", index, default_str))
+                max_word_index = max(max_word_index, index) # Track highest word index used
+
+            # Keep unique placeholders based on full match string (important for replacement later)
+            unique_placeholders_dict = {p.full_match: p for p in placeholders}
+            unique_placeholders = list(unique_placeholders_dict.values())
+
+
+            # --- 2. Parse User Mention (if needed) ---
             user_mention_to_use = ''
-            user_obj = ctx.author # Default user object is the author
+            user_obj = ctx.author
+            remaining_args_list = full_argument_string.split()
+            user_required = '<user>' in response_template or '<user_name>' in response_template
 
-            if '<user>' in response_template or '<user_name>' in response_template:
-                if not arguments:
-                    await ctx.reply("This command requires a user mention")
-                    return
-
-                mention_pattern = r"^(<@!?(\d{17,20})>)"
-                match = re.match(mention_pattern, arguments[0])
-
-                if match:
-                    user_mention_to_use = match.group(0)
-                    user_id = int(match.group(2))
-
-                    global fetched_users
-                    if user_id in fetched_users:
-                        user_obj = fetched_users.get(user_id)
+            if user_required:
+                if remaining_args_list:
+                    mention_pattern = r"^(<@!?(\d{17,20})>)"
+                    match = re.match(mention_pattern, remaining_args_list[0])
+                    if match:
+                        user_mention_to_use = match.group(0)
+                        user_id = int(match.group(2))
+                        remaining_args_list.pop(0) # Remove mention from list
+                        # Fetch user object (assuming fetched_users is global)
+                        global fetched_users
+                        if user_id in fetched_users:
+                            user_obj = fetched_users.get(user_id)
+                        else:
+                            try:
+                                user_obj = await client.fetch_user(user_id)
+                                fetched_users[user_id] = user_obj
+                            except discord.errors.NotFound:
+                                await ctx.reply(f"`{user_id}` is not a valid user ID")
+                                return
                     else:
-                        try:
-                            user_obj = await client.fetch_user(user_id)
-                            fetched_users[user_id] = user_obj
-                        except discord.errors.NotFound:
-                            await ctx.reply(f"`{user_id}` is not a valid user ID")
-                            return
+                        # User required, but first arg isn't a mention
+                        await ctx.reply("This command requires a user mention as the first argument.")
+                        return
                 else:
-                    await ctx.reply("This command requires a user mention")
+                    # User required, but no args provided
+                    await ctx.reply("This command requires a user mention.")
                     return
 
-            # --- Perform standard replacements first ---
-            intermediate_response = (response_template
-                                     .replace("<user>", user_mention_to_use)
-                                     .replace("<author>", ctx.author.mention)
-                                     .replace('<user_name>', user_obj.display_name)
-                                     .replace('<author_name>', ctx.author.display_name))
 
-            # --- Perform Random Number Replacement ---
-            def replace_random(match):
-                """Replacement function for re.sub to handle r(n1, n2)"""
+            # --- 3. Parse Arguments Based on Required Indices ---
+            parsed_values = {} # Stores final values: { "num_1": val1, "word_1": val2, "num_2": val3 }
+            user_num_args = []
+            user_word_args = []
+
+            # Separate provided arguments into numbers and words
+            for arg in remaining_args_list:
                 try:
-                    # Extract numbers, allowing for potential spaces
-                    n1_str = match.group(1).strip()
-                    n2_str = match.group(2).strip()
-                    n1 = int(n1_str)
-                    n2 = int(n2_str)
-
-                    # Ensure n1 <= n2 for randint
-                    if n1 > n2:
-                        # Option 1: Swap them
-                        # n1, n2 = n2, n1
-                        # Option 2: Return the original string or an error indicator
-                        return match.group(0) # Return original if range is invalid
-
-                    # Generate and return the random number as a string
-                    return f"{random.randint(n1, n2):,}"
+                    # Try converting to int first
+                    val = int(arg)
+                    user_num_args.append(val)
                 except ValueError:
-                    # If conversion to int fails or other issue, return the original match
-                    return match.group(0)
-                except Exception: # Catch any other unexpected errors during generation
-                     return match.group(0)
+                    # If not int, it's a word
+                    user_word_args.append(arg)
 
-            # Regex to find r(number1, number2) - allows spaces around numbers
-            # Uses non-capturing groups (?:...) if you don't need the numbers later,
-            # but capturing is needed for the replacement function.
-            random_pattern = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)" # Captures numbers
+            # Assign parsed user args to the required indices based on order
+            for i in range(1, max_num_index + 1):
+                if i - 1 < len(user_num_args):
+                    parsed_values[f"num_{i}"] = user_num_args[i-1]
+                # Else: Don't assign yet, handle defaults/requirements later
 
-            # Apply the replacement using re.sub with the function
-            final_response = re.sub(random_pattern, replace_random, intermediate_response)
-            # --- End Random Number Replacement ---
+            for i in range(1, max_word_index + 1):
+                if i - 1 < len(user_word_args):
+                    parsed_values[f"word_{i}"] = user_word_args[i-1]
+                # Else: Don't assign yet
 
-            # --- Sending Logic ---
+
+            # --- 4. Validate Requirements & Apply Defaults (Based on Placeholders Used) ---
+            # Check number requirements
+            for i in range(1, max_num_index + 1):
+                key = f"num_{i}"
+                if key not in parsed_values: # Value not provided for this index
+                    is_required_for_index = False
+                    default_for_index = None
+                    found_placeholder_for_index = False
+                    for p in unique_placeholders: # Check all unique placeholders
+                        if p.type == "num" and p.index == i:
+                            found_placeholder_for_index = True
+                            if p.is_required:
+                                is_required_for_index = True
+                                break # If any variant is required, the index is required
+                            elif p.default_value is not None and default_for_index is None:
+                                # Use the first default found for this index
+                                default_for_index = p.default_value
+
+                    if not found_placeholder_for_index: continue # Skip if index isn't actually used
+
+                    if is_required_for_index:
+                        await ctx.reply(f"Missing required number argument for position {i} (e.g., `<num{i}>`)")
+                        return
+                    else:
+                        # Apply default for this index
+                        try:
+                            parsed_values[key] = int(default_for_index) if default_for_index else 1 # Fallback default 1
+                        except (ValueError, TypeError):
+                            parsed_values[key] = 1 # Absolute fallback
+
+            # Check word requirements
+            for i in range(1, max_word_index + 1):
+                 key = f"word_{i}"
+                 if key not in parsed_values: # Value not provided for this index
+                     is_required_for_index = False
+                     default_for_index = None
+                     found_placeholder_for_index = False
+                     for p in unique_placeholders: # Check all unique placeholders
+                         if p.type == "word" and p.index == i:
+                             found_placeholder_for_index = True
+                             if p.is_required:
+                                 is_required_for_index = True
+                                 break
+                             elif p.default_value is not None and default_for_index is None:
+                                 # Use the first default found for this index
+                                 default_for_index = p.default_value
+
+                     if not found_placeholder_for_index: continue # Skip if index isn't actually used
+
+                     if is_required_for_index:
+                         await ctx.reply(f"Missing required word argument for position {i} (e.g., `<word{i}>`)")
+                         return
+                     else:
+                         # Apply default for this index
+                         parsed_values[key] = default_for_index if default_for_index is not None else "" # Default is string or empty
+
+
+            # --- 5. Perform Replacements ---
+            current_response = response_template
+
+            # Standard user/author placeholders
+            current_response = current_response.replace("<user>", user_mention_to_use)
+            current_response = current_response.replace("<author>", ctx.author.mention)
+            current_response = current_response.replace('<user_name>', user_obj.display_name)
+            current_response = current_response.replace('<author_name>', ctx.author.display_name)
+
+            # Replace ALL unique num/word placeholders found earlier
+            for p in unique_placeholders_dict.values():
+                key = f"{p.type}_{p.index}"
+                if key in parsed_values: # Value should exist after validation/defaults
+                     current_response = current_response.replace(p.full_match, str(parsed_values[key]))
+                # else: This case should ideally not happen if validation is correct
+
+            # Random Choice [...] replacement
+            def replace_choice(match):
+                options_str = match.group(1)
+                options = [opt.strip() for opt in options_str.split('|')]
+                return random.choice(options) if options else match.group(0)
+            choice_pattern = r"\[([^\]]+)\]" # Non-greedy capture inside [...]
+            current_response = re.sub(choice_pattern, replace_choice, current_response)
+
+
+            # --- 6. Perform Math Evaluation {...} ---
+            aeval = Interpreter()
+            # Add ALL required __NUMX__ variables to asteval symbol table based on max index
+            for i in range(1, max_num_index + 1):
+                 key = f"num_{i}"
+                 if key in parsed_values: # Should always be true after validation/defaults
+                      aeval.symtable[f"__NUM{i}__"] = parsed_values[key]
+                 # else: Could add a fallback like aeval.symtable[f"__NUM{i}__"] = 1 if needed
+
+            # Function to handle r(n1, n2) replacements
+            def replace_random_math(match):
+                 try:
+                     n1 = int(match.group(1).strip())
+                     n2 = int(match.group(2).strip())
+                     if n1 > n2: return match.group(0)
+                     random_num = random.randint(n1, n2)
+                     return f"{random_num:,}" # <-- Apply formatting here
+                 except (ValueError, TypeError):
+                     return match.group(0) # Return original if parse fails
+
+            random_pattern = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)" # Pattern for r(n1, n2)
+
+            # Function to handle math expression evaluation
+            def replace_math_expression(match):
+                expression = match.group(1).strip()
+                processed_expression = expression
+                try:
+                    # Replace r(...) within the math expression first (uses formatted version now)
+                    processed_expression = re.sub(random_pattern, replace_random_math, processed_expression)
+
+                    # Replace placeholders (<numX>, <numX=...>) within expression
+                    for p in unique_placeholders_dict.values():
+                        if p.type == "num":
+                             processed_expression = processed_expression.replace(p.full_match, f"__NUM{p.index}__")
+
+                    # Evaluate the processed expression
+                    result = aeval(processed_expression)
+
+                    # Format result (int if possible, then apply comma formatting)
+                    if isinstance(result, (int, float)):
+                        if isinstance(result, float) and result.is_integer():
+                            result = int(result)
+                        return f"{result:,}" # <-- Apply formatting here
+                    else:
+                        # If result is not a number, return as string
+                        return str(result)
+                except Exception as e:
+                    print(f"Error evaluating math expression '{expression}' -> '{processed_expression}': {e}")
+                    return f"[Eval Error]"
+
+            math_pattern = r"\{([^{}]+)\}" # Non-greedy capture inside {...}
+
+            # Apply replacements: Global r() first, then math {}
+            current_response = re.sub(random_pattern, replace_random_math, current_response)
+            final_response = re.sub(math_pattern, replace_math_expression, current_response)
+
+
+            # --- 7. Sending Logic ---
             try:
                 # Check if the final response is empty after replacements
                 if not final_response.strip():
                      print(f"Custom command '{potential_command_name}' resulted in empty response after replacements.")
                      # Optionally send a default message or do nothing
-                     # await ctx.send("Command executed (empty result).")
                      return
 
                 await ctx.send(final_response)
-                return  # Stop further error handling for CommandNotFound
+                return # Stop further error handling for CommandNotFound
             except discord.Forbidden:
-                pass  # Can't send message
+                # Bot lacks permission to send message in this channel
+                pass
             except Exception as e:
                 print(f"Error sending custom command '{potential_command_name}': {e}")
-                traceback.print_exc() # Print detailed traceback
+                traceback.print_exc() # Print detailed traceback for debugging
+
 
     # --- Your Existing Error Handling ---
     elif isinstance(error, commands.MissingPermissions):
