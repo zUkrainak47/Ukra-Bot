@@ -1581,6 +1581,7 @@ async def custom(ctx, name: str, *, response: str):
     Use <user_name>   to take a user mention (and send the mentioned user's nickname)
     Use <author>      to mention the author
     Use <author_name> to send the author's nickname
+    Use r(n1, n2)     to choose a random number between n1 and n2
     Example: !custom kiss <author> kissed <user> :heart:
     """
     if not ctx.guild:
@@ -1717,7 +1718,6 @@ async def on_command_error(ctx, error):
 
         guild_settings = server_settings.get(guild_id, {})
         custom_commands = guild_settings.get('custom_commands', {})
-        # print(custom_commands)
 
         if potential_command_name in custom_commands:
             # Get the stored response template
@@ -1728,22 +1728,17 @@ async def on_command_error(ctx, error):
             arguments = argument_string.split()  # Split arguments by space
             # --- User Placeholder Replacement Logic ---
             user_mention_to_use = ''
-            user_obj = ctx.author
-            # Check if there are any arguments AND if the *first* argument is a user mention
+            user_obj = ctx.author # Default user object is the author
+
             if '<user>' in response_template or '<user_name>' in response_template:
                 if not arguments:
                     await ctx.reply("This command requires a user mention")
                     return
 
-                # Regex to match '<@USER_ID>' or '<@!USER_ID>' (with nickname)
-                # It captures the USER_ID in group 1, and the full mention in group 0
-                mention_pattern = r"^(<@!?(\d{17,20})>)"  # Use ^ to anchor to the start
-
+                mention_pattern = r"^(<@!?(\d{17,20})>)"
                 match = re.match(mention_pattern, arguments[0])
 
                 if match:
-                    # Found a valid mention as the first argument!
-                    # Use the full matched mention string (e.g., "<@123456789012345678>")
                     user_mention_to_use = match.group(0)
                     user_id = int(match.group(2))
 
@@ -1757,36 +1752,67 @@ async def on_command_error(ctx, error):
                         except discord.errors.NotFound:
                             await ctx.reply(f"`{user_id}` is not a valid user ID")
                             return
-
-                    # Optional: You could even try to resolve the user ID to a member
-                    # to ensure they are still in the server, but it adds complexity.
-                    # try:
-                    #     user_id = int(match.group(2))
-                    #     member = ctx.guild.get_member(user_id)
-                    #     if not member:
-                    #         # User mentioned isn't in the server, maybe fall back?
-                    #         user_mention_to_use = ctx.author.mention # Or keep the ID mention
-                    # except (ValueError, TypeError):
-                    #     pass # Should not happen with the regex, but safety first
                 else:
                     await ctx.reply("This command requires a user mention")
                     return
 
-            # Perform the replacement
-            # Use .replace() which is safe even if "<user>" isn't in the template
-            final_response = (response_template
-                              .replace("<user>", user_mention_to_use)
-                              .replace("<author>", ctx.author.mention)
-                              .replace('<user_name>', user_obj.display_name)
-                              .replace('<author_name>', ctx.author.display_name))
-            # --- End User Placeholder Replacement Logic ---
+            # --- Perform standard replacements first ---
+            intermediate_response = (response_template
+                                     .replace("<user>", user_mention_to_use)
+                                     .replace("<author>", ctx.author.mention)
+                                     .replace('<user_name>', user_obj.display_name)
+                                     .replace('<author_name>', ctx.author.display_name))
+
+            # --- Perform Random Number Replacement ---
+            def replace_random(match):
+                """Replacement function for re.sub to handle r(n1, n2)"""
+                try:
+                    # Extract numbers, allowing for potential spaces
+                    n1_str = match.group(1).strip()
+                    n2_str = match.group(2).strip()
+                    n1 = int(n1_str)
+                    n2 = int(n2_str)
+
+                    # Ensure n1 <= n2 for randint
+                    if n1 > n2:
+                        # Option 1: Swap them
+                        # n1, n2 = n2, n1
+                        # Option 2: Return the original string or an error indicator
+                        return match.group(0) # Return original if range is invalid
+
+                    # Generate and return the random number as a string
+                    return f"{random.randint(n1, n2):,}"
+                except ValueError:
+                    # If conversion to int fails or other issue, return the original match
+                    return match.group(0)
+                except Exception: # Catch any other unexpected errors during generation
+                     return match.group(0)
+
+            # Regex to find r(number1, number2) - allows spaces around numbers
+            # Uses non-capturing groups (?:...) if you don't need the numbers later,
+            # but capturing is needed for the replacement function.
+            random_pattern = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)" # Captures numbers
+
+            # Apply the replacement using re.sub with the function
+            final_response = re.sub(random_pattern, replace_random, intermediate_response)
+            # --- End Random Number Replacement ---
+
+            # --- Sending Logic ---
             try:
+                # Check if the final response is empty after replacements
+                if not final_response.strip():
+                     print(f"Custom command '{potential_command_name}' resulted in empty response after replacements.")
+                     # Optionally send a default message or do nothing
+                     # await ctx.send("Command executed (empty result).")
+                     return
+
                 await ctx.send(final_response)
                 return  # Stop further error handling for CommandNotFound
             except discord.Forbidden:
                 pass  # Can't send message
             except Exception as e:
-                print(f"Error sending custom command '{potential_command_name}' with user replace: {e}")
+                print(f"Error sending custom command '{potential_command_name}': {e}")
+                traceback.print_exc() # Print detailed traceback
 
     # --- Your Existing Error Handling ---
     elif isinstance(error, commands.MissingPermissions):
@@ -1794,8 +1820,10 @@ async def on_command_error(ctx, error):
 
     # --- Default/Fallback Error Handling ---
     else:
-        print(f'Ignoring exception in command {ctx.command}:', file=sys.stderr)
-        traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+        # Avoid printing CommandNotFound errors handled above
+        if not isinstance(error, commands.CommandNotFound):
+            print(f'Ignoring exception in command {ctx.command}:', file=sys.stderr)
+            traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
 
 # CURRENCY
