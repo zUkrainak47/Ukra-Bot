@@ -713,6 +713,7 @@ async def on_ready():
         client.add_command(custom_remove)
         client.add_command(custom_list)
         client.add_command(custom_inspect)
+        client.add_command(calc)
         client.add_command(dnd)
         client.add_command(choose)
         client.add_command(compliment)
@@ -1848,6 +1849,94 @@ class Placeholder:
 
     def __repr__(self):
         return f"Placeholder(full='{self.full_match}', type='{self.type}', index={self.index}, default='{self.default_value}', required={self.is_required})"
+
+
+@commands.hybrid_command(name="calc", description="Simple calculator")
+@commands.cooldown(1, 5, commands.BucketType.user) # Add a reasonable cooldown (1 use per 5s per user)
+async def calc(ctx: commands.Context, *, expression: str):
+    """
+    Calculates the result of a mathematical expression.
+    Supports standard operators, functions (sqrt, sin, etc.), and variables like pi, e.
+    Evaluation times out after 3 seconds.
+
+    Example: !calc (5 + sqrt(9)) * pi / 2
+
+    Has a 5-second cooldown
+    """
+    if not expression:
+        await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
+        return
+
+    # Create interpreter with a 3-second timeout
+    # use_numpy=False is generally recommended for safety unless you specifically need numpy functions
+    aeval = Interpreter(max_time=3.0, use_numpy=False)
+
+    # You can optionally pre-populate the symbol table with safe functions/constants
+    # aeval.symtable.update(math.__dict__) # Adds everything from math module
+    # Or be more selective:
+    # aeval.symtable['sqrt'] = math.sqrt
+    # aeval.symtable['pi'] = math.pi
+    # aeval.symtable['e'] = math.e
+    # etc. (asteval includes many by default)
+
+    try:
+        # --- Evaluation ---
+        # Run the evaluation. asteval handles the timeout internally.
+        expression = expression.replace('^', '**')
+        result = aeval(expression)
+
+        # --- Formatting Output ---
+        result_str = ""
+        if isinstance(result, (int, float)):
+            # Format integers and floats that are whole numbers
+            if isinstance(result, float) and result.is_integer():
+                result_str = f"{int(result):,}"
+            else:
+                # Consider limiting decimal places for floats if needed, e.g., f"{result:,.4f}"
+                result_str = f"{result:,}" # Apply comma formatting
+        else:
+            # Handle non-numeric results (like strings or lists if asteval produces them)
+            result_str = str(result)
+
+        # --- Limit Output Length ---
+        max_len = 1800 # Keep it well below Discord's 2000 char limit
+        if len(result_str) > max_len:
+            result_str = result_str[:max_len] + "...\n(Output truncated)"
+
+        await ctx.reply(f"```\n{expression}\n= {result_str}\n```")
+
+    except Exception as e:
+        # --- Error Handling ---
+        error_str = str(e).lower()
+        # Check if the error message indicates a timeout from asteval
+        # asteval often raises RuntimeError for time limits.
+        if isinstance(e, RuntimeError) and ("time limit" in error_str or "exceeded" in error_str or "timed out" in error_str):
+             await ctx.reply("Evaluation timed out (> 3 seconds).")
+        else:
+            # Handle other evaluation errors (syntax, unknown variables, etc.)
+            # Keep error message concise for the user
+            error_snippet = str(e).split('\n')[0] # Get first line of error
+            if len(error_snippet) > 300: error_snippet = error_snippet[:300] + "..."
+            await ctx.reply(f"Error evaluating expression: ```\n{error_snippet}\n```")
+
+        # Log the full error for debugging purposes
+        print(f"Error in !calc: Expression='{expression}', Error='{e}'")
+        # traceback.print_exc() # Uncomment to print full traceback to console if needed
+
+
+@calc.error
+async def calc_error(self, ctx, error):
+    """Error handler specifically for the calc command."""
+    if isinstance(error, commands.CommandOnCooldown):
+         await ctx.reply(f"This command is on cooldown. Please wait {error.retry_after:.1f} seconds.")
+    elif isinstance(error, commands.MissingRequiredArgument):
+         # This might occur if the user just types "!calc"
+         await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
+    else:
+         # Log other unexpected errors related to the command framework itself
+         print(f'Ignoring unexpected exception in calc command: {error}')
+         # Optionally inform the user about a generic error
+         # await ctx.reply("An unexpected error occurred while processing the command.")
 
 
 @client.event
