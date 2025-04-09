@@ -1577,8 +1577,10 @@ async def custom(ctx, name: str, *, response: str):
     """
     Adds or updates a custom command for this server
     Usage: !custom_add <command_name> <response_text>
-    Use <user>   if you want the command to take a user mention
-    Use <author> if you want the command to mention the author
+    Use <user>        to take a user mention
+    Use <user_name>   to take a user mention (and send the mentioned user's nickname)
+    Use <author>      to mention the author
+    Use <author_name> to send the author's nickname
     Example: !custom kiss <author> kissed <user> :heart:
     """
     if not ctx.guild:
@@ -1726,9 +1728,9 @@ async def on_command_error(ctx, error):
             arguments = argument_string.split()  # Split arguments by space
             # --- User Placeholder Replacement Logic ---
             user_mention_to_use = ''
-
+            user_obj = ctx.author
             # Check if there are any arguments AND if the *first* argument is a user mention
-            if '<user>' in response_template:
+            if '<user>' in response_template or '<user_name>' in response_template:
                 if not arguments:
                     await ctx.reply("This command requires a user mention")
                     return
@@ -1743,6 +1745,18 @@ async def on_command_error(ctx, error):
                     # Found a valid mention as the first argument!
                     # Use the full matched mention string (e.g., "<@123456789012345678>")
                     user_mention_to_use = match.group(0)
+                    user_id = int(match.group(2))
+
+                    global fetched_users
+                    if user_id in fetched_users:
+                        user_obj = fetched_users.get(user_id)
+                    else:
+                        try:
+                            user_obj = await client.fetch_user(user_id)
+                            fetched_users[user_id] = user_obj
+                        except discord.errors.NotFound:
+                            await ctx.reply(f"`{user_id}` is not a valid user ID")
+                            return
 
                     # Optional: You could even try to resolve the user ID to a member
                     # to ensure they are still in the server, but it adds complexity.
@@ -1757,9 +1771,14 @@ async def on_command_error(ctx, error):
                 else:
                     await ctx.reply("This command requires a user mention")
                     return
+
             # Perform the replacement
             # Use .replace() which is safe even if "<user>" isn't in the template
-            final_response = response_template.replace("<user>", user_mention_to_use).replace("<author>", ctx.author.mention)
+            final_response = (response_template
+                              .replace("<user>", user_mention_to_use)
+                              .replace("<author>", ctx.author.mention)
+                              .replace('<user_name>', user_obj.display_name)
+                              .replace('<author_name>', ctx.author.display_name))
             # --- End User Placeholder Replacement Logic ---
             try:
                 await ctx.send(final_response)
@@ -1926,7 +1945,7 @@ def profile_update_after_any_gamble(guild_: str, user_: str, delta: int, save=Tr
     #     user_bal = get_user_balance(guild_, user_)
     # if user_bal > global_profiles[user_]['highest_balance']:
     #     global_profiles[user_]['highest_balance'] = user_bal
-    highest_net_check(guild_, user_, save, save=False, make_sure=False)
+    highest_net_check(guild_, user_, save=False, make_sure=False)
     if save:
         save_profiles()
 
@@ -3581,7 +3600,7 @@ class Currency(commands.Cog):
         else:
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
-    @commands.hybrid_command(name="info", description="Check your or someone else's info")
+    @commands.hybrid_command(name="info", description="Check your or someone else's info", aliases=['i'])
     @app_commands.describe(user="Whose info you want to view")
     async def info(self, ctx, *, user: discord.User = None):
         """
@@ -5207,7 +5226,7 @@ class Currency(commands.Cog):
         await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
-    @commands.hybrid_command(name="glb", description="View the global leaderboard of the 10 richest users of the bot", aliases=['global_leaderboard'])
+    @commands.hybrid_command(name="glb", description="View the global leaderboard of the 10 richest users of the bot", aliases=['global_leaderboard', 'glib'])
     @app_commands.describe(page="Leaderboard page")
     async def global_leaderboard(self, ctx, *, page: int = 1):
         """
@@ -6311,7 +6330,7 @@ class Currency(commands.Cog):
     @app_commands.describe(amount="How much you're giving away", duration="How long the giveaway will last - in 1h30m45s format")
     async def admin_giveaway(self, ctx, amount: str, duration: str):
         """
-        Starts a giveaway using coins out of thin air
+        Starts a giveaway using coins from the giveaway pool (!pool)
         Only usable by bot developer
         !giveaway <amount> <time>
         """
@@ -6319,6 +6338,10 @@ class Currency(commands.Cog):
 
     @commands.hybrid_command(name="giveaway_pool", description="Checks how many coins there are in the global giveaway pool", aliases=['pool'])
     async def giveaway_pool(self, ctx):
+        """
+        Shows how many coins there are for official giveaways to use.
+        Use !fund to add more coins to it
+        """
         await ctx.reply(f"{global_profiles[str(bot_id)]['num_2']:,} {coin} currently in the giveaway pool!\n`!fund` to add more to it :)")
 
     @commands.command()
