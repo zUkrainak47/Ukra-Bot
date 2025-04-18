@@ -71,6 +71,7 @@ client = commands.Bot(command_prefix="!", intents=intents, case_insensitive=True
 # EMOJIS
 rigged_potion = '<:rigged_potion:1336395108244787232>'
 evil_potion = '<:evil_potion:1336641208885186601>'
+math_potion = '<:math_potion:1362908683884957706>'
 funny_item = '<:funny_item:1336705286953635902>'
 twisted_orb = '<:twisted_orb:1337165700309061715>'
 laundry_machine = '<:laundry_machine:1337205545471315992>'
@@ -468,7 +469,8 @@ class UseItemView(discord.ui.View):
 items = {
     'the_catch': Item('the_catch', "The Catch", f"Rarest item in the bot\nUsing it grants you 25,000,000 {coin}\n\nObtainable in 1 of 5000 Treasure Chests {treasure_chest}", The_Catch, "https://cdn.discordapp.com/attachments/696842659989291130/1337170886373146634/The_Catch.png?ex=67a678ee&is=67a5276e&hm=3ae6739e718213ac63952faeefdcc64cc878d953da52ccb318628fb11371db2d&"),
     'rigged_potion': Item('rigged_potion', "Rigged Potion", f"Upon use, this potion doubles your balance.\nBe cautious when you use it!\n\nHas a 5% chance to drop from a Treasure Chest {treasure_chest}\nAlso distributed by the bot developer as an exclusive reward", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
-    'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion requires you to pick another user and choose a number of coins.\nBoth you and the chosen user will lose this number of coins\n\nDrops alongside Fool's Gold ✨", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
+    'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion requires you to pick another user and choose a number of coins. (Put coins in the 'parameter' field)\nBoth you and the chosen user will lose this number of coins\n\nDrops alongside Fool's Gold ✨", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
+    'math_potion': Item('math_potion', 'Math Potion', f"Using this potion requires you to choose a number between 1 and 99. This number is the success rate of this potion!\n(Put this number in the 'parameter' field)\n\nLet's call this number 'X' for simplicity\nIf the potion usage succeeds, you get 100-X percent of your balance. If the potion fails, your balance turns into X percent of itself!\n\nFor example, if you set X = 80% and you have 10,000 {coin} in your balance, there's an 80% chance to get +2,000 {coin} and a 20% chance to get -8,000 {coin}\n\nPurchasable for 4 {daily_item}", math_potion, 'https://cdn.discordapp.com/attachments/696842659989291130/1362905341829845042/math_potion.png?ex=68041803&is=6802c683&hm=0680d259dc5daea58985a779d0fa6172079208a301b0e825be18934a1be2f23d&', [4, 'daily_item']),
     'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing 69 Funny Items grants you 1,000,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
     'streak_freeze': Item('streak_freeze', "Streak Freeze", f"Freezes your streak!\nComsumed automatically when you forgot to run !daily yesterday\nProtects from a maximum of 1 missed day\n\nPurchasable for 1 {daily_item}", streak_freeze, "https://cdn.discordapp.com/attachments/696842659989291130/1339193669802131456/streak_freeze.png?ex=67add4cb&is=67ac834b&hm=73f5ec0e426647940adfa34d3174074e976b04ec78093a95ce7fc855a9dbb207&", [1, 'daily_item']),
     'scratch_off_ticket': Item('scratch_off_ticket', "Scratch-off Ticket", f"Using this ticket has a\n- 0.1% chance to grant 300,000 {coin}\n- 10% chance to grant 1,000 {coin}\n- 89.9% chance to grant 100 {coin}\n\nPurchasable for 500 {coin}", scratch_off_ticket, "https://cdn.discordapp.com/attachments/696842659989291130/1340678358652026910/scratch_off_ticket.png?ex=67b33b85&is=67b1ea05&hm=d117ecfc6890d182c31774a09091225bc55336e24ed4f71792648a723644482d&", [500, 'coin']),
@@ -1867,6 +1869,10 @@ async def calc(ctx: commands.Context, *, expression: str):
         await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
         return
 
+    if expression in ('9 + 10', '9+10'):
+        await ctx.reply("```9 + 10\n= 21```")
+        return
+
     # Create interpreter with a 3-second timeout
     # use_numpy=False is generally recommended for safety unless you specifically need numpy functions
     aeval = Interpreter(max_time=3.0, use_numpy=False)
@@ -3228,8 +3234,12 @@ async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, a
     # else:
     #     bal = ''
     if additional_context:
-        target, num = additional_context
-        additional_msg = f'\nThis will set back both {author.display_name} and {target.display_name} back {num:,} {coin}'
+        if additional_context[0] != 'math':
+            target, num = additional_context
+            additional_msg = f'\nThis will set back both {author.display_name} and {target.display_name} back {num:,} {coin}'
+        else:
+            _, num = additional_context
+            additional_msg = f'\nYou have a **{num}%** chance to multiply your balance by **1.{100-num}** and a **{100-num}%** chance to multiply it by **0.{100-num}**'
     view = ConfirmView(author, item=item, amount=amount, type_=f"{item.name} usage")  # Create the view and pass the allowed author
     view.interaction = interaction
     message = await reply_func(
@@ -3323,6 +3333,39 @@ async def evil_potion_func(message, castor, amount, additional_context=[]):
         )
         await target.send(f"**{castor.name}** used an **{items['evil_potion']}** on you https://discord.com/channels/{to_link.guild.id}/{to_link.channel.id}/{to_link.id}\n"
                           f"**{target.name}**: -{num:,} {coin}, balance: {bal2:,} {coin}")
+        save_profiles()
+    except Exception:
+        print(traceback.format_exc())
+
+
+async def math_potion_func(message, castor, amount, additional_context=[]):
+    try:
+        guild_id = '' if not message.guild else str(message.guild.id)
+        win_chance = random.random()
+        castor_id = str(castor.id)
+        if additional_context:
+            _, num = additional_context
+        else:
+            print(3349)
+            await message.reply(f"`/use math number` to use this item")
+            return
+        win = win_chance >= 1-num/100
+        global_profiles[castor_id]['items']['math_potion'] -= 1
+        original_balance = get_user_balance('', castor_id)
+        if win:
+            bal = add_coins_to_user(guild_id, castor_id, int(original_balance * (1-num/100)))
+            await message.reply(
+                f"# {items['math_potion']} used successfully\n"
+                f"## You win - `{win_chance}` {yay}\n"
+                f"**{castor.display_name}**: +{int(original_balance * (1-num/100)):,} {coin}, balance: {bal:,} {coin}"
+            )
+        else:
+            bal = remove_coins_from_user(guild_id, castor_id, int(original_balance * (num/100)))
+            await message.reply(
+                f"# {items['math_potion']} used successfully\n"
+                f"## You lose - `{win_chance}` {o7}\n"
+                f"**{castor.display_name}**: -{int(original_balance * (num/100)):,} {coin}, balance: {bal:,} {coin}"
+            )
         save_profiles()
     except Exception:
         print(traceback.format_exc())
@@ -3479,6 +3522,7 @@ async def the_catch_func(message, castor, amount, additional_context=[]):
 item_use_functions = {
     'rigged_potion': rigged_potion_func,
     'evil_potion': evil_potion_func,
+    'math_potion': math_potion_func,
     'funny_item': funny_item_func,
     'laundry_machine': laundry_machine_func,
     'scratch_off_ticket': scratch_off_ticket_func,
@@ -3492,20 +3536,25 @@ usable_items = [items[item].name for item in item_use_functions.keys()]
 async def use_item(author: discord.User, item: Item, item_message, reply_func, amount=1, additional_context=[]):
     """
     Uses an item by a user
-    Additional context = [target, number] for Evil Potion
+    Additional context:
+        [target, number] for Evil Potion
+        ['math', number] for Math Potion
     """
     try:
         if global_profiles[str(author.id)]['items'].setdefault(item.real_name, 0) < amount:
             await reply_func(f"**{author.display_name}**, you can't use **{amount:,} {item}{'s' if amount != 1 else ''}**\nOwned: {global_profiles[str(author.id)]['items'][item.real_name]:,} {item.emoji}")
             return
-        if additional_context:
+        if additional_context and additional_context[0] != 'math':
             bal1 = get_user_balance('', str(additional_context[0].id)), additional_context[0]
             bal2 = get_user_balance('', str(author.id)), author
             if bal1[0] < additional_context[1] or bal2[0] < additional_context[1]:
                 await reply_func(f"{min(bal1, bal2)[1].display_name} has less than {additional_context[1]:,} {coin}")
                 return
         elif item.real_name in ['evil_potion']:
-            await reply_func("`/use evil @user amount` to use this item")
+            await reply_func("`/use evil @user coins` to use this item")
+            return
+        if item.real_name in ['math_potion'] and not additional_context:
+            await reply_func("`/use math number` to use this item")
             return
         decision, msg = await confirm_item(reply_func, author, item, amount, additional_context, f"\n> {item.description.split('\n\n')[0].replace('\n', '\n> ')}", interaction=item_message)
         if msg is not None:
@@ -4181,8 +4230,8 @@ class Currency(commands.Cog):
             print(traceback.format_exc())
 
     @commands.hybrid_command(name="use", description="Use item of choice")
-    @app_commands.describe(item="The name of the item", amount="How many you want to use. Only used for some items", target="For items like evil potion", coins="For items like evil potion")
-    async def use(self, ctx: commands.Context, item: str, amount: int = 1, target: discord.Member = None, coins: str = '0'):
+    @app_commands.describe(item="The name of the item", amount="How many you want to use. Only used for some items", target="For items like evil potion", parameter="For evil and math potions")
+    async def use(self, ctx: commands.Context, item: str, amount: int = 1, target: discord.Member = None, parameter: str = '0'):
         """
         Use item of choice
         Accepts amount as a parameter for some items where it makes sense, so you can use those in bulk
@@ -4229,11 +4278,16 @@ class Currency(commands.Cog):
                     if target.id in (interaction.user.id, bot_id):
                         await interaction.response.send_message(f"Pick someone else please {icant}", ephemeral=True)
                         return
-                    num, _, _ = convert_msg_to_number([coins], '', author_id, ignored_sources=['%', 'all', 'half'])
+                    num, _, _ = convert_msg_to_number([parameter], '', author_id, ignored_sources=['%', 'all', 'half'])
                     if num < 1:
-                        await interaction.response.send_message("Make sure that the `coins` parameter you're providing is an actual, positive number", ephemeral=True)
+                        await interaction.response.send_message("Make sure that the `parameter` (coins) you're providing is an actual, positive number", ephemeral=True)
                         return
                     context = [target, num]
+                elif item_name in ['math_potion']:
+                    if not parameter.isdecimal() or int(parameter) <= 1 or int(parameter) >= 100:
+                        await interaction.response.send_message("Make sure that the `parameter` (success rate) you're providing is > 1 and < 100", ephemeral=True)
+                        return
+                    context = ['math', int(parameter)]
                 elif item_name in ['funny_item']:
                     if amount != 69:
                         amount = 69

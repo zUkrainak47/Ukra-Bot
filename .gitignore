@@ -4,4 +4,4 @@
 /auto/
 /stocks/
 .env
-test.py
+martingale.py
