@@ -755,7 +755,10 @@ async def on_ready():
         async def remove_all_roles(role_name):
             print('handling', role_name)
             for guild_id in role_dict[role_name]:
-                guild = await client.fetch_guild(int(guild_id))
+                try:
+                    guild = await client.fetch_guild(int(guild_id))
+                except discord.NotFound:
+                    continue
                 if not guild:
                     continue
                 # react_to = await log_channel.send(f"`===== {guild.name} - {guild_id} - {role_name} =====`")
@@ -844,15 +847,18 @@ async def on_ready():
             print(f"Error resuming giveaway {message_id}: {e}")
 
     async def resume_giveaways():
+        print('resuming giveaways')
         tasks = []
         for message_id in active_giveaways:
             tasks.append(asyncio.create_task(resume_giveaway(message_id)))
         await asyncio.gather(*tasks)
-
-    for role_ in role_dict:
-        await remove_all_roles(role_)
-        save_dict[role_]()
-    await resume_giveaways()
+    try:
+        for role_ in role_dict:
+            await remove_all_roles(role_)
+            save_dict[role_]()
+        await resume_giveaways()
+    except Exception as e:
+        traceback.print_exc()
     # await refund_giveaways()
 
 
@@ -1615,7 +1621,9 @@ async def silence(ctx):
                 return
 
             try:
-                if ((random.random() > 0.3 or role in caller.roles) and (target.id != bot_id)) or target.id == caller.id:
+                if target.bot:
+                    await ctx.send(f"Sorry, can't silence bots {o7}")
+                elif ((random.random() > 0.3 or role in caller.roles) and (target.id != bot_id)) or target.id == caller.id:
                     distributed_silence.setdefault(str(ctx.guild.id), []).append(target.id)
                     save_distributed_silence()
                     await target.add_roles(role)
@@ -1624,9 +1632,6 @@ async def silence(ctx):
                     await target.remove_roles(role)
                     distributed_silence[str(ctx.guild.id)].remove(target.id)
                     save_distributed_silence()
-                elif target.bot:
-                    await ctx.send(f"Sorry, can't silence bots {o7}")
-                    ctx.command.reset_cooldown(ctx)
                 else:
                     distributed_silence.setdefault(str(ctx.guild.id), []).append(caller.id)
                     save_distributed_silence()
@@ -1813,7 +1818,7 @@ async def custom_inspect(ctx, name: str):
     custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
 
     if command_name in custom_commands:
-        await ctx.reply(f"## !{command_name}\n`{custom_commands[command_name]}`")
+        await ctx.reply(f"## !{command_name}\n```{custom_commands[command_name]}```")
         return
 
     await ctx.reply(f"Custom command `!{command_name}` doesn't exist.")
@@ -2150,7 +2155,7 @@ async def on_command_error(ctx, error):
                      n2 = int(match.group(2).strip())
                      if n1 > n2: return match.group(0)
                      random_num = random.randint(n1, n2)
-                     return f"{random_num:,}" # <-- Apply formatting here
+                     return f"{random_num}" # <-- Apply formatting here
                  except (ValueError, TypeError):
                      return match.group(0) # Return original if parse fails
 
@@ -2176,7 +2181,7 @@ async def on_command_error(ctx, error):
                     if isinstance(result, (int, float)):
                         if isinstance(result, float) and result.is_integer():
                             result = int(result)
-                        return f"{result:,}" # <-- Apply formatting here
+                        return f"{result}" # <-- Apply formatting here
                     else:
                         # If result is not a number, return as string
                         return str(result)
@@ -3172,9 +3177,10 @@ class MyHelpCommand(commands.HelpCommand):
         # Now create the view, passing the ALREADY filtered data
         # Ensure there's data to pass before creating the view
         if not filtered_mapping:
-            # Handle case where no commands are available at all
-            # Maybe send a simple message or an embed indicating no commands
-            await self.get_destination().send("No commands available.")
+            if self.context.interaction:
+                await self.context.interaction.followup.send("No commands available.")
+            else:
+                await self.get_destination().send("No commands available.")
             return
 
         view = HelpView(
@@ -3187,8 +3193,11 @@ class MyHelpCommand(commands.HelpCommand):
 
         # Create initial embed using the view's method
         embed = await view.create_embed()
-        destination = self.get_destination()
-        message = await destination.send(embed=embed, view=view)
+        if self.context.interaction:
+            message = await self.context.interaction.followup.send(embed=embed, view=view)
+        else:
+            destination = self.get_destination()
+            message = await destination.send(embed=embed, view=view)
         view.message = message  # <-- Ensure this line is present and correct
 
     # Optional: Override help for specific commands/cogs if needed
@@ -3196,7 +3205,10 @@ class MyHelpCommand(commands.HelpCommand):
         embed = discord.Embed(title=self.get_command_signature(command),
                               description=command.help or "No description provided.",
                               color=0xffd000)
-        await self.get_destination().send(embed=embed)
+        if self.context.interaction:
+            await self.context.interaction.followup.send(embed=embed)
+        else:
+            await self.get_destination().send(embed=embed)
 
     async def send_cog_help(self, cog):
         embed = discord.Embed(title=f"{cog.qualified_name} Commands",
@@ -3212,19 +3224,23 @@ class MyHelpCommand(commands.HelpCommand):
                                  value=command.short_doc or "No description.",
                                  inline=False)
 
-        await self.get_destination().send(embed=embed)
+        if self.context.interaction:
+            await self.context.interaction.followup.send(embed=embed)
+        else:
+            await self.get_destination().send(embed=embed)
 
     # Optional: Handle command not found
     async def command_not_found(self, string):
-        return f"Command `{string}` not found."
+        msg = f"Command `{string}` not found."
+        if self.context.interaction:
+            await self.context.interaction.followup.send(msg) # Or maybe ephemeral=True
+        else:
+            await self.get_destination().send(msg)
 
     async def subcommand_not_found(self, command, string):
         if isinstance(command, commands.Group) and len(command.all_commands) > 0:
             return f"Subcommand `{string}` not found for command `{command.qualified_name}`."
         return f"Command `{command.qualified_name}` has no subcommand named `{string}`."
-
-
-client.help_command = MyHelpCommand()
 
 
 async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, additional_context=[], additional_msg='', interaction=None):
@@ -3921,6 +3937,30 @@ class Currency(commands.Cog):
 
     def cog_unload(self):
         self.update_stock_prices.cancel()  # Stop task when the cog is unloaded
+
+    @commands.hybrid_command(name="help", description="Shows help information for commands.")
+    @app_commands.describe(command="The command or category you need help with (optional)")
+    async def help(self, ctx: commands.Context, *, command: str = None):
+        """Shows help information for commands."""
+        await ctx.defer(ephemeral=False)
+        help_cmd = MyHelpCommand()
+        help_cmd.context = ctx
+
+        if command is None:
+            mapping = help_cmd.get_bot_mapping()
+            await help_cmd.send_bot_help(mapping)
+        else:
+            cog = self.bot.get_cog(command)
+            if cog:
+                await help_cmd.send_cog_help(cog)
+                return
+
+            cmd = self.bot.get_command(command)
+            if cmd:
+                await help_cmd.send_command_help(cmd)
+                return
+
+            await help_cmd.command_not_found(command)
 
     async def get_user(self, id_: int):
         global fetched_users
@@ -6559,7 +6599,7 @@ class Currency(commands.Cog):
     @app_commands.describe(number="How many coins you're betting")
     async def slots(self, ctx, *, number: str = ''):
         """
-        Takes a bet, spins three wheels of 10 emojis, if all of them match you win 50x the bet, if they are :sunfire2: you win 500x the bet
+        Takes a bet, spins three wheels of 10 emojis, if all of them match you win 50x the bet, if they are <:sunfire2:1324080466223169609> you win 500x the bet
         !slots number
         Has a 1-second cooldown
         """
@@ -6670,8 +6710,8 @@ class Currency(commands.Cog):
         Feeds Ukra Bot an entrance fee, the rest is added to the pool which is paid out to the winner of the lottery
         """
         entrance_price = 2500
-        ukra_bot_fee = 500
-        payout = 2000
+        ukra_bot_fee = 0
+        payout = 2500
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             today_date = datetime.now().date().isoformat()
