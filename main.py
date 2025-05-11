@@ -2018,9 +2018,8 @@ async def on_command_error(ctx, error):
             placeholders = []
             num_pattern = r"(<num(\d+)(?:=(\d+))?>)"
             word_pattern = r"(<word(\d+)(?:=([^>]+))?>)"
-            # --- MODIFICATION: Simplified text_pattern for just <text> ---
-            text_pattern = r"(<text(?:=([^>]+))?>)"  # Matches <text> or <text=default>
-            has_text_placeholder = False  # Flag to check if <text> is in template
+            text_pattern = r"(<text(?:=([^>]+))?>)"
+            has_text_placeholder = False
 
             max_num_index = 0
             max_word_index = 0
@@ -2037,12 +2036,10 @@ async def on_command_error(ctx, error):
                 placeholders.append(Placeholder(full, "word", index, default_str))
                 max_word_index = max(max_word_index, index)
 
-            # --- MODIFICATION: Extract <text> placeholder ---
             text_match = re.search(text_pattern, response_template)
             if text_match:
                 has_text_placeholder = True
                 full_text_match, default_text_value = text_match.groups()
-                # We use index 0 for <text> as it's unique
                 placeholders.append(Placeholder(text_match.group(0), "text", 0, default_text_value))
 
             unique_placeholders_dict = {p.full_match: p for p in placeholders}
@@ -2080,7 +2077,6 @@ async def on_command_error(ctx, error):
 
             parsed_values = {}
             consumed_original_indices = set()
-
             num_inputs_with_indices = []
             word_inputs_with_indices = []
 
@@ -2135,32 +2131,26 @@ async def on_command_error(ctx, error):
                     await ctx.reply(f"Missing required argument for <word{p_word.index}>.")
                     return
 
-            # --- MODIFICATION: Process unique <text> placeholder ---
             if has_text_placeholder:
-                text_placeholder_obj = next((p for p in unique_placeholders if p.type == "text"),
-                                            None)  # Should be only one
+                text_placeholder_obj = next((p for p in unique_placeholders if p.type == "text"), None)
                 if text_placeholder_obj:
-                    key_to_fill = "text_0"  # Using a consistent key for the single <text>
-
+                    key_to_fill = "text_0"
                     remaining_text_parts_list = []
                     temp_unconsumed_for_text = []
                     for val_str, original_idx in word_inputs_with_indices:
                         if original_idx not in consumed_original_indices:
                             temp_unconsumed_for_text.append((val_str, original_idx))
-
                     temp_unconsumed_for_text.sort(key=lambda x: x[1])
                     remaining_text_parts_list = [val_str for val_str, _ in temp_unconsumed_for_text]
-
                     if remaining_text_parts_list:
                         parsed_values[key_to_fill] = " ".join(remaining_text_parts_list)
                         for _, original_idx in temp_unconsumed_for_text:
                             consumed_original_indices.add(original_idx)
                     elif text_placeholder_obj.default_value is not None:
                         parsed_values[key_to_fill] = text_placeholder_obj.default_value
-                    elif text_placeholder_obj.is_required:  # if <text> has no default, it's considered required
+                    elif text_placeholder_obj.is_required:
                         await ctx.reply(f"Missing required text for <text>.")
                         return
-            # --- End of MODIFIED <text> processing ---
 
             current_response = response_template
             current_response = current_response.replace("<user>", user_mention_to_use)
@@ -2169,13 +2159,10 @@ async def on_command_error(ctx, error):
             current_response = current_response.replace('<author_name>', ctx.author.display_name)
 
             for p_replace in unique_placeholders:
-                # --- MODIFICATION: Handle unique key for <text> ---
                 if p_replace.type == "text":
                     ph_key_in_parsed = "text_0"
                 else:
                     ph_key_in_parsed = f"{p_replace.type}_{p_replace.index}"
-                # --- End MODIFICATION ---
-
                 if ph_key_in_parsed in parsed_values:
                     current_response = current_response.replace(p_replace.full_match,
                                                                 str(parsed_values[ph_key_in_parsed]))
@@ -2191,23 +2178,30 @@ async def on_command_error(ctx, error):
                 return random.choice(options) if options else match.group(0)
 
             choice_pattern = r"\[([^\[\]]+)\]"
-            temp_response_after_choices = current_response
+            temp_response_after_choices = current_response  # Start with user/author/ph replaced string
+            # Iteratively resolve choices, because choices can be arguments to math or other choices
             while True:
                 evaluated_choices_response = re.sub(choice_pattern, replace_choice, temp_response_after_choices)
-                if evaluated_choices_response == temp_response_after_choices:
+                if evaluated_choices_response == temp_response_after_choices:  # No more changes
                     break
                 temp_response_after_choices = evaluated_choices_response
-            current_response = temp_response_after_choices
+            current_response = temp_response_after_choices  # This now has choices resolved
 
             aeval = Interpreter()
-            for p_math in unique_placeholders:
-                if p_math.type == "num":
-                    parsed_key = f"num_{p_math.index}"
-                    if parsed_key in parsed_values:
-                        aeval.symtable[f"__NUM{p_math.index}__"] = parsed_values[parsed_key]
-                    elif p_math.default_value is not None:
-                        if re.search(r"\{[^{}]*" + re.escape(p_math.full_match) + r"[^{}]*\}", current_response):
-                            aeval.symtable[f"__NUM{p_math.index}__"] = int(p_math.default_value)
+            for p_math_sym in unique_placeholders:  # Use unique_placeholders to get all num definitions
+                if p_math_sym.type == "num":
+                    parsed_key = f"num_{p_math_sym.index}"
+                    if parsed_key in parsed_values:  # If user provided a value
+                        aeval.symtable[f"__NUM{p_math_sym.index}__"] = parsed_values[parsed_key]
+                    elif p_math_sym.default_value is not None:  # If there's a default
+                        # Only add default to symtable if this num placeholder is actually used in a math expression
+                        if re.search(r"\{[^{}]*" + re.escape(p_math_sym.full_match) + r"[^{}]*\}",
+                                     current_response):  # Check in choice-resolved string
+                            try:
+                                aeval.symtable[f"__NUM{p_math_sym.index}__"] = int(p_math_sym.default_value)
+                            except ValueError:
+                                print(
+                                    f"Warning: Default value for {p_math_sym.full_match} is not a valid integer for math.")
 
             _random_pattern_in_math = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)"
 
@@ -2218,19 +2212,51 @@ async def on_command_error(ctx, error):
                 except (ValueError, TypeError):
                     return match.group(0)
 
+            # THIS IS THE MODIFIED FUNCTION
             def replace_math_expression(match):
-                expression = match.group(1).strip()
-                processed_expression = re.sub(_random_pattern_in_math, _replace_random_for_math_eval, expression)
-                for p_math_replace in unique_placeholders_dict.values():
-                    if p_math_replace.type == "num":
-                        processed_expression = processed_expression.replace(p_math_replace.full_match,
-                                                                            f"__NUM{p_math_replace.index}__")
+                expression_with_wrapper = match.group(1).strip()
+                actual_numerical_expression = expression_with_wrapper
+                is_formatted_output = False
+
+                format_match = re.fullmatch(r"format\s*\(\s*(.+)\s*,\s*['\"](?P<sep>,?)['\"]\s*\)",
+                                            expression_with_wrapper, re.IGNORECASE)
+                if format_match:
+                    actual_numerical_expression = format_match.group(1).strip()
+                    separator = format_match.group('sep')
+                    if separator == ',':  # Only support comma formatting for now
+                        is_formatted_output = True
+                    else:  # If format() is used with something other than ',', treat as non-special
+                        actual_numerical_expression = expression_with_wrapper  # Revert, asteval might handle it or error
+                        is_formatted_output = False
+
+                processed_numerical_expression = re.sub(_random_pattern_in_math, _replace_random_for_math_eval,
+                                                        actual_numerical_expression)
+                for p_math_replace_inner in unique_placeholders_dict.values():  # Iterate all defined placeholders
+                    if p_math_replace_inner.type == "num":
+                        # When replacing inside math, always use the __NUMx__ internal form
+                        processed_numerical_expression = processed_numerical_expression.replace(
+                            p_math_replace_inner.full_match, f"__NUM{p_math_replace_inner.index}__")
+
                 try:
-                    result = aeval(processed_expression)
-                    return f"{int(result) if isinstance(result, float) and result.is_integer() else result}"
+                    numerical_result = aeval(processed_numerical_expression)
+                    if isinstance(numerical_result, (int, float)):
+                        if is_formatted_output:
+                            return f"{numerical_result:,}"
+                        else:
+                            return f"{int(numerical_result) if isinstance(numerical_result, float) and numerical_result.is_integer() else numerical_result}"
+                    else:
+                        if is_formatted_output:
+                            print(
+                                f"Math expression '{processed_numerical_expression}' did not yield a number for formatting. Result: {numerical_result}")
+                            return f"[FormatTargetError]"
+                        return str(numerical_result)
                 except Exception as e_math:
-                    print(f"Error evaluating math '{expression}' -> '{processed_expression}': {e_math}")
+                    # It's helpful to see what expression failed after all internal replacements
+                    print(
+                        f"Error evaluating math. Original: '{expression_with_wrapper}'. Processed for asteval: '{processed_numerical_expression}'. Error: {e_math}")
                     return f"[MathEval Error]"
+
+            # END OF MODIFIED FUNCTION
 
             math_pattern = r"\{([^{}]+)\}"
             response_after_math_and_choices = re.sub(math_pattern, replace_math_expression, current_response)
