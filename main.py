@@ -359,6 +359,28 @@ def save_everything():
     save_active_loans()
 
 
+async def is_admin(ctx):
+    if ctx.author.id in allowed_users:
+        return True
+
+    if ctx.guild:
+        if ctx.author.guild_permissions.administrator:
+            return True
+
+    return False
+
+
+async def is_manager(ctx):
+    if ctx.author.id in allowed_users:
+        return True
+
+    if ctx.guild:
+        if ctx.author.guild_permissions.manage_guild:
+            return True
+
+    return False
+
+
 def perform_backup(reason='no reason given', destination='auto'):
     save_everything()
     source = "dev"
@@ -1254,7 +1276,7 @@ async def settings(ctx):
 
 # ROLES
 @client.command()
-@commands.has_permissions(administrator=True)
+@commands.check(is_admin)
 async def setrole(ctx):
     """
     Changes role that is distributed when executing !segs or !backshot
@@ -1301,7 +1323,7 @@ default_allowed_commands = ['compliment', 'dnd', 'currency_system']
 
 
 @commands.hybrid_command(name="tcc", description="Toggle Channel Currency", aliases=['toggle_channel_currency'])
-@commands.has_permissions(administrator=True)
+@commands.check(is_admin)
 async def tcc(ctx):
     """
     If currency system is enabled in a server, starts ignoring the channel this command was sent in
@@ -1363,7 +1385,7 @@ async def tuc(ctx, *, target: discord.User):
 
 
 @client.command(aliases=['allow'])
-@commands.has_permissions(administrator=True)
+@commands.check(is_admin)
 async def enable(ctx):
     """
     Enables command of choice
@@ -1392,7 +1414,7 @@ async def enable(ctx):
 
 
 @client.command(aliases=['disallow', 'prevent'])
-@commands.has_permissions(administrator=True)
+@commands.check(is_admin)
 async def disable(ctx):
     """
     Disables command of choice
@@ -1677,7 +1699,7 @@ async def silence(ctx):
 
 @commands.hybrid_command(name='custom', description='Adds a custom command to the server',  aliases=['custom_add', 'add_custom'])
 @app_commands.describe(name='Custom command name', response='Custom response (!help custom for details)')
-@commands.has_permissions(manage_guild=True)  # Only allow users who can manage the server
+@commands.check(is_manager)  # Only allow users who can manage the server
 async def custom(ctx, name: str, *, response: str):
     """
     Adds or updates a custom command for this server
@@ -1694,7 +1716,7 @@ async def custom(ctx, name: str, *, response: str):
     - `<word1=hello>` to give the option to set a specific word, but default to "hello" if not passed
     - `[option1|...]` to choose randomly from all passed options
     - `r(n1, n2)    ` to choose a random number between n1 and n2
-    - `{r(2,5) + 5 * <num=2>}`  --  mathematical expressions are supported in {}
+    - `{r(2,5) + 5 * <num1=2>}`  --  mathematical expressions are supported in {}
 
     Example:
     - !custom kiss <author> kissed <user> :heart:
@@ -1754,7 +1776,7 @@ async def custom_error(ctx, error):
 
 @commands.hybrid_command(name='custom_remove', description='Removes a custom command from this server',  aliases=['custom_delete', 'delete_custom', 'remove_custom', 'del_custom', 'custom_del'])
 @app_commands.describe(name='Custom command name')
-@commands.has_permissions(manage_guild=True)  # Only allow users who can manage the server
+@commands.check(is_manager)  # Only allow users who can manage the server
 async def custom_remove(ctx, name: str):
     """
     Removes a custom command from this server
@@ -2170,7 +2192,7 @@ async def on_command_error(ctx, error):
                     if isinstance(result, (int, float)):
                         if isinstance(result, float) and result.is_integer():
                             result = int(result)
-                        return f"{result:,}"
+                        return f"{result}"
                     else:
                         return str(result)
                 except Exception as e_math:
@@ -2187,7 +2209,7 @@ async def on_command_error(ctx, error):
                     n2 = int(match.group(2).strip())
                     if n1 > n2: return match.group(0)
                     random_num = random.randint(n1, n2)
-                    return f"{random_num:,}"
+                    return f"{random_num}"
                 except (ValueError, TypeError):
                     return match.group(0)
 
