@@ -862,6 +862,23 @@ async def on_ready():
     # await refund_giveaways()
 
 
+@client.event
+async def on_message(message: discord.Message):
+    if 'kys_protect' in server_settings.get(str(message.guild.id), {}).get('allowed_commands'):
+        if message.author == client.user:
+            return
+
+        if "kys" in message.content.lower() or "kill yourself" in message.content.lower():
+            try:
+                await message.reply("https://cdn.discordapp.com/attachments/1360213211315704039/1371060548141187093/neverkys.mov?ex=6821c323&is=682071a3&hm=14b2b2776a7026c1eeded946082433d76566889dde3aec91fb103c7576b38d34&")
+            except discord.Forbidden:
+                print(f"Cannot kys protect in {message.channel.name} (guild: {message.guild.name if message.guild else 'DM'}) due to permissions.")
+            except Exception as e:
+                print(f"Error kys protecting reply: {e}")
+
+    await client.process_commands(message)
+
+
 @client.command(aliases=['pp', 'shoot'])
 async def ignore(ctx):
     """Ignored command"""
@@ -1198,6 +1215,7 @@ async def settings(ctx):
     silence_role = guild_settings.get("silence_role", False)
     compliments_allowed = 'compliment' in allowed_commands
     dnd_allowed = 'dnd' in allowed_commands
+    kys_allowed = 'kys_protect' in allowed_commands
     currency_allowed = 'currency_system' in allowed_commands
 
     if segs_role and ctx.guild.get_role(segs_role):
@@ -1228,7 +1246,9 @@ async def settings(ctx):
                    '\n' +
                    f"DND:              {allow_dict[dnd_allowed]}\n" +
                    '\n' +
-                   f"Currency System:  {allow_dict[currency_allowed]}" +
+                   f"Currency System:  {allow_dict[currency_allowed]}\n" +
+                   '\n' +
+                   f"Kys Protection:   {allow_dict[kys_allowed]}" +
                    '```')
 
 
@@ -1276,7 +1296,7 @@ async def setrole(ctx):
 
 
 # ENABLING/DISABLING
-toggleable_commands = ['segs', 'backshot', 'silence', 'compliment', 'dnd', 'currency_system']
+toggleable_commands = ['segs', 'backshot', 'silence', 'compliment', 'dnd', 'currency_system', 'kys_protect']
 default_allowed_commands = ['compliment', 'dnd', 'currency_system']
 
 
