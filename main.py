@@ -867,8 +867,8 @@ async def on_message(message: discord.Message):
     if 'kys_protect' in server_settings.get(str(message.guild.id), {}).get('allowed_commands'):
         if message.author == client.user:
             return
-
-        if "kys" in message.content.lower() or "kill yourself" in message.content.lower():
+        content = message.content.lower()
+        if "kys" in content or "kill yourself" in content or "killyourself" in content or "kms" in content:
             try:
                 await message.reply("https://cdn.discordapp.com/attachments/1360213211315704039/1371060548141187093/neverkys.mov?ex=6821c323&is=682071a3&hm=14b2b2776a7026c1eeded946082433d76566889dde3aec91fb103c7576b38d34&")
             except discord.Forbidden:
@@ -879,10 +879,10 @@ async def on_message(message: discord.Message):
     await client.process_commands(message)
 
 
-@client.command(aliases=['pp', 'shoot'])
-async def ignore(ctx):
-    """Ignored command"""
-    return
+# @client.command(aliases=['pp', 'shoot'])
+# async def ignore(ctx):
+#     """Ignored command"""
+#     return
 
 
 @client.hybrid_command(name="delete_bot_message", aliases=['delbotmsg'])
@@ -1438,6 +1438,7 @@ async def segs(ctx):
     Cannot be used on users who have been shot or segsed
     !segs @victim, gives victim the Segs Role
     Has a 2-minute cooldown
+    Disabled by default. Run !enable segs to enable
     """
     caller = ctx.author
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1527,6 +1528,7 @@ async def backshot(ctx):
     Cannot be used on users who have been shot or backshot
     !backshot @victim, gives victim the Backshot Role
     Has a 2-minute cooldown
+    Disabled by default. Run !enable backshot to enabl
     """
     caller = ctx.author
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1613,6 +1615,7 @@ async def silence(ctx):
     Distributes Silenced Role for 15 seconds with a 30% chance to backfire and silence you for 30s instead
     !silence @victim, gives victim the Silenced Role
     Has a 2-minute cooldown
+    Disabled by default. Run !enable silence to enable
     """
     caller = ctx.author
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1975,7 +1978,7 @@ async def calc_error(ctx, error):
 async def on_command_error(ctx, error):
     # --- Custom Command Handling ---
     if isinstance(error, commands.CommandNotFound):
-        if not ctx.guild: # Custom commands are guild-specific
+        if not ctx.guild:  # Custom commands are guild-specific
             return
         guild_id = str(ctx.guild.id)
         potential_command_name = ctx.invoked_with.lower()
@@ -2002,22 +2005,20 @@ async def on_command_error(ctx, error):
                 full, index_str, default_str = match.groups()
                 index = int(index_str)
                 placeholders.append(Placeholder(full, "num", index, default_str))
-                max_num_index = max(max_num_index, index) # Track highest num index used
+                max_num_index = max(max_num_index, index)
 
             for match in re.finditer(word_pattern, response_template):
                 full, index_str, default_str = match.groups()
                 index = int(index_str)
                 placeholders.append(Placeholder(full, "word", index, default_str))
-                max_word_index = max(max_word_index, index) # Track highest word index used
+                max_word_index = max(max_word_index, index)
 
-            # Keep unique placeholders based on full match string (important for replacement later)
             unique_placeholders_dict = {p.full_match: p for p in placeholders}
             unique_placeholders = list(unique_placeholders_dict.values())
 
-
             # --- 2. Parse User Mention (if needed) ---
             user_mention_to_use = ''
-            user_obj = ctx.author
+            user_obj = ctx.author  # Default to command author
             remaining_args_list = full_argument_string.split()
             user_required = '<user>' in response_template or '<user_name>' in response_template
 
@@ -2028,8 +2029,7 @@ async def on_command_error(ctx, error):
                     if match:
                         user_mention_to_use = match.group(0)
                         user_id = int(match.group(2))
-                        remaining_args_list.pop(0) # Remove mention from list
-                        # Fetch user object (assuming fetched_users is global)
+                        remaining_args_list.pop(0)
                         global fetched_users
                         if user_id in fetched_users:
                             user_obj = fetched_users.get(user_id)
@@ -2041,210 +2041,179 @@ async def on_command_error(ctx, error):
                                 await ctx.reply(f"`{user_id}` is not a valid user ID")
                                 return
                     else:
-                        # User required, but first arg isn't a mention
                         await ctx.reply("This command requires a user mention as the first argument.")
                         return
                 else:
-                    # User required, but no args provided
                     await ctx.reply("This command requires a user mention.")
                     return
 
-
             # --- 3. Parse Arguments Based on Required Indices ---
-            parsed_values = {} # Stores final values: { "num_1": val1, "word_1": val2, "num_2": val3 }
+            parsed_values = {}
             user_num_args = []
             user_word_args = []
 
-            # Separate provided arguments into numbers and words
             for arg in remaining_args_list:
                 try:
-                    # Try converting to int first
                     val = int(arg)
                     user_num_args.append(val)
                 except ValueError:
-                    # If not int, it's a word
                     user_word_args.append(arg)
 
-            # Assign parsed user args to the required indices based on order
             for i in range(1, max_num_index + 1):
                 if i - 1 < len(user_num_args):
-                    parsed_values[f"num_{i}"] = user_num_args[i-1]
-                # Else: Don't assign yet, handle defaults/requirements later
+                    parsed_values[f"num_{i}"] = user_num_args[i - 1]
 
             for i in range(1, max_word_index + 1):
                 if i - 1 < len(user_word_args):
-                    parsed_values[f"word_{i}"] = user_word_args[i-1]
-                # Else: Don't assign yet
+                    parsed_values[f"word_{i}"] = user_word_args[i - 1]
 
-
-            # --- 4. Validate Requirements & Apply Defaults (Based on Placeholders Used) ---
-            # Check number requirements
+            # --- 4. Validate Requirements & Apply Defaults ---
             for i in range(1, max_num_index + 1):
                 key = f"num_{i}"
-                if key not in parsed_values: # Value not provided for this index
+                if key not in parsed_values:
                     is_required_for_index = False
                     default_for_index = None
                     found_placeholder_for_index = False
-                    for p in unique_placeholders: # Check all unique placeholders
+                    for p in unique_placeholders:
                         if p.type == "num" and p.index == i:
                             found_placeholder_for_index = True
                             if p.is_required:
                                 is_required_for_index = True
-                                break # If any variant is required, the index is required
+                                break
                             elif p.default_value is not None and default_for_index is None:
-                                # Use the first default found for this index
                                 default_for_index = p.default_value
-
-                    if not found_placeholder_for_index: continue # Skip if index isn't actually used
-
+                    if not found_placeholder_for_index: continue
                     if is_required_for_index:
                         await ctx.reply(f"Missing required number argument for position {i} (e.g., `<num{i}>`)")
                         return
                     else:
-                        # Apply default for this index
                         try:
-                            parsed_values[key] = int(default_for_index) if default_for_index else 1 # Fallback default 1
+                            parsed_values[key] = int(default_for_index) if default_for_index else 1
                         except (ValueError, TypeError):
-                            parsed_values[key] = 1 # Absolute fallback
+                            parsed_values[key] = 1
 
-            # Check word requirements
             for i in range(1, max_word_index + 1):
-                 key = f"word_{i}"
-                 if key not in parsed_values: # Value not provided for this index
-                     is_required_for_index = False
-                     default_for_index = None
-                     found_placeholder_for_index = False
-                     for p in unique_placeholders: # Check all unique placeholders
-                         if p.type == "word" and p.index == i:
-                             found_placeholder_for_index = True
-                             if p.is_required:
-                                 is_required_for_index = True
-                                 break
-                             elif p.default_value is not None and default_for_index is None:
-                                 # Use the first default found for this index
-                                 default_for_index = p.default_value
+                key = f"word_{i}"
+                if key not in parsed_values:
+                    is_required_for_index = False
+                    default_for_index = None
+                    found_placeholder_for_index = False
+                    for p in unique_placeholders:
+                        if p.type == "word" and p.index == i:
+                            found_placeholder_for_index = True
+                            if p.is_required:
+                                is_required_for_index = True
+                                break
+                            elif p.default_value is not None and default_for_index is None:
+                                default_for_index = p.default_value
+                    if not found_placeholder_for_index: continue
+                    if is_required_for_index:
+                        await ctx.reply(f"Missing required word argument for position {i} (e.g., `<word{i}>`)")
+                        return
+                    else:
+                        parsed_values[key] = default_for_index if default_for_index is not None else ""
 
-                     if not found_placeholder_for_index: continue # Skip if index isn't actually used
-
-                     if is_required_for_index:
-                         await ctx.reply(f"Missing required word argument for position {i} (e.g., `<word{i}>`)")
-                         return
-                     else:
-                         # Apply default for this index
-                         parsed_values[key] = default_for_index if default_for_index is not None else "" # Default is string or empty
-
-
-            # --- 5. Perform Replacements ---
+            # --- 5. Perform Standard Replacements ---
             current_response = response_template
-
-            # Standard user/author placeholders
             current_response = current_response.replace("<user>", user_mention_to_use)
             current_response = current_response.replace("<author>", ctx.author.mention)
             current_response = current_response.replace('<user_name>', user_obj.display_name)
             current_response = current_response.replace('<author_name>', ctx.author.display_name)
 
-            # Replace ALL unique num/word placeholders found earlier
             for p in unique_placeholders_dict.values():
                 key = f"{p.type}_{p.index}"
-                if key in parsed_values: # Value should exist after validation/defaults
-                     current_response = current_response.replace(p.full_match, str(parsed_values[key]))
-                # else: This case should ideally not happen if validation is correct
+                if key in parsed_values:
+                    current_response = current_response.replace(p.full_match, str(parsed_values[key]))
 
-            # Random Choice [...] replacement
+            # --- 6.1. Iterative Random Choice [...] replacement ---
             def replace_choice(match):
                 options_str = match.group(1)
                 options = [opt.strip() for opt in options_str.split('|')]
                 return random.choice(options) if options else match.group(0)
-            choice_pattern = r"\[([^\]]+)\]" # Non-greedy capture inside [...]
-            current_response = re.sub(choice_pattern, replace_choice, current_response)
 
+            choice_pattern = r"\[([^\[\]]+)\]"  # Innermost choices
 
-            # --- 6. Perform Math Evaluation {...} ---
+            temp_response_after_choices = current_response
+            while True:
+                evaluated_choices_response = re.sub(choice_pattern, replace_choice, temp_response_after_choices)
+                if evaluated_choices_response == temp_response_after_choices:
+                    break
+                temp_response_after_choices = evaluated_choices_response
+            current_response = temp_response_after_choices  # This now has choices resolved
+
+            # --- 6.2. Perform Math Evaluation {...} ---
             aeval = Interpreter()
-            # Add ALL required __NUMX__ variables to asteval symbol table based on max index
             for i in range(1, max_num_index + 1):
-                 key = f"num_{i}"
-                 if key in parsed_values: # Should always be true after validation/defaults
-                      aeval.symtable[f"__NUM{i}__"] = parsed_values[key]
-                 # else: Could add a fallback like aeval.symtable[f"__NUM{i}__"] = 1 if needed
+                key = f"num_{i}"
+                if key in parsed_values:
+                    aeval.symtable[f"__NUM{i}__"] = parsed_values[key]
 
-            # Function to handle r(n1, n2) replacements
-            def replace_random_math(match):
-                 try:
-                     n1 = int(match.group(1).strip())
-                     n2 = int(match.group(2).strip())
-                     if n1 > n2: return match.group(0)
-                     random_num = random.randint(n1, n2)
-                     return f"{random_num}" # <-- Apply formatting here
-                 except (ValueError, TypeError):
-                     return match.group(0) # Return original if parse fails
+            _random_pattern_in_math = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)"
 
-            random_pattern = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)" # Pattern for r(n1, n2)
+            def _replace_random_for_math_eval(match):
+                try:
+                    n1 = int(match.group(1).strip())
+                    n2 = int(match.group(2).strip())
+                    if n1 > n2: return match.group(0)
+                    return str(random.randint(n1, n2))
+                except (ValueError, TypeError):
+                    return match.group(0)
 
-            # Function to handle math expression evaluation
             def replace_math_expression(match):
                 expression = match.group(1).strip()
-                processed_expression = expression
+                processed_expression = re.sub(_random_pattern_in_math, _replace_random_for_math_eval, expression)
+                for p_math in unique_placeholders_dict.values():
+                    if p_math.type == "num":
+                        processed_expression = processed_expression.replace(p_math.full_match, f"__NUM{p_math.index}__")
                 try:
-                    # Replace r(...) within the math expression first (uses formatted version now)
-                    processed_expression = re.sub(random_pattern, replace_random_math, processed_expression)
-
-                    # Replace placeholders (<numX>, <numX=...>) within expression
-                    for p in unique_placeholders_dict.values():
-                        if p.type == "num":
-                             processed_expression = processed_expression.replace(p.full_match, f"__NUM{p.index}__")
-
-                    # Evaluate the processed expression
                     result = aeval(processed_expression)
-
-                    # Format result (int if possible, then apply comma formatting)
                     if isinstance(result, (int, float)):
                         if isinstance(result, float) and result.is_integer():
                             result = int(result)
-                        return f"{result}" # <-- Apply formatting here
+                        return f"{result:,}"
                     else:
-                        # If result is not a number, return as string
                         return str(result)
-                except Exception as e:
-                    print(f"Error evaluating math expression '{expression}' -> '{processed_expression}': {e}")
-                    return f"[Eval Error]"
+                except Exception as e_math:
+                    print(f"Error evaluating math expression '{expression}' -> '{processed_expression}': {e_math}")
+                    return f"[MathEval Error]"
 
-            math_pattern = r"\{([^{}]+)\}" # Non-greedy capture inside {...}
+            math_pattern = r"\{([^{}]+)\}"
+            response_after_math_and_choices = re.sub(math_pattern, replace_math_expression, current_response)
 
-            # Apply replacements: Global r() first, then math {}
-            current_response = re.sub(random_pattern, replace_random_math, current_response)
-            final_response = re.sub(math_pattern, replace_math_expression, current_response)
+            # --- 6.3. Perform Global r(n1, n2) replacement ---
+            def replace_random_math_globally_formatted(match):
+                try:
+                    n1 = int(match.group(1).strip())
+                    n2 = int(match.group(2).strip())
+                    if n1 > n2: return match.group(0)
+                    random_num = random.randint(n1, n2)
+                    return f"{random_num:,}"
+                except (ValueError, TypeError):
+                    return match.group(0)
 
+            random_pattern_global = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)"
+            final_response = re.sub(random_pattern_global, replace_random_math_globally_formatted,
+                                    response_after_math_and_choices)
 
             # --- 7. Sending Logic ---
             try:
-                # Check if the final response is empty after replacements
                 if not final_response.strip():
-                     print(f"Custom command '{potential_command_name}' resulted in empty response after replacements.")
-                     # Optionally send a default message or do nothing
-                     return
-
+                    print(f"Custom command '{potential_command_name}' resulted in empty response.")
+                    return
                 await ctx.send(final_response)
-                return # Stop further error handling for CommandNotFound
+                return
             except discord.Forbidden:
-                # Bot lacks permission to send message in this channel
                 pass
             except Exception as e:
                 print(f"Error sending custom command '{potential_command_name}': {e}")
-                traceback.print_exc() # Print detailed traceback for debugging
+                traceback.print_exc()
 
-
-    # --- Your Existing Error Handling ---
     elif isinstance(error, commands.MissingPermissions):
         await ctx.reply("You can't use this command due to lack of permissions :3")
-
-    # --- Default/Fallback Error Handling ---
     else:
-        # Avoid printing CommandNotFound errors handled above
-        if not isinstance(error, commands.CommandNotFound):
+        if not isinstance(error, commands.CommandNotFound):  # Avoid printing for handled custom commands
             print(f'Ignoring exception in command {ctx.command}:', file=sys.stderr)
             traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
-
 
 # CURRENCY
 active_pvp_requests = dict()
