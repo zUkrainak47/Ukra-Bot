@@ -1714,6 +1714,8 @@ async def custom(ctx, name: str, *, response: str):
     - `<num1=5>     ` to give the option to set a specific number, but default to 5 if not passed
     - `<word1>      ` to require a word input and replace <word1> with it
     - `<word1=hello>` to give the option to set a specific word, but default to "hello" if not passed
+    - `<text>       ` to require some text input and replace <text> with it (can be more than one word)
+    - `<text=hi hi> ` to set a default value for text
     - `[option1|...]` to choose randomly from all passed options
     - `r(n1, n2)    ` to choose a random number between n1 and n2
     - `{r(2,5) + 5 * <num1=2>}`  --  mathematical expressions are supported in {}
@@ -2005,7 +2007,6 @@ async def on_command_error(ctx, error):
         guild_id = str(ctx.guild.id)
         potential_command_name = ctx.invoked_with.lower()
 
-        # Ensure server_settings and custom_commands structure exists
         guild_settings = server_settings.setdefault(guild_id, {})
         custom_commands = guild_settings.setdefault('custom_commands', {})
 
@@ -2014,12 +2015,13 @@ async def on_command_error(ctx, error):
             command_part = f"{ctx.prefix}{ctx.invoked_with}"
             full_argument_string = ctx.message.content[len(command_part):].strip()
 
-            # --- 1. Extract ALL Placeholders (Determine Max Indices Needed) ---
             placeholders = []
-            # Regex for <numX> or <numX=default_num>
             num_pattern = r"(<num(\d+)(?:=(\d+))?>)"
-            # Regex for <wordX> or <wordX=default_word> (default can be anything not '>')
             word_pattern = r"(<word(\d+)(?:=([^>]+))?>)"
+            # --- MODIFICATION: Simplified text_pattern for just <text> ---
+            text_pattern = r"(<text(?:=([^>]+))?>)"  # Matches <text> or <text=default>
+            has_text_placeholder = False  # Flag to check if <text> is in template
+
             max_num_index = 0
             max_word_index = 0
 
@@ -2035,12 +2037,19 @@ async def on_command_error(ctx, error):
                 placeholders.append(Placeholder(full, "word", index, default_str))
                 max_word_index = max(max_word_index, index)
 
+            # --- MODIFICATION: Extract <text> placeholder ---
+            text_match = re.search(text_pattern, response_template)
+            if text_match:
+                has_text_placeholder = True
+                full_text_match, default_text_value = text_match.groups()
+                # We use index 0 for <text> as it's unique
+                placeholders.append(Placeholder(text_match.group(0), "text", 0, default_text_value))
+
             unique_placeholders_dict = {p.full_match: p for p in placeholders}
             unique_placeholders = list(unique_placeholders_dict.values())
 
-            # --- 2. Parse User Mention (if needed) ---
             user_mention_to_use = ''
-            user_obj = ctx.author  # Default to command author
+            user_obj = ctx.author
             remaining_args_list = full_argument_string.split()
             user_required = '<user>' in response_template or '<user_name>' in response_template
 
@@ -2069,147 +2078,167 @@ async def on_command_error(ctx, error):
                     await ctx.reply("This command requires a user mention.")
                     return
 
-            # --- 3. Parse Arguments Based on Required Indices ---
             parsed_values = {}
-            user_num_args = []
-            user_word_args = []
+            consumed_original_indices = set()
 
-            for arg in remaining_args_list:
+            num_inputs_with_indices = []
+            word_inputs_with_indices = []
+
+            for original_idx, arg_str_val in enumerate(remaining_args_list):
+                word_inputs_with_indices.append((arg_str_val, original_idx))
                 try:
-                    val = int(arg)
-                    user_num_args.append(val)
+                    num_inputs_with_indices.append((int(arg_str_val), original_idx))
                 except ValueError:
-                    user_word_args.append(arg)
+                    pass
 
-            for i in range(1, max_num_index + 1):
-                if i - 1 < len(user_num_args):
-                    parsed_values[f"num_{i}"] = user_num_args[i - 1]
+            num_defs = sorted([p for p in unique_placeholders if p.type == "num"], key=lambda p: p.index)
+            num_arg_search_cursor = 0
+            for p_num in num_defs:
+                key_to_fill = f"num_{p_num.index}"
+                found_arg_for_this_num_ph = False
+                current_search_pos = num_arg_search_cursor
+                while current_search_pos < len(num_inputs_with_indices):
+                    val, original_idx = num_inputs_with_indices[current_search_pos]
+                    if original_idx not in consumed_original_indices:
+                        parsed_values[key_to_fill] = val
+                        consumed_original_indices.add(original_idx)
+                        num_arg_search_cursor = current_search_pos + 1
+                        found_arg_for_this_num_ph = True
+                        break
+                    current_search_pos += 1
+                if found_arg_for_this_num_ph: continue
+                if p_num.default_value is not None:
+                    parsed_values[key_to_fill] = int(p_num.default_value)
+                elif p_num.is_required:
+                    await ctx.reply(f"Missing required number for <num{p_num.index}>.")
+                    return
 
-            for i in range(1, max_word_index + 1):
-                if i - 1 < len(user_word_args):
-                    parsed_values[f"word_{i}"] = user_word_args[i - 1]
+            word_defs = sorted([p for p in unique_placeholders if p.type == "word"], key=lambda p: p.index)
+            word_arg_search_cursor = 0
+            for p_word in word_defs:
+                key_to_fill = f"word_{p_word.index}"
+                found_arg_for_this_word_ph = False
+                current_search_pos = word_arg_search_cursor
+                while current_search_pos < len(word_inputs_with_indices):
+                    val_str, original_idx = word_inputs_with_indices[current_search_pos]
+                    if original_idx not in consumed_original_indices:
+                        parsed_values[key_to_fill] = val_str
+                        consumed_original_indices.add(original_idx)
+                        word_arg_search_cursor = current_search_pos + 1
+                        found_arg_for_this_word_ph = True
+                        break
+                    current_search_pos += 1
+                if found_arg_for_this_word_ph: continue
+                if p_word.default_value is not None:
+                    parsed_values[key_to_fill] = p_word.default_value
+                elif p_word.is_required:
+                    await ctx.reply(f"Missing required argument for <word{p_word.index}>.")
+                    return
 
-            # --- 4. Validate Requirements & Apply Defaults ---
-            for i in range(1, max_num_index + 1):
-                key = f"num_{i}"
-                if key not in parsed_values:
-                    is_required_for_index = False
-                    default_for_index = None
-                    found_placeholder_for_index = False
-                    for p in unique_placeholders:
-                        if p.type == "num" and p.index == i:
-                            found_placeholder_for_index = True
-                            if p.is_required:
-                                is_required_for_index = True
-                                break
-                            elif p.default_value is not None and default_for_index is None:
-                                default_for_index = p.default_value
-                    if not found_placeholder_for_index: continue
-                    if is_required_for_index:
-                        await ctx.reply(f"Missing required number argument for position {i} (e.g., `<num{i}>`)")
+            # --- MODIFICATION: Process unique <text> placeholder ---
+            if has_text_placeholder:
+                text_placeholder_obj = next((p for p in unique_placeholders if p.type == "text"),
+                                            None)  # Should be only one
+                if text_placeholder_obj:
+                    key_to_fill = "text_0"  # Using a consistent key for the single <text>
+
+                    remaining_text_parts_list = []
+                    temp_unconsumed_for_text = []
+                    for val_str, original_idx in word_inputs_with_indices:
+                        if original_idx not in consumed_original_indices:
+                            temp_unconsumed_for_text.append((val_str, original_idx))
+
+                    temp_unconsumed_for_text.sort(key=lambda x: x[1])
+                    remaining_text_parts_list = [val_str for val_str, _ in temp_unconsumed_for_text]
+
+                    if remaining_text_parts_list:
+                        parsed_values[key_to_fill] = " ".join(remaining_text_parts_list)
+                        for _, original_idx in temp_unconsumed_for_text:
+                            consumed_original_indices.add(original_idx)
+                    elif text_placeholder_obj.default_value is not None:
+                        parsed_values[key_to_fill] = text_placeholder_obj.default_value
+                    elif text_placeholder_obj.is_required:  # if <text> has no default, it's considered required
+                        await ctx.reply(f"Missing required text for <text>.")
                         return
-                    else:
-                        try:
-                            parsed_values[key] = int(default_for_index) if default_for_index else 1
-                        except (ValueError, TypeError):
-                            parsed_values[key] = 1
+            # --- End of MODIFIED <text> processing ---
 
-            for i in range(1, max_word_index + 1):
-                key = f"word_{i}"
-                if key not in parsed_values:
-                    is_required_for_index = False
-                    default_for_index = None
-                    found_placeholder_for_index = False
-                    for p in unique_placeholders:
-                        if p.type == "word" and p.index == i:
-                            found_placeholder_for_index = True
-                            if p.is_required:
-                                is_required_for_index = True
-                                break
-                            elif p.default_value is not None and default_for_index is None:
-                                default_for_index = p.default_value
-                    if not found_placeholder_for_index: continue
-                    if is_required_for_index:
-                        await ctx.reply(f"Missing required word argument for position {i} (e.g., `<word{i}>`)")
-                        return
-                    else:
-                        parsed_values[key] = default_for_index if default_for_index is not None else ""
-
-            # --- 5. Perform Standard Replacements ---
             current_response = response_template
             current_response = current_response.replace("<user>", user_mention_to_use)
             current_response = current_response.replace("<author>", ctx.author.mention)
             current_response = current_response.replace('<user_name>', user_obj.display_name)
             current_response = current_response.replace('<author_name>', ctx.author.display_name)
 
-            for p in unique_placeholders_dict.values():
-                key = f"{p.type}_{p.index}"
-                if key in parsed_values:
-                    current_response = current_response.replace(p.full_match, str(parsed_values[key]))
+            for p_replace in unique_placeholders:
+                # --- MODIFICATION: Handle unique key for <text> ---
+                if p_replace.type == "text":
+                    ph_key_in_parsed = "text_0"
+                else:
+                    ph_key_in_parsed = f"{p_replace.type}_{p_replace.index}"
+                # --- End MODIFICATION ---
 
-            # --- 6.1. Iterative Random Choice [...] replacement ---
+                if ph_key_in_parsed in parsed_values:
+                    current_response = current_response.replace(p_replace.full_match,
+                                                                str(parsed_values[ph_key_in_parsed]))
+                elif not p_replace.is_required and p_replace.default_value is None:
+                    current_response = current_response.replace(p_replace.full_match, "")
+                elif p_replace.is_required:
+                    current_response = current_response.replace(p_replace.full_match,
+                                                                f"[MISSING_{p_replace.full_match}]")
+
             def replace_choice(match):
                 options_str = match.group(1)
                 options = [opt.strip() for opt in options_str.split('|')]
                 return random.choice(options) if options else match.group(0)
 
-            choice_pattern = r"\[([^\[\]]+)\]"  # Innermost choices
-
+            choice_pattern = r"\[([^\[\]]+)\]"
             temp_response_after_choices = current_response
             while True:
                 evaluated_choices_response = re.sub(choice_pattern, replace_choice, temp_response_after_choices)
                 if evaluated_choices_response == temp_response_after_choices:
                     break
                 temp_response_after_choices = evaluated_choices_response
-            current_response = temp_response_after_choices  # This now has choices resolved
+            current_response = temp_response_after_choices
 
-            # --- 6.2. Perform Math Evaluation {...} ---
             aeval = Interpreter()
-            for i in range(1, max_num_index + 1):
-                key = f"num_{i}"
-                if key in parsed_values:
-                    aeval.symtable[f"__NUM{i}__"] = parsed_values[key]
+            for p_math in unique_placeholders:
+                if p_math.type == "num":
+                    parsed_key = f"num_{p_math.index}"
+                    if parsed_key in parsed_values:
+                        aeval.symtable[f"__NUM{p_math.index}__"] = parsed_values[parsed_key]
+                    elif p_math.default_value is not None:
+                        if re.search(r"\{[^{}]*" + re.escape(p_math.full_match) + r"[^{}]*\}", current_response):
+                            aeval.symtable[f"__NUM{p_math.index}__"] = int(p_math.default_value)
 
             _random_pattern_in_math = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)"
 
             def _replace_random_for_math_eval(match):
                 try:
-                    n1 = int(match.group(1).strip())
-                    n2 = int(match.group(2).strip())
-                    if n1 > n2: return match.group(0)
-                    return str(random.randint(n1, n2))
+                    n1, n2 = int(match.group(1)), int(match.group(2))
+                    return str(random.randint(n1, n2) if n1 <= n2 else match.group(0))
                 except (ValueError, TypeError):
                     return match.group(0)
 
             def replace_math_expression(match):
                 expression = match.group(1).strip()
                 processed_expression = re.sub(_random_pattern_in_math, _replace_random_for_math_eval, expression)
-                for p_math in unique_placeholders_dict.values():
-                    if p_math.type == "num":
-                        processed_expression = processed_expression.replace(p_math.full_match, f"__NUM{p_math.index}__")
+                for p_math_replace in unique_placeholders_dict.values():
+                    if p_math_replace.type == "num":
+                        processed_expression = processed_expression.replace(p_math_replace.full_match,
+                                                                            f"__NUM{p_math_replace.index}__")
                 try:
                     result = aeval(processed_expression)
-                    if isinstance(result, (int, float)):
-                        if isinstance(result, float) and result.is_integer():
-                            result = int(result)
-                        return f"{result}"
-                    else:
-                        return str(result)
+                    return f"{int(result) if isinstance(result, float) and result.is_integer() else result}"
                 except Exception as e_math:
-                    print(f"Error evaluating math expression '{expression}' -> '{processed_expression}': {e_math}")
+                    print(f"Error evaluating math '{expression}' -> '{processed_expression}': {e_math}")
                     return f"[MathEval Error]"
 
             math_pattern = r"\{([^{}]+)\}"
             response_after_math_and_choices = re.sub(math_pattern, replace_math_expression, current_response)
 
-            # --- 6.3. Perform Global r(n1, n2) replacement ---
             def replace_random_math_globally_formatted(match):
                 try:
-                    n1 = int(match.group(1).strip())
-                    n2 = int(match.group(2).strip())
-                    if n1 > n2: return match.group(0)
-                    random_num = random.randint(n1, n2)
-                    return f"{random_num}"
+                    n1, n2 = int(match.group(1)), int(match.group(2))
+                    return f"{random.randint(n1, n2) if n1 <= n2 else match.group(0)}"
                 except (ValueError, TypeError):
                     return match.group(0)
 
@@ -2217,10 +2246,10 @@ async def on_command_error(ctx, error):
             final_response = re.sub(random_pattern_global, replace_random_math_globally_formatted,
                                     response_after_math_and_choices)
 
-            # --- 7. Sending Logic ---
             try:
                 if not final_response.strip():
-                    print(f"Custom command '{potential_command_name}' resulted in empty response.")
+                    print(
+                        f"Custom command '{potential_command_name}' resulted in empty response for template: {response_template} with args: {full_argument_string}")
                     return
                 await ctx.send(final_response)
                 return
@@ -2233,7 +2262,7 @@ async def on_command_error(ctx, error):
     elif isinstance(error, commands.MissingPermissions):
         await ctx.reply("You can't use this command due to lack of permissions :3")
     else:
-        if not isinstance(error, commands.CommandNotFound):  # Avoid printing for handled custom commands
+        if not isinstance(error, commands.CommandNotFound):
             print(f'Ignoring exception in command {ctx.command}:', file=sys.stderr)
             traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
