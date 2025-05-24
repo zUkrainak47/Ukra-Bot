@@ -381,6 +381,17 @@ async def is_manager(ctx):
     return False
 
 
+async def custom_perms(ctx):
+    if ctx.author.id in allowed_users:
+        return True
+
+    if ctx.guild:
+        if ctx.author.guild_permissions.manage_guild or discord.utils.get(ctx.guild.roles, name="Custom Commands Manager") in ctx.author.roles:
+            return True
+
+    return False
+
+
 def perform_backup(reason='no reason given', destination='auto'):
     save_everything()
     source = "dev"
@@ -1178,7 +1189,8 @@ async def save(ctx):
     Only usable by bot developer
     """
     if ctx.author.id not in allowed_users:
-        await ctx.send("You can't use this command, silly", ephemeral=True)
+        # await ctx.send("You can't use this command, silly", ephemeral=True)
+        return
     else:
         save_everything()
         await ctx.send("Saving complete", ephemeral=True)
@@ -1191,7 +1203,8 @@ async def backup(ctx):
     Only usable by bot developer
     """
     if ctx.author.id not in allowed_users:
-        await ctx.send("You can't use this command, silly", ephemeral=True)
+        # await ctx.send("You can't use this command, silly", ephemeral=True)
+        return
     else:
         perform_backup('backup command call', destination='dev_backup')
         await ctx.send("Backup complete", ephemeral=True)
@@ -1441,7 +1454,7 @@ async def disable(ctx):
 
 # Create a cooldown
 cooldown = commands.CooldownMapping.from_cooldown(1, 120, commands.BucketType.member)
-silence_cooldown = commands.CooldownMapping.from_cooldown(1, 120, commands.BucketType.member)
+silence_cooldown = commands.CooldownMapping.from_cooldown(1, 900, commands.BucketType.member)
 
 
 def check_cooldown(ctx, cd=cooldown):
@@ -1699,7 +1712,7 @@ async def silence(ctx):
 
 @commands.hybrid_command(name='custom', description='Adds a custom command to the server',  aliases=['custom_add', 'add_custom'])
 @app_commands.describe(name='Custom command name', response='Custom response (!help custom for details)')
-@commands.check(is_manager)  # Only allow users who can manage the server
+@commands.check(custom_perms)
 async def custom(ctx, name: str, *, response: str):
     """
     Adds or updates a custom command for this server
@@ -1726,6 +1739,8 @@ async def custom(ctx, name: str, *, response: str):
     - !custom fireball <user> took {<num1=1>*(r(1,8) + r(1,8) + r(1,8) + r(1,8) + r(1,8))} fire damage
     - !custom numbers {<num1> + <num2> * <num3>}
     - !custom random_multiply {[10|53] * [15|25|35] * r(3, 7)}
+
+    Only usable by Moderators as well as users with a role called "Custom Commands Manager"
     """
     if not ctx.guild:
         await ctx.reply("Custom commands can only be added in servers.")
@@ -1766,8 +1781,7 @@ async def custom(ctx, name: str, *, response: str):
 async def custom_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.reply(f"Usage: `!custom <command_name> <response_text>`\nExample: `!custom kiss <author> kissed <user> :heart:`")
-    elif isinstance(error, commands.MissingPermissions):
-        # await ctx.reply("You need the 'Manage Server' permission to use this command.")
+    elif isinstance(error, discord.ext.commands.errors.CheckFailure):
         pass
     elif isinstance(error, commands.BadArgument):
         await ctx.reply(f"Couldn't properly understand the command name or response.")
@@ -1778,7 +1792,7 @@ async def custom_error(ctx, error):
 
 @commands.hybrid_command(name='custom_remove', description='Removes a custom command from this server',  aliases=['custom_delete', 'delete_custom', 'remove_custom', 'del_custom', 'custom_del'])
 @app_commands.describe(name='Custom command name')
-@commands.check(is_manager)  # Only allow users who can manage the server
+@commands.check(custom_perms)
 async def custom_remove(ctx, name: str):
     """
     Removes a custom command from this server
@@ -5719,13 +5733,14 @@ class Currency(commands.Cog):
 
     @give.error
     async def give_error(self, ctx, error):
-        example = 'Example: `give @user 100` gives @user 100 coins'
-        if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.reply('This command is used to give coins to someone!\n' + example)
-        elif isinstance(error, commands.BadArgument):
-            await ctx.reply('Invalid input!\n' + example)
-        else:
-            print(f"Unexpected error: {error}")  # Log other errors for debugging
+        if currency_allowed(ctx):
+            example = 'Example: `give @user 100` gives @user 100 coins'
+            if isinstance(error, commands.MissingRequiredArgument):
+                await ctx.reply('This command is used to give coins to someone!\n' + example)
+            elif isinstance(error, commands.BadArgument):
+                await ctx.reply('Invalid input!\n' + example)
+            else:
+                print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="lb", description="View the leaderboard of the 10 richest users in this server", aliases=['leaderboard'])
