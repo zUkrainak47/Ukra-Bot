@@ -506,7 +506,7 @@ items = {
     'math_potion': Item('math_potion', 'Math Potion', f"Using this potion requires you to choose a number between 1 and 99. This number is the success rate of this potion!\n(Put this number in the 'parameter' field)\n\nLet's call this number 'X' for simplicity\nIf the potion usage succeeds, you get 100-X percent of your balance. If the potion fails, you lose X percent of your balance!\n\nFor example, if you set X = 80% and you have 10,000 {coin} in your balance, there's an 80% chance to get +2,000 {coin} and a 20% chance to get -8,000 {coin}\n\nPurchasable for 4 {daily_item}", math_potion, 'https://cdn.discordapp.com/attachments/696842659989291130/1362905341829845042/math_potion.png?ex=68041803&is=6802c683&hm=0680d259dc5daea58985a779d0fa6172079208a301b0e825be18934a1be2f23d&', [4, 'daily_item']),
     'funny_item': Item('funny_item', "Funny Item", f"It's an incredibly Funny Item XD\nYou can use it once you own 69 of it\nUsing 69 Funny Items grants you 1,000,000 {coin}\n\nDrops when you get 69 {coin} from Fishing 🎣", funny_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336705627703087214/msjoy_100x100.png?ex=67a4c7a0&is=67a37620&hm=01645ccfbdd31ee0c0851b472028e8318d11cc8643aaeca8a02787c2b8942f29&"),
     'streak_freeze': Item('streak_freeze', "Streak Freeze", f"Freezes your streak!\nComsumed automatically when you forgot to run !daily yesterday\nProtects from a maximum of 1 missed day\n\nPurchasable for 1 {daily_item}", streak_freeze, "https://cdn.discordapp.com/attachments/696842659989291130/1339193669802131456/streak_freeze.png?ex=67add4cb&is=67ac834b&hm=73f5ec0e426647940adfa34d3174074e976b04ec78093a95ce7fc855a9dbb207&", [1, 'daily_item']),
-    'scratch_off_ticket': Item('scratch_off_ticket', "Scratch-off Ticket", f"Using this ticket has a\n- 0.1% chance to grant 300,000 {coin}\n- 10% chance to grant 1,000 {coin}\n- 89.9% chance to grant 100 {coin}\n\nPurchasable for 500 {coin}", scratch_off_ticket, "https://cdn.discordapp.com/attachments/696842659989291130/1340678358652026910/scratch_off_ticket.png?ex=67b33b85&is=67b1ea05&hm=d117ecfc6890d182c31774a09091225bc55336e24ed4f71792648a723644482d&", [500, 'coin']),
+    'scratch_off_ticket': Item('scratch_off_ticket', "Scratch-off Ticket", f"Using this ticket has a\n- 0.1% chance to grant 300,000 {coin}\n- 10% chance to grant 1,000 {coin}\n- 89.9% chance to grant 100 {coin}\n\nPurchasable for 500 {coin}\nDrops alongside winning the Lottery", scratch_off_ticket, "https://cdn.discordapp.com/attachments/696842659989291130/1340678358652026910/scratch_off_ticket.png?ex=67b33b85&is=67b1ea05&hm=d117ecfc6890d182c31774a09091225bc55336e24ed4f71792648a723644482d&", [500, 'coin']),
     'laundry_machine': Item('laundry_machine', "Laundry Machine", f"It's what you think it is.\nUsing this item grants you 10,000 {coin}\n\nPurchasable for 10,000 {coin}", laundry_machine, "https://cdn.discordapp.com/attachments/696842659989291130/1337206253784535101/laundry_machine.png?ex=67a699de&is=67a5485e&hm=3e7dd2b88acaee2d9c82d86285bcde8d40a809006f7945c9112e610e6afc5f38&", [10000, 'coin']),
 
     'daily_item': Item('daily_item', "Daily Item", "It's a Daily Item!\nIt doesn't do anything yet but it will in the future\nUsed as shop currency", daily_item, "https://cdn.discordapp.com/attachments/696842659989291130/1336436807692320912/daily_item.png?ex=67a3cd44&is=67a27bc4&hm=090331df144f6166d56cfc6871e592cb8cefe9c04f5ce7b2d102cd43bccbfa3a&"),
@@ -632,7 +632,7 @@ def get_default_profile(user_balance: int) -> dict:
             "upgrades": {}, "idle": {},
 
             'dict_1': {}, 'dict_2': {}, 'dict_3': {}, 'dict_4': {}, 'dict_5': {},
-            'list_1': [], 'list_2': [], 'list_3': [], 'list_4': [], 'list_5': [],
+            'list_1': [], 'list_2': [0, 0], 'list_3': [], 'list_4': [], 'list_5': [],
             'num_1': 0, 'num_2': 0, 'num_3': 0, 'num_4': 0, 'num_5': 0,
             'str_1': '', 'str_2': '', 'str_3': '', 'str_4': '', 'str_5': ''}
 
@@ -2357,7 +2357,22 @@ def get_user_net(guild_: str, user_: str, make_sure=True):
     return num
 
 
-def get_net_leaderboard(members=[]):
+def get_user_loan_net(guild_: str, user_: str):
+    try:
+        total_left_to_pay = 0
+        total_left_owed = 0
+
+        make_sure_user_profile_exists(guild_, user_)
+        for i in global_profiles[user_]['dict_1'].setdefault('in', []):
+            total_left_to_pay += active_loans[i][2]-active_loans[i][3]
+        for i in global_profiles[user_]['dict_1'].setdefault('out', []):
+            total_left_owed += active_loans[i][2]-active_loans[i][3]
+        return total_left_owed - total_left_to_pay
+    except Exception:
+        print(traceback.format_exc())
+
+
+def get_net_leaderboard(members=[], real=False):
     net_worth_list = []
     for user_id, balance in global_currency.items():
         if members and user_id not in members:
@@ -2382,7 +2397,8 @@ def get_net_leaderboard(members=[]):
                 price = 0 if stock_cache[stock_name][1] == "" else stock_cache[stock_name][0]
                 # Multiply shares by price and take the integer part.
                 total_worth += int(shares * price)
-
+        if real:
+            total_worth += get_user_loan_net('', user_id)
         # Append the tuple (user_id, total_worth) to our list.
         net_worth_list.append((user_id, total_worth))
 
@@ -2465,6 +2481,17 @@ def adjust_gamble_winrate(guild_: str, user_: str, win: bool, save=True, make_su
         global_profiles[user_]['gamble_win_ratio'][0] += 1
     else:
         global_profiles[user_]['gamble_win_ratio'][1] += 1
+    if save:
+        save_profiles()
+
+
+def adjust_dice_winrate(guild_: str, user_: str, win: bool, save=True, make_sure=True):
+    if make_sure:
+        make_sure_user_profile_exists(guild_, user_)
+    if win:
+        global_profiles[user_]['list_2'][0] += 1
+    else:
+        global_profiles[user_]['list_2'][1] += 1
     if save:
         save_profiles()
 
@@ -4153,6 +4180,13 @@ class Currency(commands.Cog):
                         profile_embed.add_field(name="!gamble uses", value=f'{total_gambled:,}', inline=True)
                         profile_embed.add_field(name="Lotteries Won", value=f'{target_profile['lotteries_won']:,}', inline=True)
 
+                        if total_diced := sum(target_profile['list_2']):
+                            profile_embed.add_field(name="!dice Win Rate", value=f"{round(target_profile['list_2'][0]/total_diced*100, 2)}%", inline=True)
+                        else:
+                            profile_embed.add_field(name="!dice Win Rate", value=f"0.0%", inline=True)
+                        profile_embed.add_field(name="!dice uses", value=f'{target_profile['commands'].get('dice', 0):,}', inline=True)
+                        profile_embed.add_field(name="", value='', inline=True)
+
                     profile_embed.add_field(name="Rare Items Showcase", value=', '.join(f"{rare_items_to_emoji[item]}: {target_profile['rare_items_found'].get(item, 0)}" for item in rare_items_to_emoji), inline=False)
                     if target_profile['num_5']:
                         profile_embed.add_field(name="Total Donated", value=f"${target_profile['num_5']:,.2f}", inline=False)
@@ -4213,7 +4247,7 @@ class Currency(commands.Cog):
         known_data = ("```json\n"
                       f"{global_profiles[str(ctx.author.id)]}\n"
                       "```\n\n"
-                      "`dict_1` - loans, `list_1` - used codes, `num_1` - total funded giveaways, `num_5` - total donated")
+                      "`dict_1` - loans, `list_1` - used codes, `list_2` - dice win rate, `num_1` - total funded giveaways, `num_5` - total donated")
         if guild_id:
             await ctx.reply('Check your DMs', ephemeral=True)
             await ctx.author.send(known_data)
@@ -4934,9 +4968,12 @@ class Currency(commands.Cog):
                         stock_total += int(user_stocks[s] * stock_cache[s][0])
             stock_total = stock_total
             stock_msg = f" +{stock_total:,} {coin} in `STOCK`" if stock_total else ''
+            user_loans = get_user_loan_net(guild_id, str(user.id))
+            loan_msg = f" {'-' if user_loans < 0 else '+'}{abs(user_loans):,} {coin} (loans)" if user_loans else ''
             net_worth = num + laundry * 10000 + stock_total
+            net_worth_loan_msg = f"\n\n**Net Worth (counting loans):** {net_worth + user_loans:,} {coin}" if user_loans else ''
             # await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}{laundry_msg}")
-            await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}{stock_msg}{laundry_msg}\n**Net worth:** {net_worth:,} {coin}")
+            await ctx.reply(f"**{user.display_name}'s balance:** {num:,} {coin}{stock_msg}{laundry_msg}{loan_msg}\n**Net worth:** {net_worth:,} {coin}{net_worth_loan_msg}")
             highest_net_check(guild_id, str(user.id), net_worth, save=True, make_sure=False)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
@@ -5900,6 +5937,88 @@ class Currency(commands.Cog):
         await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
+    @commands.hybrid_command(name="glbr", description="View the global leaderboard with LOANS", aliases=['global_leaderboard_real', 'glibr'])
+    @app_commands.describe(page="Leaderboard page")
+    async def global_leaderboard(self, ctx, *, page: int = 1):
+        """
+        View the top 10 richest users of the bot globally with LOANS (optionally accepts a page)
+        Also shows your global rank
+        """
+        global fetched_users
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        if currency_allowed(ctx) and bot_down_check(guild_id):
+            author_id = str(ctx.author.id)
+            make_sure_user_has_currency(guild_id, author_id)
+            # sorted_members = sorted(global_currency.items(), key=lambda x: x[1], reverse=True)
+            sorted_members = get_net_leaderboard([], True)
+            #  FIXME probably not the best approach
+            top_users = []
+            found_author = False
+            if getattr(ctx, "interaction", None) is None:
+                contents = ctx.message.content.split()[1:]
+                if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
+                    page = contents[0]
+                else:
+                    page = 1
+            page = min(int(page), math.ceil(len(sorted_members)/10))
+
+            if page == 1:
+                page_msg = ''
+            else:
+                page_msg = f' - page #{page}'
+
+            page -= 1
+            c = 0
+            for user_id, coins in sorted_members[page*10:page*10+10]:
+                try:
+                    user = await self.get_user(int(user_id))
+
+                    if int(user_id) != ctx.author.id:
+                        name_ = user.global_name or user.name
+                        top_users.append([name_, coins])
+                    else:
+                        top_users.append([f"{user.mention}", coins])
+                        found_author = True
+                    make_sure_user_profile_exists(guild_id, user_id)
+                    c += 1
+                    rank = page*10 + c
+                    highest_rank = global_profiles[user_id]['highest_global_rank']
+                    if rank < highest_rank or highest_rank == -1:
+                        global_profiles[user_id]['highest_global_rank'] = rank
+                        if rank == 1:
+                            if 'Reached #1' not in global_profiles[user_id]['items'].setdefault('titles', []):
+                                global_profiles[user_id]['items']['titles'].append('Reached #1')
+                            await ctx.send(f"{user.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
+                        save_profiles()
+                except discord.NotFound:
+                    global_currency.remove(user_id)
+                    save_currency()
+            if not found_author:
+                # rank = sorted_members.index((str(ctx.author.id), global_currency[str(ctx.author.id)]))+1
+                user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
+                rank = user_to_index[str(ctx.author.id)] + 1
+                highest_rank = global_profiles[str(ctx.author.id)]['highest_global_rank']
+                if rank < highest_rank or highest_rank == -1:
+                    global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
+                    if rank == 1:
+                        if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
+                            global_profiles[author_id]['items']['titles'].append('Reached #1')
+                        await ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
+                    save_profiles()
+                you = f"\n\nYou're at **#{rank}**"
+            else:
+                you = ''
+            number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
+            await ctx.send(f"# Global Leaderboard (real) {page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
+        elif currency_allowed(ctx):
+            await ctx.reply(f'{reason}, currency commands are disabled')
+
+    @global_leaderboard.error
+    async def global_leaderboard_error(self, ctx, error):
+        print(error)
+        await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
+
+    @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="funders", description="View the top 10 giveaway funders globally")
     @app_commands.describe(page="Leaderboard page")
     async def funders(self, ctx, *, page: int = 1):
@@ -6103,6 +6222,7 @@ class Currency(commands.Cog):
                         add_coins_to_user(guild_id, author_id, delta)  # save file
                         num = get_user_balance(guild_id, author_id)
                         profile_update_after_any_gamble(guild_id, author_id, delta, save=False)
+                        adjust_dice_winrate(guild_id, author_id, result, False, False)
                         command_count_increment(guild_id, author_id, 'dice', True, False)
                         messages_dict = {1: f"You win! The dice rolled `{dice_roll}` {yay}", 0: f"You lose! The dice rolled `{dice_roll}` {o7}"}
                         await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
