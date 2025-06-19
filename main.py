@@ -2963,7 +2963,7 @@ class ConfirmView(discord.ui.View):
 
 
 class LottoView(discord.ui.View):
-    def __init__(self, s, ctx, enterbutton, entrance_price, ukra_bot_fee, payout, timeout: float = 90):
+    def __init__(self, s, ctx, enterbutton, entrance_price, ukra_bot_fee, payout, misc, timeout: float = 90):
         super().__init__(timeout=timeout)
         self.message = None
         self.ctx = ctx
@@ -2973,6 +2973,7 @@ class LottoView(discord.ui.View):
         self.ukra_bot_fee = ukra_bot_fee
         self.payout = payout
         self.enterbutton = enterbutton
+        self.misc = misc
         self.s = s
 
         if self.enterbutton:
@@ -2993,7 +2994,7 @@ class LottoView(discord.ui.View):
             await interaction.response.defer()
             entered = await self.s.enter_lotto(self.ctx, self.entrance_price, self.ukra_bot_fee, self.payout)
             if entered:
-                await self.on_timeout()
+                await self.on_entered()
         except:
             print(traceback.format_exc())
 
@@ -3009,6 +3010,25 @@ class LottoView(discord.ui.View):
                 await self.message.edit(view=self)
             except Exception as e:
                 print("Failed to update the message on timeout:", e)
+
+    async def on_entered(self):
+        # Disable all buttons in the view when the view times out.
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+
+        # If you have a reference to the sent message, update it to reflect that the buttons are now disabled.
+        if self.message:
+            try:
+                await self.message.edit(content=f'# {peepositbusiness} Lottery\n'
+                    '### Current lottery:\n'
+                    f'- **{self.misc+1}** participant{'s' if self.misc+1 != 1 else ''}\n'
+                    f'- **{(self.misc+1) * self.payout:,}** {coin} in pool\n'
+                    f'- Participation price: {self.entrance_price} {coin}\n'
+                    f'- Ends <t:{get_daily_reset_timestamp()}:R>\n', view=self)
+            except Exception as e:
+                print("Failed to update the message on timeout:", e)
+
 
 
 class HelpView(discord.ui.View):
@@ -4180,11 +4200,14 @@ class Currency(commands.Cog):
                         profile_embed.add_field(name="!gamble uses", value=f'{total_gambled:,}', inline=True)
                         profile_embed.add_field(name="Lotteries Won", value=f'{target_profile['lotteries_won']:,}', inline=True)
 
-                        if total_diced := sum(target_profile['list_2']):
+                        total_diced = sum(target_profile['list_2'])
+                        total_diced_real = target_profile['commands'].get('dice', 0)
+                        if total_diced:
                             profile_embed.add_field(name="!dice Win Rate", value=f"{round(target_profile['list_2'][0]/total_diced*100, 2)}%", inline=True)
                         else:
                             profile_embed.add_field(name="!dice Win Rate", value=f"0.0%", inline=True)
-                        profile_embed.add_field(name="!dice uses", value=f'{target_profile['commands'].get('dice', 0):,}', inline=True)
+                        additional_dice_msg = f" in win rate, {target_profile['commands'].get('dice', 0):,} total" if total_diced != total_diced_real else ''
+                        profile_embed.add_field(name="!dice uses", value=f'{total_diced:,}{additional_dice_msg}', inline=True)
                         profile_embed.add_field(name="", value='', inline=True)
 
                     profile_embed.add_field(name="Rare Items Showcase", value=', '.join(f"{rare_items_to_emoji[item]}: {target_profile['rare_items_found'].get(item, 0)}" for item in rare_items_to_emoji), inline=False)
@@ -5937,9 +5960,9 @@ class Currency(commands.Cog):
         await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
-    @commands.hybrid_command(name="glbr", description="View the global leaderboard with LOANS", aliases=['global_leaderboard_real', 'glibr'])
+    @commands.hybrid_command(name="glbr", description="View the global leaderboard with LOANS", aliases=['global_leaderboard_real', 'glibr', 'glrb', 'glirb'])
     @app_commands.describe(page="Leaderboard page")
-    async def global_leaderboard(self, ctx, *, page: int = 1):
+    async def global_leaderboard_real(self, ctx, *, page: int = 1):
         """
         View the top 10 richest users of the bot globally with LOANS (optionally accepts a page)
         Also shows your global rank
@@ -6013,8 +6036,8 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @global_leaderboard.error
-    async def global_leaderboard_error(self, ctx, error):
+    @global_leaderboard_real.error
+    async def global_leaderboard_real_error(self, ctx, error):
         print(error)
         await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
 
@@ -6929,7 +6952,7 @@ class Currency(commands.Cog):
                 await self.enter_lotto(ctx, entrance_price, ukra_bot_fee, payout)
 
             else:
-                view = LottoView(self, ctx, enterbutton=not_joined, entrance_price=entrance_price, ukra_bot_fee=ukra_bot_fee, payout=payout)
+                view = LottoView(self, ctx, enterbutton=not_joined, entrance_price=entrance_price, ukra_bot_fee=ukra_bot_fee, payout=payout, misc=len(active_lottery[today_date]))
                 message = await ctx.send(
                     f'# {peepositbusiness} Lottery\n'
                     '### Current lottery:\n'
