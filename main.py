@@ -2911,7 +2911,7 @@ class PaginationView(discord.ui.View):
     async def first_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page = 1
-        current_title = global_profiles[str(interaction.user.id)]['title']
+        current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
         self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
@@ -2919,7 +2919,7 @@ class PaginationView(discord.ui.View):
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page -= 1
-        current_title = global_profiles[str(interaction.user.id)]['title']
+        current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
         self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
@@ -2927,7 +2927,7 @@ class PaginationView(discord.ui.View):
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page += 1
-        current_title = global_profiles[str(interaction.user.id)]['title']
+        current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
         self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
@@ -2935,7 +2935,7 @@ class PaginationView(discord.ui.View):
     async def last_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page = self.total_pages()
-        current_title = global_profiles[str(interaction.user.id)]['title']
+        current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
         self.footer = f'Your current title is {"not set" if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
