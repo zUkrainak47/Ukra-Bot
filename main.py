@@ -2693,17 +2693,14 @@ class PaginationView(discord.ui.View):
         # Case 2: The Lore View
         if self.author.startswith('The Lore of'):
             # For the lore view, we have a specific title and a list of fields.
-            embed = discord.Embed(title=f"", color=self.color)
+            entry = data[0]
+            embed = discord.Embed(title=f"", color=self.color, timestamp=entry['timestamp'])
             embed.set_author(name=f"{self.author} - Entry {self.current_page} / {self.total_pages()}", icon_url=self.author_icon)
-            if not data:
-                embed.description = "No lore on this page."
-            else:
-                entry = data[0]
-                if entry['image_url']:
-                    embed.set_image(url=entry['image_url'])
-                # The data is already formatted as a list of dicts with a 'label' and 'item'.
-                embed.add_field(name='', value=entry['item'], inline=False)
-                embed.set_footer(text=entry['label'])
+            if entry['image_url'] is not None:
+                embed.set_image(url=entry['image_url'])
+            # The data is already formatted as a list of dicts with a 'label' and 'item'.
+            embed.add_field(name='', value=entry['item'], inline=False)
+            embed.set_footer(text=entry['label'])
 
             return embed
 
@@ -4247,9 +4244,9 @@ class Lore(commands.Cog):
 
             # Format for display
             value_string = (
-                f"{entry['content']}\n"
-                f"-# <t:{int(datetime.fromisoformat(entry['timestamp']).timestamp())}:D>"
-                f"\n\n"
+                f"{entry['content']}\n\n"
+                # f"-# <t:{int(datetime.fromisoformat(entry['timestamp']).timestamp())}:D>"
+                # f"\n\n"
                 f"Added by {adder_name} "
                 # f"on <t:{int(datetime.fromisoformat(entry['timestamp']).timestamp())}:D>\n"
                 f"\n[Jump to Message]({message_url})"
@@ -4258,7 +4255,8 @@ class Lore(commands.Cog):
             embed_data.append({
                 "label": f"{entry['message_id']}",  # message id in this case lol
                 "item": value_string,
-                "image_url": entry['image_url']
+                "image_url": entry['image_url'],
+                "timestamp": datetime.fromisoformat(entry['timestamp'])
             })
 
         pagination_view = PaginationView(
