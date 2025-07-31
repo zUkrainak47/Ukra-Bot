@@ -4,6 +4,7 @@ import traceback
 import asyncio
 import datetime
 import re
+import typing
 from datetime import datetime, timedelta, UTC
 from datetime import time as datetime_time
 import os
@@ -1071,7 +1072,7 @@ async def donate(ctx):
                     f"\nThe first donation yields twice as many coins as the usual rate {murmheart}" * (not global_profiles[str(ctx.author.id)]['num_5']))
 
 
-@commands.hybrid_command(name="server", description="DM's the sender an invite link to Ukra Bot Server", aliases=['invite'])
+@commands.hybrid_command(name="server", description="DM's the sender an invite link to Ukra Bot Server", aliases=['invite', 'support'])
 async def server(ctx):
     """
     You should write this command for exclusive giveaways :3
@@ -2612,9 +2613,7 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
 
 # taken from https://youtu.be/PRC4Ev5TJwc + chatgpt refined
 class PaginationView(discord.ui.View):
-    current_page: int = 1
-
-    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', ctx_=None, timeout: float = 120):
+    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', ctx_=None, timeout: float = 120, page_: int = 1):
         super().__init__(timeout=timeout)
         self.data = data_
         self.title = title_
@@ -2630,6 +2629,7 @@ class PaginationView(discord.ui.View):
                          5 if (self.footer and self.footer_icon) else \
                          15 if self.author == "Custom Commands" else \
                          8
+        self.current_page = page_
 
     def total_pages(self) -> int:
         """
@@ -4211,24 +4211,60 @@ class Lore(commands.Cog):
             await print_reset_time(int(error.retry_after), ctx, f"You're adding lore too quickly! ")
 
     @commands.hybrid_command(name="lore", description="Displays the lore for a specific user in this server")
-    async def view_lore(self, ctx, user: discord.Member=None):
+    @app_commands.describe(user="The user whose lore you're checking", page="Entry number")
+    async def view_lore(self, ctx, user: typing.Optional[discord.Member] = None, page: int = 1):
         """
         Displays the lore for a specific user in this server
         Use !addlore to add lore
         """
+
+        if ctx.interaction is None:
+            # Reset to defaults
+            target_user = None
+            page_num = 1
+            args = ctx.message.content.split()[1:]  # Get all arguments after the command name
+
+            if not args:
+                # Case: !lore (no arguments)
+                target_user = ctx.author
+                page_num = 1
+            else:
+                # Try to convert the first argument to a Member
+                try:
+                    # Use a converter to handle mentions, IDs, and names
+                    target_user = await commands.MemberConverter().convert(ctx, args[0])
+                    # If successful, the rest of the arguments could be the page number
+                    if len(args) > 1 and args[1].isdigit():
+                        page_num = int(args[1])
+                    else:
+                        page_num = 1  # Default page if only a user is provided
+                except commands.MemberNotFound:
+                    # The first argument was NOT a user. Assume it's a page number.
+                    target_user = ctx.author
+                    if args[0].isdigit():
+                        page_num = int(args[0])
+                    else:
+                        # Invalid first argument, could show an error or default
+                        await ctx.reply("Invalid argument. Please provide a valid user or page number.")
+                        return
+        else:
+            # If invoked via slash command, the arguments are already parsed correctly
+            target_user = user if user is not None else ctx.author
+            page_num = page
+
         if not ctx.guild:
             return await ctx.reply("Lore can only be viewed in a server.")
 
-        if user is None:
-            user = ctx.author
+        # if user is None:
+        #     user = ctx.author
 
         guild_id = str(ctx.guild.id)
-        user_id = str(user.id)
+        user_id = str(target_user.id)
 
         user_lore = lore_data.get(guild_id, {}).get(user_id, [])
 
         if not user_lore:
-            return await ctx.reply(f"**{user.display_name}** has no lore yet.")
+            return await ctx.reply(f"**{target_user.display_name}** has no lore yet.")
 
         # You can reuse your PaginationView here.
         # We'll format the data for it.
@@ -4261,12 +4297,13 @@ class Lore(commands.Cog):
 
         pagination_view = PaginationView(
             data_=embed_data,
-            author_=f"The Lore of {user.display_name}",
-            author_icon_=user.avatar.url,
+            author_=f"The Lore of {target_user.display_name}",
+            author_icon_=target_user.avatar.url,
             title_='',
-            color_=user.color if not user.color == discord.Colour.default() else 0xffd000,
+            color_=target_user.color if not target_user.color == discord.Colour.default() else 0xffd000,
             footer_=[f"{user_lore[-1]['message_id']}", ""],
             ctx_=ctx,
+            page_=min(page_num, len(user_lore))
         )
         await pagination_view.send_embed()
 
@@ -4274,6 +4311,8 @@ class Lore(commands.Cog):
     async def remove_lore(self, ctx, message_id_to_remove):
         """
         Removes a lore entry by its message ID
+        You can remove your own lore, as well as lore you've created
+        Server admins can remove any lore
         """
         if not ctx.guild:
             return await ctx.reply("Lore can only be managed in a server.")
