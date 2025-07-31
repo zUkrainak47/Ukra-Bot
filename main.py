@@ -756,6 +756,16 @@ async def print_reset_time(r: int, ctx, custom_message=''):
 
 
 @client.event
+async def on_guild_join(guild: discord.Guild):
+    """
+    Called when the bot joins a new guild.
+    Initializes the default settings for that guild.
+    """
+    print(f"Joined a new guild: {guild.name} (ID: {guild.id})")
+    make_sure_server_settings_exist(str(guild.id))
+
+
+@client.event
 async def on_ready():
     try:
         client.add_command(rng)
@@ -788,6 +798,10 @@ async def on_ready():
         rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
         lottery_channel = client.get_guild(696311992973131796).get_channel(1326949510336872458)
         await up_channel.send(f'{yay} {bot_name} has connected to Discord! <@&1339183730019008513>')
+        print("Verifying settings for all guilds...")
+        for guild in client.guilds:
+            make_sure_server_settings_exist(str(guild.id))
+
         print('Bot is up!')
         global bot_down, reason
         bot_down = False
