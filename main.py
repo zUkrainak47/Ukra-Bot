@@ -265,6 +265,14 @@ else:
     active_loans = {}
 
 
+LORE_FILE = Path("dev", "lore.json")
+if os.path.exists(LORE_FILE):
+    with open(LORE_FILE, "r") as file:
+        lore_data = json.load(file)
+else:
+    lore_data = {}
+
+
 def save_settings():
     with open(SETTINGS_FILE, "w") as file:
         json.dump(server_settings, file, indent=4)
@@ -343,6 +351,11 @@ def save_active_loans():
         json.dump(active_loans, file, indent=4)
 
 
+def save_lore():
+    with open(LORE_FILE, "w") as file:
+        json.dump(lore_data, file, indent=4)
+
+
 def save_everything():
     save_settings()
     save_currency()
@@ -357,6 +370,7 @@ def save_everything():
     save_ignored_users()
     save_active_lottery()
     save_active_loans()
+    save_lore()
 
 
 async def is_admin(ctx):
@@ -730,7 +744,7 @@ def convert_msg_to_user_id(message: list, check_mentions=True) -> int:
     return -1
 
 
-async def print_reset_time(r, ctx, custom_message=''):
+async def print_reset_time(r: int, ctx, custom_message=''):
     if r > 60:
         r /= 60
         time_ = 'minutes'
@@ -1232,6 +1246,61 @@ async def compliment(ctx, *, user: discord.User = None):
         # await log_channel.send(f"🫡 {ctx.author.mention} tried to cast a compliment in {ctx.channel.mention} but compliments aren't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
 
 
+@client.command(aliases=['allow'])
+@commands.check(is_admin)
+async def enable(ctx):
+    """
+    Enables command of choice
+    Can only be used by administrators
+    """
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    if not guild_id:
+        await ctx.reply("Can't use this in DMs!")
+        return
+    make_sure_server_settings_exist(guild_id)
+    cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
+    if cmd in toggleable_commands and cmd not in server_settings.get(guild_id).get('allowed_commands'):
+        server_settings.get(guild_id).get('allowed_commands').append(cmd)
+        await log_channel.send(f'{wicked} {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
+        success = f"{cmd} has been enabled"
+        success += '. **Please run** `!setrole segs @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('segs_role')))) * cmd == 'segs')
+        success += '. **Please run** `!setrole backshot @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('backshots_role')))) * cmd == 'backshot')
+        success += '. **Please run** `!setrole silence @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('silence_role')))) * cmd == 'silence')
+        await ctx.send(success)
+        save_settings()
+    elif cmd in toggleable_commands:
+        await ctx.send(f"{cmd} is already enabled")
+    else:
+        await ctx.send(f"Command usage: `!enable <cmd>`\n"
+                       f"Available commands: {', '.join(toggleable_commands)}")
+
+
+@client.command(aliases=['disallow', 'prevent'])
+@commands.check(is_admin)
+async def disable(ctx):
+    """
+    Disables command of choice
+    Can only be used by administrators
+    """
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    if not guild_id:
+        await ctx.reply("Can't use this in DMs!")
+        return
+    make_sure_server_settings_exist(guild_id)
+    cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
+    if cmd in toggleable_commands and cmd in server_settings.get(guild_id).get('allowed_commands'):
+        server_settings.get(guild_id).get('allowed_commands').remove(cmd)
+        await log_channel.send(f'{deadge} {ctx.author.mention} disabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
+        success = f"{cmd} has been disabled"
+        await ctx.send(success)
+        save_settings()
+    elif cmd in toggleable_commands:
+        await ctx.send(f"{cmd} is already disabled")
+    else:
+        await ctx.send(f"Command usage: `!disable <cmd>`\n"
+                       f"Available commands: {', '.join(toggleable_commands)}")
+
+
 @client.command()
 async def settings(ctx):
     """Shows current server settings"""
@@ -1268,7 +1337,9 @@ async def settings(ctx):
     else:
         silence_role_name = "N/A" + ", run `!setrole silence @role`" * silence_allowed
 
-    await ctx.send(f"```Segs:             {allow_dict[segs_allowed]}\n" +
+    await ctx.send(f"```Currency System:  {allow_dict[currency_allowed]}\n" +
+                   '\n' +
+                   f"Segs:             {allow_dict[segs_allowed]}\n" +
                    f"Segs Role:        {segs_role_name}\n" +
                    '\n' +
                    f"Backshots:        {allow_dict[backshots_allowed]}\n" +
@@ -1280,8 +1351,6 @@ async def settings(ctx):
                    f"Compliments:      {allow_dict[compliments_allowed]}\n" +
                    '\n' +
                    f"DND:              {allow_dict[dnd_allowed]}\n" +
-                   '\n' +
-                   f"Currency System:  {allow_dict[currency_allowed]}\n" +
                    '\n' +
                    f"Kys Protection:   {allow_dict[kys_allowed]}" +
                    '```')
@@ -1395,61 +1464,6 @@ async def tuc(ctx, *, target: discord.User):
         await target.send("You have been banned from using Ukra Bot's currency system")
     else:
         await ctx.send(f"Couldn't find a user with ID `{target_id}`")
-
-
-@client.command(aliases=['allow'])
-@commands.check(is_admin)
-async def enable(ctx):
-    """
-    Enables command of choice
-    Can only be used by administrators
-    """
-    guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    if not guild_id:
-        await ctx.reply("Can't use this in DMs!")
-        return
-    make_sure_server_settings_exist(guild_id)
-    cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
-    if cmd in toggleable_commands and cmd not in server_settings.get(guild_id).get('allowed_commands'):
-        server_settings.get(guild_id).get('allowed_commands').append(cmd)
-        await log_channel.send(f'{wicked} {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
-        success = f"{cmd} has been enabled"
-        success += '. **Please run** `!setrole segs @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('segs_role')))) * cmd == 'segs')
-        success += '. **Please run** `!setrole backshot @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('backshots_role')))) * cmd == 'backshot')
-        success += '. **Please run** `!setrole silence @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('silence_role')))) * cmd == 'silence')
-        await ctx.send(success)
-        save_settings()
-    elif cmd in toggleable_commands:
-        await ctx.send(f"{cmd} is already enabled")
-    else:
-        await ctx.send(f"Command usage: `!enable <cmd>`\n"
-                       f"Available commands: {', '.join(toggleable_commands)}")
-
-
-@client.command(aliases=['disallow', 'prevent'])
-@commands.check(is_admin)
-async def disable(ctx):
-    """
-    Disables command of choice
-    Can only be used by administrators
-    """
-    guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    if not guild_id:
-        await ctx.reply("Can't use this in DMs!")
-        return
-    make_sure_server_settings_exist(guild_id)
-    cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
-    if cmd in toggleable_commands and cmd in server_settings.get(guild_id).get('allowed_commands'):
-        server_settings.get(guild_id).get('allowed_commands').remove(cmd)
-        await log_channel.send(f'{deadge} {ctx.author.mention} disabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
-        success = f"{cmd} has been disabled"
-        await ctx.send(success)
-        save_settings()
-    elif cmd in toggleable_commands:
-        await ctx.send(f"{cmd} is already disabled")
-    else:
-        await ctx.send(f"Command usage: `!disable <cmd>`\n"
-                       f"Available commands: {', '.join(toggleable_commands)}")
 
 
 # Create a cooldown
@@ -2612,7 +2626,10 @@ class PaginationView(discord.ui.View):
         self.author_icon = author_icon_
         self.ctx = ctx_
         self.message = None
-        self.page_size = 5 if (self.footer and self.footer_icon) else 15 if self.author == "Custom Commands" else 8
+        self.page_size = 1 if self.author.startswith('The Lore of') else \
+                         5 if (self.footer and self.footer_icon) else \
+                         15 if self.author == "Custom Commands" else \
+                         8
 
     def total_pages(self) -> int:
         """
@@ -2620,12 +2637,27 @@ class PaginationView(discord.ui.View):
         is a stock entry (i.e. its first element equals 'stock'), then we treat
         that as a separate page and compute the normal pages from all other items.
         """
-        if self.author != 'Custom Commands' and (self.title != 'Titles' and self.data and self.data[-1][0] == 'stock'):
+        # If there's no data, there's only one (empty) page.
+        if not self.data:
+            return 1
+
+        # --- Safely check for the special 'stock' item case ---
+        last_item = self.data[-1]
+        is_stock_item = False
+        if isinstance(last_item, (list, tuple)) and last_item:  # Check if it's a non-empty list/tuple
+            if last_item[0] == 'stock':
+                is_stock_item = True
+
+        # Apply the special logic ONLY for the inventory view, not for lore/titles/etc.
+        if self.author != 'Custom Commands' and self.title != 'Titles' and is_stock_item:
             # Exclude the stock item from the pagination of normal items.
-            normal_items = len(self.data) - 1
-            # Calculate how many pages the normal items need.
-            return math.ceil(normal_items / self.page_size) + 1
-        return max(math.ceil(len(self.data) / self.page_size), 1)
+            normal_items_count = len(self.data) - 1
+            # Calculate how many pages the normal items need, then add one for the stock page.
+            # Use max(1, ...) in case there are no normal items.
+            return max(1, math.ceil(normal_items_count / self.page_size)) + 1
+
+        # For all other cases (lore, custom commands, etc.), use the standard calculation.
+        return max(1, math.ceil(len(self.data) / self.page_size))
 
     async def send_embed(self):
         # Prepare the embed with the first page's data
@@ -2639,10 +2671,13 @@ class PaginationView(discord.ui.View):
         self.message = await self.ctx.reply(embed=embed, view=self)
 
     def create_embed(self, data):
-        # Use one embed style if footer and footer_icon are provided
+        # Case 1: Title/Footer mode (your original logic for !title)
         if self.footer and self.footer_icon:
-            embed = discord.Embed(title=f"{self.title.capitalize()} - Page {self.current_page} / {self.total_pages()}", color=self.color)
+            embed = discord.Embed(title=f"{self.title.capitalize()} - Page {self.current_page} / {self.total_pages()}",
+                                  color=self.color)
             for item in data:
+                # This assumes data is a list of dicts with 'label' and 'item'
+                # which is perfect for both !title and our new !lore.
                 embed.add_field(name=item['label'], value=item['item'], inline=False)
             if self.stickied_msg:
                 embed.add_field(name='', value='')
@@ -2650,24 +2685,42 @@ class PaginationView(discord.ui.View):
                 for i in self.stickied_msg:
                     embed.add_field(name='', value=i, inline=False)
             embed.set_footer(text=self.footer, icon_url=self.footer_icon)
+            return embed
 
+        # --- NEW LOGIC BRANCH ---
+        # Case 2: The Lore View
+        if self.author.startswith('The Lore of'):
+            # For the lore view, we have a specific title and a list of fields.
+            embed = discord.Embed(title=f"", color=self.color)
+            embed.set_author(name=f"{self.author} - Entry {self.current_page} / {self.total_pages()}", icon_url=self.author_icon)
+            if not data:
+                embed.description = "No lore on this page."
+            else:
+                entry = data[0]
+                # The data is already formatted as a list of dicts with a 'label' and 'item'.
+                embed.add_field(name='', value=entry['item'], inline=False)
+                embed.set_footer(text=f"{entry['label']}")
+
+            return embed
+
+        # --- EXISTING LOGIC BRANCH ---
+        # Case 3: Description-based mode (for !inventory, !shop, etc.)
         else:
-            # Otherwise use a description-style embed.
             desc = ''
             stock = ''
-            for item in data:
+            for item_data in data:  # Renamed 'item' to 'item_data' to avoid confusion
                 if self.author == "Item List":
-                    emoji, name = items[item].emoji, items[item].name
+                    emoji, name = items[item_data].emoji, items[item_data].name
                     desc += f'{emoji} **{name}**\n'
                 elif self.author == "Item Shop":
-                    item, num = item
-                    emoji, name = items[item].emoji, items[item].name
-                    desc += f'{emoji} **{name}** ─ {num[0]:,} {coin if num[1] == 'coin' else items[num[1]].emoji}\n'
+                    item_key, num = item_data
+                    emoji, name = items[item_key].emoji, items[item_key].name
+                    desc += f'{emoji} **{name}** ─ {num[0]:,} {coin if num[1] == "coin" else items[num[1]].emoji}\n'
                 elif self.author == "Custom Commands":
-                    desc += f'!{item}\n'
-                else:
-                    item, info = item
-                    if isinstance(info, dict):
+                    desc += f'!{item_data}\n'
+                else:  # This is the !inventory case
+                    item_key, info = item_data
+                    if isinstance(info, dict):  # Stock logic
                         found = False
                         total = 0
                         for s in sorted(info):
@@ -2680,8 +2733,8 @@ class PaginationView(discord.ui.View):
                             stock = "You don't own any Stock Shares!\nRun `/stock` to get some"
                         else:
                             stock += f'\nTotal: {total:,} {coin}'
-                    else:
-                        emoji, name = items[item].emoji, items[item].name
+                    else:  # Regular item logic
+                        emoji, name = items[item_key].emoji, items[item_key].name
                         desc += f'{emoji} **{name}** ─ {info:,}\n'
             if not data:
                 if self.author == "Custom Commands":
@@ -2689,7 +2742,7 @@ class PaginationView(discord.ui.View):
                 else:
                     desc = "You don't own any Items yet!"
 
-            embed = discord.Embed(title="Custom Commands" if self.author == "Custom Commands" else "Items" if (not data or data[-1][0] != 'stock') else 'Stock shares', color=self.color, description=desc+stock)
+            embed = discord.Embed(title="Custom Commands" if self.author == "Custom Commands" else "Items" if (not data or not isinstance(data[-1], (list, tuple)) or data[-1][0] != 'stock') else 'Stock shares', color=self.color, description=desc+stock)
 
             if self.author and self.author != "Custom Commands":
                 embed.set_author(name=self.author, icon_url=self.author_icon)
@@ -2699,8 +2752,7 @@ class PaginationView(discord.ui.View):
                 for i in self.stickied_msg:
                     embed.add_field(name='', value=i, inline=False)
             embed.set_footer(text=f"Page {self.current_page} / {self.total_pages()}")
-
-        return embed
+            return embed
 
     async def update_message(self, data):
         self.update_buttons()
@@ -2724,10 +2776,19 @@ class PaginationView(discord.ui.View):
 
     def get_current_page_data(self):
         from_item = (self.current_page - 1) * self.page_size
-        until_item = min(self.current_page * self.page_size,  len(self.data))
-        # print(self.data[min(until_item, len(self.data))-1][0])
-        # print(until_item)
-        if self.author != 'Custom Commands' and (self.title != 'Titles' and self.data[until_item-1][0] == 'stock'):
+        until_item = min(self.current_page * self.page_size, len(self.data))
+
+        if not self.data:
+            return []
+
+        last_item = self.data[until_item - 1]
+
+        is_stock_item = False
+        if isinstance(last_item, (list, tuple)) and last_item:  # Check if it's a non-empty list/tuple
+            if last_item[0] == 'stock':
+                is_stock_item = True
+
+        if self.author != 'Custom Commands' and self.title != 'Titles' and is_stock_item:
             if self.current_page != self.total_pages():
                 until_item -= 1
                 # print(until_item)
@@ -4055,6 +4116,197 @@ async def update_stock_cache():
     print()
 
 
+class Lore(commands.Cog):
+    """Commands related to the lore system"""
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def get_user(self, id_: int):
+        global fetched_users
+        if id_ in fetched_users:
+            return fetched_users.get(id_)
+        else:
+            try:
+                user = await self.bot.fetch_user(id_)
+                fetched_users[id_] = user
+                return user
+            except discord.errors.NotFound:
+                return None
+
+    @commands.command(name="addlore")
+    @commands.cooldown(1, 300, commands.BucketType.user)  # 1 use per 5 minutes per user
+    async def add_lore(self, ctx):
+        """Adds a message to a user's server-specific lore by replying to it."""
+        if not ctx.guild:
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.reply("Lore can only be added in a server.")
+
+        if not ctx.message.reference:
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.reply("You need to reply to the message you want to add to the lore.")
+
+        try:
+            referenced_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+        except discord.NotFound:
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.reply("I couldn't find the message you replied to.")
+
+        lore_subject = referenced_message.author
+        adder = ctx.author
+
+        if lore_subject.bot:
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.reply("You can't add lore for a bot.")
+        if lore_subject.id == adder.id:
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.reply("You can't add lore for yourself.")
+
+        guild_id = str(ctx.guild.id)
+        subject_id = str(lore_subject.id)
+
+        # Ensure guild and user keys exist
+        lore_data.setdefault(guild_id, {}).setdefault(subject_id, [])
+
+        if not referenced_message.content:
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.reply("You can't add empty messages to lore.")
+
+        # Check for duplicates
+        if any(entry['message_id'] == str(referenced_message.id) for entry in lore_data[guild_id][subject_id]):
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.reply("This message is already part of their lore!")
+
+        new_entry = {
+            "message_id": str(referenced_message.id),
+            "channel_id": str(referenced_message.channel.id),
+            "adder_id": str(adder.id),
+            "timestamp": referenced_message.created_at.isoformat(),  # Use original message time
+            "content": referenced_message.content
+        }
+
+        lore_data[guild_id][subject_id].append(new_entry)
+        save_lore()
+
+        await ctx.reply(f"✅ Added to **{lore_subject.display_name}**'s lore.")
+
+    @add_lore.error
+    async def add_lore_error(self, ctx, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            await print_reset_time(int(error.retry_after), ctx, f"You're adding lore too quickly! ")
+
+    @commands.hybrid_command(name="lore", description="Displays the lore for a specific user in this server")
+    async def view_lore(self, ctx, user: discord.Member=None):
+        """
+        Displays the lore for a specific user in this server
+        Use !addlore to add lore
+        """
+        if not ctx.guild:
+            return await ctx.reply("Lore can only be viewed in a server.")
+
+        if user is None:
+            user = ctx.author
+
+        guild_id = str(ctx.guild.id)
+        user_id = str(user.id)
+
+        user_lore = lore_data.get(guild_id, {}).get(user_id, [])
+
+        if not user_lore:
+            return await ctx.reply(f"**{user.display_name}** has no lore yet.")
+
+        # You can reuse your PaginationView here.
+        # We'll format the data for it.
+        embed_data = []
+        for entry in user_lore[::-1]:
+            # Fetch adder's name. Use cache or fetch.
+            # This is simplified; you have a good get_user helper for this.
+            adder = await self.get_user(int(entry['adder_id']))
+            adder_name = adder.display_name if adder else "Unknown User"
+
+            # Create the message URL
+            message_url = f"https://discord.com/channels/{guild_id}/{entry['channel_id']}/{entry['message_id']}"
+
+            # Format for display
+            value_string = (
+                f"{entry['content']}\n"
+                f"-# <t:{int(datetime.fromisoformat(entry['timestamp']).timestamp())}:D>"
+                f"\n\n"
+                f"Added by {adder_name} "
+                # f"on <t:{int(datetime.fromisoformat(entry['timestamp']).timestamp())}:D>\n"
+                f"\n[Jump to Message]({message_url})"
+                # f" | ID: `{entry['message_id']}`"
+            )
+            embed_data.append({
+                "label": f"{entry['message_id']}",  # The field name
+                "item": value_string,  # The field value
+            })
+
+        pagination_view = PaginationView(
+            data_=embed_data,
+            author_=f"The Lore of {user.display_name}",
+            author_icon_=user.avatar.url,
+            title_='',
+            color_=user.color if not user.color == discord.Colour.default() else 0xffd000,
+            footer_=[f"{user_lore[-1]['message_id']}", ""],
+            ctx_=ctx,
+        )
+        await pagination_view.send_embed()
+
+    @commands.hybrid_command(name="removelore", description="Removes a lore entry by its message ID")
+    async def remove_lore(self, ctx, message_id_to_remove):
+        """
+        Removes a lore entry by its message ID
+        """
+        if not ctx.guild:
+            return await ctx.reply("Lore can only be managed in a server.")
+        if not message_id_to_remove.isdigit():
+            return await ctx.reply("Please provide a Message ID.")
+        guild_id = str(ctx.guild.id)
+        guild_lore = lore_data.get(guild_id, {})
+
+        found_entry = None
+        subject_id_of_found_entry = None
+
+        # Search for the message ID across all users in the guild
+        for user_id, entries in guild_lore.items():
+            for entry in entries:
+                if entry['message_id'] == str(message_id_to_remove):
+                    found_entry = entry
+                    subject_id_of_found_entry = user_id
+                    break
+            if found_entry:
+                break
+
+        if not found_entry:
+            return await ctx.reply(f"Could not find a lore entry with the ID `{message_id_to_remove}`.")
+
+        # Permission Check
+        is_admin = ctx.author.guild_permissions.manage_guild
+        is_adder = str(ctx.author.id) == found_entry['adder_id']
+        is_subject = str(ctx.author.id) == subject_id_of_found_entry
+
+        if not (is_admin or is_adder or is_subject):
+            return await ctx.reply("You do not have permission to remove this lore entry.")
+
+        # Remove the entry
+        lore_data[guild_id][subject_id_of_found_entry].remove(found_entry)
+
+        # If the user has no more lore, clean up the key
+        if not lore_data[guild_id][subject_id_of_found_entry]:
+            del lore_data[guild_id][subject_id_of_found_entry]
+
+        save_lore()
+
+        lore_subject = await self.bot.fetch_user(int(subject_id_of_found_entry))
+        await ctx.reply(f"✅ Successfully removed a lore entry for **{lore_subject.display_name}**.")
+
+    @remove_lore.error
+    async def remove_lore_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply(f"Usage: `!removelore <Message ID>`")
+
+
 class Currency(commands.Cog):
     """Commands related to the currency system"""
 
@@ -5235,7 +5487,7 @@ class Currency(commands.Cog):
         """
         Dig and get a very small number of coins
         Choose random number from 1-400, sqrt(number) is the payout
-        If number is 400 you win 2,500 coins
+        If number is 400 you win 2,500 coins (Gold <:gold:1325823946737713233>)
         Has a 20-second cooldown
         """
         await self.d(ctx)
@@ -5344,8 +5596,8 @@ class Currency(commands.Cog):
         Mine and get a small number of coins
         Choose random number from 1-625, 2*sqrt(number) is the payout
 
-        If number is 625 you win 7,500 coins (Diamonds)
-        If number is 1 you get Fool's Gold and an Evil Potion
+        If number is 625 you win 7,500 coins (Diamonds 💎)
+        If number is 1 you get Fool's Gold ✨ and an <:evil_potion:1336641208885186601> Evil Potion
 
         Has a 2-minute cooldown
         """
@@ -5521,11 +5773,11 @@ class Currency(commands.Cog):
     async def fishinge(self, ctx):
         """
         Fish and get a random number of coins from 1 to 167
-        If the amount of coins chosen was 167, you get a random number of coins from 7,500 to 12,500 (Treasure Chest)
-        If the amount chosen was 12,500 you win 25,000,000 coins (The Catch)
+        If the amount of coins chosen was 167, you get a random number of coins from 7,500 to 12,500 (Treasure Chest <:treasure_chest:1325811472680620122>)
+        If the amount chosen was 12,500 you win 25,000,000 coins (<:TheCatch:1325812275172347915> The Catch)
 
-        Getting 69 coins drops a Funny Item
-        Treasure Chests have a 5% chance to drop a Rigged Potion
+        Getting 69 coins drops a <:funny_item:1336705286953635902> Funny Item
+        Treasure Chests have a 5% chance to drop a <:rigged_potion:1336395108244787232> Rigged Potion
 
         Has a 10-minute cooldown
         """
@@ -7061,7 +7313,7 @@ class Currency(commands.Cog):
     #     """
     #     await self.run_giveaway(ctx, admin=False)
 
-    @commands.hybrid_command(name="admin_giveaway", description="Starts a giveaway using coins out of thin air", aliases=['aga'])
+    @commands.hybrid_command(name="admin_giveaway", description="Starts a giveaway using coins from the !pool", aliases=['aga'])
     @app_commands.describe(amount="How much you're giving away", duration="How long the giveaway will last - in 1h30m45s format")
     async def admin_giveaway(self, ctx, amount: str, duration: str):
         """
@@ -7193,6 +7445,7 @@ class Currency(commands.Cog):
 
 async def setup():
     await client.add_cog(Currency(client))
+    await client.add_cog(Lore(client))
 
 
 # @client.event
