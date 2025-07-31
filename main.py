@@ -2664,7 +2664,9 @@ class PaginationView(discord.ui.View):
         current_data = self.get_current_page_data()
         embed = self.create_embed(current_data)
         self.update_buttons()
-        if not (self.footer and self.footer_icon):
+        if self.author.startswith('The Lore of'):
+            pass
+        elif not (self.footer and self.footer_icon):
             self.update_item_buttons()
         else:
             self.update_title_buttons()
@@ -2697,9 +2699,11 @@ class PaginationView(discord.ui.View):
                 embed.description = "No lore on this page."
             else:
                 entry = data[0]
+                if entry['image_url']:
+                    embed.set_image(url=entry['image_url'])
                 # The data is already formatted as a list of dicts with a 'label' and 'item'.
                 embed.add_field(name='', value=entry['item'], inline=False)
-                embed.set_footer(text=f"{entry['label']}")
+                embed.set_footer(text=entry['label'])
 
             return embed
 
@@ -2756,7 +2760,9 @@ class PaginationView(discord.ui.View):
 
     async def update_message(self, data):
         self.update_buttons()
-        if not (self.footer and self.footer_icon):
+        if self.author.startswith('The Lore of'):
+            pass
+        elif not (self.footer and self.footer_icon):
             self.update_item_buttons()
         else:
             self.update_title_buttons()
@@ -4137,7 +4143,9 @@ class Lore(commands.Cog):
     @commands.command(name="addlore")
     @commands.cooldown(1, 300, commands.BucketType.user)  # 1 use per 5 minutes per user
     async def add_lore(self, ctx):
-        """Adds a message to a user's server-specific lore by replying to it."""
+        """
+        Adds a message to a user's server-specific lore by replying to it
+        """
         if not ctx.guild:
             ctx.command.reset_cooldown(ctx)
             return await ctx.reply("Lore can only be added in a server.")
@@ -4162,15 +4170,24 @@ class Lore(commands.Cog):
             ctx.command.reset_cooldown(ctx)
             return await ctx.reply("You can't add lore for yourself.")
 
+        lore_content = referenced_message.content
+        lore_image_url = referenced_message.attachments[0].url if referenced_message.attachments else None
+
+        # Check if the content is JUST a URL pointing to an image/gif
+        image_extensions = ('.gif', '.png', '.jpg', '.jpeg', '.webp')
+        if not lore_image_url and lore_content.startswith('https') and lore_content.lower().endswith(image_extensions):
+            lore_image_url = lore_content
+            lore_content = ""
+
+        if not lore_content and not lore_image_url:
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.reply("You can't add a message with no usable content to lore.")
+
         guild_id = str(ctx.guild.id)
         subject_id = str(lore_subject.id)
 
         # Ensure guild and user keys exist
         lore_data.setdefault(guild_id, {}).setdefault(subject_id, [])
-
-        if not referenced_message.content:
-            ctx.command.reset_cooldown(ctx)
-            return await ctx.reply("You can't add empty messages to lore.")
 
         # Check for duplicates
         if any(entry['message_id'] == str(referenced_message.id) for entry in lore_data[guild_id][subject_id]):
@@ -4182,7 +4199,8 @@ class Lore(commands.Cog):
             "channel_id": str(referenced_message.channel.id),
             "adder_id": str(adder.id),
             "timestamp": referenced_message.created_at.isoformat(),  # Use original message time
-            "content": referenced_message.content
+            "content": lore_content,
+            "image_url": lore_image_url
         }
 
         lore_data[guild_id][subject_id].append(new_entry)
@@ -4238,8 +4256,9 @@ class Lore(commands.Cog):
                 # f" | ID: `{entry['message_id']}`"
             )
             embed_data.append({
-                "label": f"{entry['message_id']}",  # The field name
-                "item": value_string,  # The field value
+                "label": f"{entry['message_id']}",  # message id in this case lol
+                "item": value_string,
+                "image_url": entry['image_url']
             })
 
         pagination_view = PaginationView(
@@ -4298,7 +4317,7 @@ class Lore(commands.Cog):
 
         save_lore()
 
-        lore_subject = await self.bot.fetch_user(int(subject_id_of_found_entry))
+        lore_subject = await self.get_user(int(subject_id_of_found_entry))
         await ctx.reply(f"✅ Successfully removed a lore entry for **{lore_subject.display_name}**.")
 
     @remove_lore.error
