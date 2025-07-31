@@ -926,7 +926,7 @@ async def on_ready():
 
 @client.event
 async def on_message(message: discord.Message):
-    if 'kys_protect' in server_settings.get(str(message.guild.id), {}).get('allowed_commands'):
+    if message.guild and 'kys_protect' in server_settings.get(str(message.guild.id), {}).get('allowed_commands'):
         if message.author == client.user:
             return
         content = message.content.lower()
