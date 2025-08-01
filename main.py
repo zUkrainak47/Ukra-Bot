@@ -46,6 +46,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
 ALPHAVANTAGE_API_KEY = os.getenv('ALPHAVANTAGE_API_KEY')
+TENOR_API_KEY = os.getenv('TENOR_API_KEY')
 finnhub_client = finnhub.Client(api_key=FINNHUB_API_KEY)
 server_settings = {}
 global_currency = {}
@@ -1984,6 +1985,7 @@ async def calc(ctx: commands.Context, *, expression: str):
         # --- Evaluation ---
         # Run the evaluation. asteval handles the timeout internally.
         expression = expression.replace('^', '**')
+        expression = expression.replace('ˆ', '**')
         result = aeval(expression)
 
         # --- Formatting Output ---
@@ -2916,7 +2918,7 @@ class PaginationView(discord.ui.View):
 
         if custom_id in ("left_full", "left", "right", "right_full", 'reset_button') or "title_button" in custom_id:
             if interaction.user.id != self.ctx.author.id:
-                await interaction.response.send_message("This isn't your view wyd", ephemeral=True)
+                await interaction.response.send_message("This isn't your view\nRun the command yourself to scroll pages :)", ephemeral=True)
                 return False
             return True
         return True
@@ -4190,6 +4192,12 @@ class Lore(commands.Cog):
             lore_image_url = lore_content
             lore_content = ""
 
+        elif not lore_image_url and "tenor.com/view/" in lore_content:
+            direct_url = await get_direct_tenor_url(lore_content)
+            if direct_url:
+                lore_image_url = direct_url
+                lore_content = ""  # The main content is the GIF
+
         if not lore_content and not lore_image_url:
             ctx.command.reset_cooldown(ctx)
             return await ctx.reply("You can't add a message with no usable content to lore.")
@@ -4375,6 +4383,39 @@ class Lore(commands.Cog):
     async def remove_lore_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.reply(f"Usage: `!removelore <Message ID>`")
+
+
+async def get_direct_tenor_url(tenor_url: str):
+    """
+    Takes a Tenor webpage URL and returns a direct .gif URL using the Tenor API.
+    Returns None if it fails.
+    """
+    if not TENOR_API_KEY:
+        return None  # Can't do anything without an API key
+
+    # Extract the GIF ID from the URL using regex
+    match = re.search(r'-(\d+)$', tenor_url)
+    if not match:
+        return None  # URL format is not what we expected
+
+    gif_id = match.group(1)
+
+    # Construct the API request URL
+    api_url = f"https://tenor.googleapis.com/v2/posts?ids={gif_id}&key={TENOR_API_KEY}&media_filter=gif"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    # Navigate the JSON response to find the direct .gif URL
+                    return data['results'][0]['media_formats']['gif']['url'].replace('AAAAC', 'AAAAd')
+                else:
+                    print(f"Tenor API error: {response.status}")
+                    return None
+    except Exception as e:
+        print(f"Failed to fetch from Tenor API: {e}")
+        return None
 
 
 class Currency(commands.Cog):
