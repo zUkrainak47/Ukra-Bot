@@ -2644,6 +2644,7 @@ class PaginationView(discord.ui.View):
         self.page_size = 1 if self.author.startswith('The Lore of') else \
                          5 if (self.footer and self.footer_icon) else \
                          15 if self.author == "Custom Commands" else \
+                         10 if self.title == 'Lore Leaderboard' else \
                          8
         self.current_page = page_
 
@@ -2703,6 +2704,13 @@ class PaginationView(discord.ui.View):
                 for i in self.stickied_msg:
                     embed.add_field(name='', value=i, inline=False)
             embed.set_footer(text=self.footer, icon_url=self.footer_icon)
+            return embed
+
+        elif self.title == 'Lore Leaderboard':
+            embed = discord.Embed(title=f"{self.title} - Page {self.current_page} / {self.total_pages()}",
+                                  color=self.color)
+            for item in data:
+                embed.add_field(name='', value=f"{item['label']}: {item['item']}", inline=False)
             return embed
 
         # --- NEW LOGIC BRANCH ---
@@ -4141,17 +4149,20 @@ class Lore(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def get_user(self, id_: int):
+    async def get_user(self, id_: int, ctx=None):
+        if ctx is not None and ctx.guild:
+            user = ctx.guild.get_member(id_)
+            if user:
+                return user
         global fetched_users
         if id_ in fetched_users:
             return fetched_users.get(id_)
-        else:
-            try:
-                user = await self.bot.fetch_user(id_)
-                fetched_users[id_] = user
-                return user
-            except discord.errors.NotFound:
-                return None
+        try:
+            user = await self.bot.fetch_user(id_)
+            fetched_users[id_] = user
+            return user
+        except discord.errors.NotFound:
+            return None
 
     @commands.command(name="addlore")
     @commands.cooldown(1, 300, commands.BucketType.user)  # 1 use per 5 minutes per user
@@ -4294,7 +4305,7 @@ class Lore(commands.Cog):
         for entry in user_lore[::-1]:
             # Fetch adder's name. Use cache or fetch.
             # This is simplified; you have a good get_user helper for this.
-            adder = await self.get_user(int(entry['adder_id']))
+            adder = await self.get_user(int(entry['adder_id']), ctx)
             adder_name = adder.display_name if adder else "Unknown User"
 
             # Create the message URL
@@ -4329,7 +4340,7 @@ class Lore(commands.Cog):
         )
         await pagination_view.send_embed()
 
-    @commands.hybrid_command(name="removelore", description="Removes a lore entry by its message ID")
+    @commands.hybrid_command(name="removelore", description="Removes a lore entry by its message ID", aliases=['dellore', 'rmlore'])
     async def remove_lore(self, ctx, message_id_to_remove):
         """
         Removes a lore entry by its message ID
@@ -4376,13 +4387,48 @@ class Lore(commands.Cog):
 
         save_lore()
 
-        lore_subject = await self.get_user(int(subject_id_of_found_entry))
+        lore_subject = await self.get_user(int(subject_id_of_found_entry), ctx)
         await ctx.reply(f"✅ Successfully removed a lore entry for **{lore_subject.display_name}**.")
 
     @remove_lore.error
     async def remove_lore_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.reply(f"Usage: `!removelore <Message ID>`")
+
+    @commands.hybrid_command(name="lore_leaderboard", description="Removes a lore entry by its message ID", aliases=['lorelb'])
+    async def lore_leaderboard(self, ctx, page: int = 1):
+        """
+        Shows the server leaderboard of lore entries
+        """
+        if not ctx.guild:
+            return await ctx.reply("Lore can only be managed in a server.")
+        guild_id = str(ctx.guild.id)
+        guild_lore = lore_data.get(guild_id, {})
+        if not guild_lore:
+            return await ctx.reply("There is no lore in this server yet!")
+
+        embed_data = []
+        entry_counts = {user_id: len(entries) for user_id, entries in guild_lore.items()}
+        sorted_entries = sorted(entry_counts.items(), key=lambda item: item[1], reverse=True)
+        rank = 1
+
+        for user_id, message_count in sorted_entries:
+            user = await self.get_user(int(user_id), ctx)
+
+            embed_data.append({
+                'label': f"#{rank} - {user.display_name}",
+                'item': f"**{message_count}** entr{'ies' if message_count != 1 else 'y'}"
+            })
+            rank += 1
+
+        pagination_view = PaginationView(
+            data_=embed_data,
+            title_='Lore Leaderboard',
+            color_=0xffd000,
+            ctx_=ctx,
+            page_=min(page, len(embed_data))
+        )
+        await pagination_view.send_embed()
 
 
 async def get_direct_tenor_url(tenor_url: str):
@@ -4452,17 +4498,21 @@ class Currency(commands.Cog):
 
             await help_cmd.command_not_found(command)
 
-    async def get_user(self, id_: int):
+    async def get_user(self, id_: int, ctx=None):
+        if ctx is not None and ctx.guild:
+            user = ctx.guild.get_member(id_)
+            if user:
+                return user
         global fetched_users
         if id_ in fetched_users:
             return fetched_users.get(id_)
-        else:
-            try:
-                user = await self.bot.fetch_user(id_)
-                fetched_users[id_] = user
-                return user
-            except discord.errors.NotFound:
-                return None
+        try:
+            user = await self.bot.fetch_user(id_)
+            fetched_users[id_] = user
+            return user
+        except discord.errors.NotFound:
+            return None
+
 
     async def get_user_profile(self, ctx, target, full_info=False):
         """
@@ -6275,7 +6325,7 @@ class Currency(commands.Cog):
             c = 0
             for user_id, coins in sorted_members[page*10:page*10+10]:
                 try:
-                    user = await self.get_user(int(user_id))
+                    user = await self.get_user(int(user_id), ctx)
 
                     if int(user_id) != ctx.author.id:
                         name_ = user.global_name or user.name
@@ -6357,8 +6407,7 @@ class Currency(commands.Cog):
             c = 0
             for user_id, coins in sorted_members[page*10:page*10+10]:
                 try:
-                    user = await self.get_user(int(user_id))
-
+                    user = await self.get_user(int(user_id), ctx)
                     if int(user_id) != ctx.author.id:
                         name_ = user.global_name or user.name
                         top_users.append([name_, coins])
@@ -6442,7 +6491,7 @@ class Currency(commands.Cog):
             page -= 1
             for user_id, coins in sorted_members[page*10:page*10+10]:
                 try:
-                    user = await self.get_user(int(user_id))
+                    user = await self.get_user(int(user_id), ctx)
 
                     if int(user_id) != ctx.author.id:
                         name_ = user.global_name or user.name
@@ -7042,7 +7091,7 @@ class Currency(commands.Cog):
                     if not loans_found2:
                         answer += '### Incoming:\n'
                     loaner_id = active_loans[i][0]
-                    loaner = await self.get_user(loaner_id)
+                    loaner = await self.get_user(loaner_id, ctx)
                     if loaner_id in ignored_users:
                         _, _, _, _, _ = await loan_payment(i, 0)
                         # await ctx.reply(f'Loan `#{i}` to <@{loaner_id}> has been closed. {loaner.display_name} is banned from Ukra Bot')
@@ -7058,7 +7107,7 @@ class Currency(commands.Cog):
                     if not loans_found1:
                         answer += '### Outgoing:\n'
                     loanee_id = active_loans[i][1]
-                    loanee = await self.get_user(loanee_id)
+                    loanee = await self.get_user(loanee_id, ctx)
                     if loanee_id in ignored_users:
                         _, _, _, _, paid = await loan_payment(i, active_loans[i][2]-active_loans[i][3])
                         # await ctx.reply(f'Loan `#{i}` from <@{loanee_id}> has been closed. {loanee.display_name} is banned from Ukra Bot\n**{user.display_name}:** +{paid:,} {coin}, balance: {get_user_balance('', user_id)} {coin}')
@@ -7102,7 +7151,7 @@ class Currency(commands.Cog):
 
                 user_id = user.id
                 if user_id in ignored_users:
-                    user = await self.get_user(user_id)
+                    user = await self.get_user(user_id, ctx)
                     loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                     for loan_id in loans:
                         if active_loans[loan_id][0] == user_id:
@@ -7118,7 +7167,7 @@ class Currency(commands.Cog):
                 loans = global_profiles[author_id]['dict_1'].setdefault('in', []).copy()
                 for loan_id in loans:
                     if active_loans[loan_id][0] == user_id and get_user_balance(guild_id, author_id) >= (active_loans[loan_id][2] - active_loans[loan_id][3]):
-                        user = await self.get_user(user_id)
+                        user = await self.get_user(user_id, ctx)
                         finalized, loaner_id, loan_size, _, paid = await loan_payment(loan_id, get_user_balance(guild_id, author_id))
                         if not loan_size:
                             # await ctx.reply(f'Loan `#{loan_id}` from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
@@ -7127,7 +7176,7 @@ class Currency(commands.Cog):
 
                         num1 = remove_coins_from_user(guild_id, author_id, paid)
                         num2 = get_user_balance(guild_id, str(user_id))
-                        user = await self.get_user(user_id)
+                        user = await self.get_user(user_id, ctx)
                         # await ctx.reply(f'Loan `#{loan_id}` of {loan_size:,} {coin} from <@{user_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
                         await ctx.reply(f'Loan of {loan_size:,} {coin} from <@{user_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
                                         f'**{ctx.author.display_name}:** {num1:,} {coin}\n**{user.display_name}:** {num2:,} {coin}')
@@ -7136,7 +7185,7 @@ class Currency(commands.Cog):
                         await ctx.reply(f'Come back when you can pay back the loan buh you need {active_loans[loan_id][2] - active_loans[loan_id][3]:,} {coin} and you only have {get_user_balance(guild_id, author_id):,} {coin}')
                         return
 
-                user = await self.get_user(user_id)
+                user = await self.get_user(user_id, ctx)
                 if user:
                     await ctx.reply(f"You don't owe **{user.display_name}** anything")
                     return
