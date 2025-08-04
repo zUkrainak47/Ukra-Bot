@@ -2932,32 +2932,36 @@ class PaginationView(discord.ui.View):
     async def first_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page = 1
-        current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-        self.footer = f'Your current title is {'not set' if not current_title else current_title}'
+        if self.footer and self.footer_icon:
+            current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+            self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
     @discord.ui.button(label="<", style=discord.ButtonStyle.primary, row=0, custom_id='left')
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page -= 1
-        current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-        self.footer = f'Your current title is {'not set' if not current_title else current_title}'
+        if self.footer and self.footer_icon:
+            current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+            self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
     @discord.ui.button(label=">", style=discord.ButtonStyle.primary, row=0, custom_id='right')
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page += 1
-        current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-        self.footer = f'Your current title is {'not set' if not current_title else current_title}'
+        if self.footer and self.footer_icon:
+            current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+            self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
     @discord.ui.button(label=">|", style=discord.ButtonStyle.green, row=0, custom_id='right_full')
     async def last_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page = self.total_pages()
-        current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-        self.footer = f'Your current title is {"not set" if not current_title else current_title}'
+        if self.footer and self.footer_icon:
+            current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+            self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
 
     async def on_timeout(self):
@@ -3114,14 +3118,18 @@ class LottoView(discord.ui.View):
             except Exception as e:
                 print("Failed to update the message on timeout:", e)
 
+
 only_prefix = {'backshot', 'disable', 'enable', 'segs', 'setrole', 'settings', 'silence',
-                   'coinflip', 'redeem',
-                   'addlore'}
+               'coinflip', 'redeem',
+               'addlore'}
+
+
 class HelpView(discord.ui.View):
     cmd_aliases = {'farm_dig': 'd', 'farm_mine': 'm', 'farm_work': 'w', 'farm_fish': 'f', 'gamble': 'g',
                    'balance': 'bal', 'coinflip': 'c', 'dice': '1d', 'twodice': '2d', 'giveaway_pool': 'pool',
                    'info': 'i', 'profile': 'p', 'inventory': 'inv', 'stock_prices': 'sp',
                    'lore_compact': 'lore2', 'lore_leaderboard': 'lorelb'}
+
     # Add filtered_mapping and categories to the parameters
     def __init__(self, help_command, filtered_mapping, categories, ctx, items_per_page=6, initial_category="No Category", timeout=120.0):
         super().__init__(timeout=timeout)
@@ -4411,18 +4419,20 @@ class Lore(commands.Cog):
         )
         await pagination_view.send_embed()
 
-    @commands.hybrid_command(name="lore_remove", description="Removes a lore entry by its message ID",
+    @commands.hybrid_command(name="lore_remove", description="Removes a lore entry by its message ID (or a link to the message)",
                              aliases=['removelore', 'dellore', 'deletelore', 'loredelete', 'rmlore'])
     async def lore_remove(self, ctx, message_id_to_remove):
         """
-        Removes a lore entry by its message ID
+        Removes a lore entry by its message ID (or a link to the message)
         You can remove your own lore, as well as lore you've created
         Server admins can remove any lore
         """
         if not ctx.guild:
             return await ctx.reply("Lore can only be managed in a server.")
+        if message_id_to_remove.startswith("https://discord.com/channels/") and message_id_to_remove.split("/")[-1].isdigit():
+            message_id_to_remove = message_id_to_remove.split("/")[-1]
         if not message_id_to_remove.isdigit():
-            return await ctx.reply("Please provide a Message ID.")
+            return await ctx.reply("Please provide a Message ID or a link to the message.")
         guild_id = str(ctx.guild.id)
         guild_lore = lore_data.get(guild_id, {})
 
