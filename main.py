@@ -1123,10 +1123,10 @@ async def choose(ctx, *, options: str):
 @app_commands.describe(dice="DND notation")
 async def dnd(ctx, *, dice: str = ''):
     """
-    Rolls n1 DND dice of size n2 (roll <n1>d<n1>)
+    Rolls n1 DND dice of size n2 (roll <n1>d<n2>)
     Rolls 1d6 if no argument passed
     Examples: !dnd 2d6, !dnd d20, !dnd 5, !dnd
-    roll <n1>d<n1> where n1 and n2 are numbers, d is a separator, 0 < n1 <= 100, 0 < n2 <= 1000
+    roll <n1>d<n2> where n1 and n2 are numbers, d is a separator, 0 < n1 <= 100, 0 < n2 <= 1000
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
 
@@ -1176,18 +1176,6 @@ async def dnd(ctx, *, dice: str = ''):
 
         else:
             await ctx.reply("Example usage: `dnd 2d6`")
-
-
-@client.command()
-async def botpp(ctx):
-    """Makes the bot send !pp if Jarv Bot is in the server"""
-    try:
-        await ctx.guild.fetch_member(155149108183695360)
-        await ctx.send("!pp")
-    except discord.errors.NotFound:
-        await ctx.send("Jarv Bot is not in the server")
-    except:
-        await ctx.send("Can't use PP here :P")
 
 
 @commands.hybrid_command(name="botafk", description="Toggles currency commands globally", aliases=['botdown'])
@@ -5611,15 +5599,12 @@ class Currency(commands.Cog):
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, dig_coins, paid = await loan_payment(loan_id, dig_coins)
                     if not loan_size:
-                        # dig_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         loan_msg += f'\n- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         continue
 
                     if finalized:
-                        # dig_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                         loan_msg += f'\n- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
-                        # dig_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                         loan_msg += f'\n- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not dig_coins:
                         break
@@ -5719,15 +5704,12 @@ class Currency(commands.Cog):
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, mine_coins, paid = await loan_payment(loan_id, mine_coins)
                     if not loan_size:
-                        # mine_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         loan_msg += f'\n- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         continue
 
                     if finalized:
-                        # mine_message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                         loan_msg += f'\n- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
-                        # mine_message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                         loan_msg += f'\n- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not mine_coins:
                         break
@@ -5898,15 +5880,12 @@ class Currency(commands.Cog):
                 for loan_id in loans:
                     finalized, loaner_id, loan_size, fish_coins, paid = await loan_payment(loan_id, fish_coins)
                     if not loan_size:
-                        # fish_message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         loan_msg += f'\n- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                         continue
 
                     if finalized:
-                        # fish_message += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                         loan_msg += f'\n- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)'
                     else:
-                        # fish_message += f'\n- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                         loan_msg += f'\n- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                     if not fish_coins:
                         break
@@ -5987,9 +5966,6 @@ class Currency(commands.Cog):
                         reply_msg, rare_message, item_message, loan_message, total_gained = await tracked_func[command_name](ctx, False, reply_msg, rare_message, item_message, loan_message, total_gained)
                     else:
                         cd_msg += f'{command_name.capitalize().ljust(4)} {tracked_commands_emojis[command_name]} - {get_timestamp(retry_after)}\n'
-                # if not found_one:
-                #     await ctx.reply('All commands are on cooldown wyd', ephemeral=True)
-                #     return
                 rare = ''
                 if rare_message:
                     rare = '# You found '
@@ -6062,14 +6038,11 @@ class Currency(commands.Cog):
             for loan_id in loans:
                 finalized, loaner_id, loan_size, today_coins_bonus, paid = await loan_payment(loan_id, today_coins_bonus)
                 if not loan_size:
-                    # message += f'- Loan `#{loan_id}` from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                     message += f'- Loan from <@{loaner_id}> has been closed. They are banned from Ukra Bot'
                     continue
                 if finalized:
-                    # message += f'- Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)\n'
                     message += f'- Loan of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)\n'
                 else:
-                    # message += f'- Loan `#{loan_id}` from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)\n'
                     message += f'- Loan from <@{loaner_id}>: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)\n'
                 if not today_coins_bonus:
                     break
@@ -6182,10 +6155,8 @@ class Currency(commands.Cog):
                             finalized, loaner_id, loan_size, loan_money, paid = await loan_payment(loan_id, loan_money, False)
 
                             if finalized:
-                                # answer += f'\n- Loan `#{loan_id}` of {loan_size:,} {coin} has been fully paid back ({paid:,} {coin} were paid now)'
                                 answer += f'\n- Loan of {loan_size:,} {coin} has been fully paid back ({paid:,} {coin} were paid now)'
                             else:
-                                # answer += f'\n- Loan `#{loan_id}`: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                                 answer += f'\n- Loan: {active_loans[loan_id][3]:,}/{loan_size:,} {coin} paid back so far ({paid:,} {coin} were paid now)'
                             break
 
@@ -6889,10 +6860,6 @@ class Currency(commands.Cog):
                 author_id = str(ctx.author.id)
                 make_sure_user_profile_exists(guild_id, author_id)
                 example = 'Examples: `loan @user 7.5k 50%` / `loan @user 7.5k 3.75k` - both of these mean the following: you give @user 7500 coins now and they will have to pay you back 11250 coins later'
-                # contents = ctx.message.content.split()[1:]
-                # if not contents:
-                #     await ctx.reply('This command is used to loan coins to someone!\n' + example)
-                #     return
 
                 if ctx.author.id in active_loan_requests:
                     await ctx.reply(f"You already have a loan request pending")
@@ -6943,10 +6910,6 @@ class Currency(commands.Cog):
                 if interest > 3 * number:
                     await ctx.reply("Interest is capped at 3x of the loan itself. Try again")
                     return
-
-                # else:
-                #     await ctx.reply(f"Something went wrong, please make sure that the command has a user mention\n\n{example}")
-                #     return
 
                 if number > get_user_balance(guild_id, author_id):
                     await ctx.reply(f"Loan failed! You don't own {number:,} {coin} {sadgebusiness}")
@@ -7017,12 +6980,10 @@ class Currency(commands.Cog):
                             for loan in global_profiles[author_id]['dict_1'].setdefault('out', []):
                                 if user.id in active_loans[loan]:
                                     active_loans[loan][2] += number + interest
-                                    loan_info = loan, True
                                     ps = f"**{user.display_name}** now owes **{ctx.author.display_name}** {number + interest:,} {coin} more\n(that's {active_loans[loan][3]:,}/{active_loans[loan][2]:,} {coin} total)"
                                     break
                             else:
                                 active_loans[str(msg2.id)] = [ctx.author.id, user.id, number + interest, 0]
-                                loan_info = msg2.id, False
                                 ps = f"**{user.display_name}** owes **{ctx.author.display_name}** {number + interest:,} {coin}"
                                 global_profiles[str(ctx.author.id)]['dict_1'].setdefault('out', []).append(str(msg2.id))
                                 global_profiles[str(user.id)]['dict_1'].setdefault('in', []).append(str(msg2.id))
@@ -7030,7 +6991,6 @@ class Currency(commands.Cog):
 
                             save_active_loans()
 
-                            # await msg2.reply(f"## Loan successful! - `#{loan_info[0]}`\n" +
                             await msg2.reply(f"## Loan successful!\n" +
                                              f"**{user.display_name}:** +{number:,} {coin}, balance: {target_bal:,} {coin}\n" +
                                              f"**{ctx.author.display_name}:** -{number:,} {coin}, balance: {author_bal:,} {coin}\n\n"
@@ -7094,12 +7054,10 @@ class Currency(commands.Cog):
                     loaner = await self.get_user(loaner_id, ctx)
                     if loaner_id in ignored_users:
                         _, _, _, _, _ = await loan_payment(i, 0)
-                        # await ctx.reply(f'Loan `#{i}` to <@{loaner_id}> has been closed. {loaner.display_name} is banned from Ukra Bot')
                         await ctx.reply(f'Loan to <@{loaner_id}> has been closed. {loaner.display_name} is banned from Ukra Bot')
                         continue
                     loans_found2 += 1
                     total_left_to_pay += active_loans[i][2]-active_loans[i][3]
-                    # answer += f"{loans_found2}. `#{i}` - **{user.display_name}** owes **{loaner.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
                     answer += f"{loans_found2}. **{user.display_name}** owes **{loaner.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
                 if loans_found2:
                     answer += f"Total left to pay back: {total_left_to_pay:,} {coin}\n"
@@ -7110,12 +7068,10 @@ class Currency(commands.Cog):
                     loanee = await self.get_user(loanee_id, ctx)
                     if loanee_id in ignored_users:
                         _, _, _, _, paid = await loan_payment(i, active_loans[i][2]-active_loans[i][3])
-                        # await ctx.reply(f'Loan `#{i}` from <@{loanee_id}> has been closed. {loanee.display_name} is banned from Ukra Bot\n**{user.display_name}:** +{paid:,} {coin}, balance: {get_user_balance('', user_id)} {coin}')
                         await ctx.reply(f'Loan from <@{loanee_id}> has been closed. {loanee.display_name} is banned from Ukra Bot\n**{user.display_name}:** +{paid:,} {coin}, balance: {get_user_balance('', user_id)} {coin}')
                         continue
                     loans_found1 += 1
                     total_left_owed += active_loans[i][2]-active_loans[i][3]
-                    # answer += f"{loans_found1}. `#{i}` - **{loanee.display_name}** owes **{user.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
                     answer += f"{loans_found1}. **{loanee.display_name}** owes **{user.display_name}** {active_loans[i][2]:,} {coin} ({active_loans[i][3]:,}/{active_loans[i][2]:,})\n"
                 if loans_found1:
                     answer += f"Total left to be paid back: {total_left_owed:,} {coin}\n"
@@ -7158,7 +7114,6 @@ class Currency(commands.Cog):
                             global_profiles[str(user_id)]['dict_1']['out'].remove(loan_id)
                             global_profiles[author_id]['dict_1']['in'].remove(loan_id)
                             del active_loans[loan_id]
-                            # await ctx.reply(f'Loan `#{loan_id}` from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
                             await ctx.reply(f'Loan from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
                             return
                     return
@@ -7170,14 +7125,12 @@ class Currency(commands.Cog):
                         user = await self.get_user(user_id, ctx)
                         finalized, loaner_id, loan_size, _, paid = await loan_payment(loan_id, get_user_balance(guild_id, author_id))
                         if not loan_size:
-                            # await ctx.reply(f'Loan `#{loan_id}` from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
                             await ctx.reply(f'Loan from <@{user.id}> has been closed. {user.display_name} is banned from Ukra Bot')
                             return
 
                         num1 = remove_coins_from_user(guild_id, author_id, paid)
                         num2 = get_user_balance(guild_id, str(user_id))
                         user = await self.get_user(user_id, ctx)
-                        # await ctx.reply(f'Loan `#{loan_id}` of {loan_size:,} {coin} from <@{user_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
                         await ctx.reply(f'Loan of {loan_size:,} {coin} from <@{user_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
                                         f'**{ctx.author.display_name}:** {num1:,} {coin}\n**{user.display_name}:** {num2:,} {coin}')
                         return
@@ -7189,30 +7142,6 @@ class Currency(commands.Cog):
                 if user:
                     await ctx.reply(f"You don't owe **{user.display_name}** anything")
                     return
-
-                # loan_id = contents[0].lstrip('#')
-                # if loan_id in active_loans:
-                #     if (active_loans[loan_id][1] == ctx.author.id) and (get_user_balance(guild_id, author_id) >= (active_loans[loan_id][2] - active_loans[loan_id][3])):
-                #         finalized, loaner_id, loan_size, _, paid = await loan_payment(loan_id, get_user_balance(guild_id, author_id))
-                #         loaner = await self.get_user(loaner_id)
-                #
-                #         if not loan_size:
-                #             await ctx.reply(f'Loan `#{loan_id}` from <@{loaner_id}> has been closed. {loaner.display_name} is banned from Ukra Bot')
-                #             return
-                #
-                #         num1 = remove_coins_from_user(guild_id, author_id, paid)
-                #         num2 = get_user_balance(guild_id, str(loaner_id))
-                #         await ctx.reply(f'Loan `#{loan_id}` of {loan_size:,} {coin} from <@{loaner_id}> has been fully paid back ({paid:,} {coin} were paid now)\n\n'
-                #                         f'**{ctx.author.display_name}:** {num1:,} {coin}\n**{loaner.display_name}:** {num2:,} {coin}')
-                #         return
-                #     elif active_loans[loan_id][1] == ctx.author.id:
-                #         await ctx.reply(f'Come back when you can pay back the loan buh you need {active_loans[loan_id][2] - active_loans[loan_id][3]:,} {coin} and you only have {get_user_balance(guild_id, author_id):,} {coin}')
-                #         return
-                #     else:
-                #         await ctx.reply("That's not your loan to pay lmao wyd")
-                #         return
-                # else:
-                #     await ctx.reply(f"Loan `#{loan_id}` doesn't exist")
 
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
@@ -7574,25 +7503,6 @@ class Currency(commands.Cog):
                 current_balance = make_sure_user_profile_exists(guild_id, target_id)
                 number = min(current_balance, number)
                 num = remove_coins_from_user(guild_id, target_id, number)  # save file
-                # if cmd == 'Funding':
-                #     global_profiles[target_id]['num_1'] += number
-                #     given_away = global_profiles[target_id]['num_1']
-                #     user_titles = global_profiles[target_id]['items'].setdefault('titles', [])
-                #     new_titles = []
-                #     for ti in should_have_titles(given_away):
-                #         if ti not in user_titles:
-                #             global_profiles[target_id]['items']['titles'].append(ti)
-                #             new_titles.append(ti)
-                #     save_profiles()
-                #     additional_msg = f'\n\nTotal Funded: {given_away:,} {coin}'
-                #     if new_titles:
-                #         if len(new_titles) > 1:
-                #             additional_msg += f"\n\n{mentions[0].mention}, you've unlocked new Titles: *{', '.join(new_titles)}*.\nRun `!title` to change your Titles!"
-                #         else:
-                #             additional_msg += f"\n\n{mentions[0].mention}, you've unlocked the *{new_titles[0]}* Title!\nRun `!title` to change it!"
-                #     if 'Gave away 250k' in new_titles:
-                #         additional_msg += f'\n\nYou have also unlocked the `!e` command! Thank you for funding so many giveaways {gladge}'
-                # else:
                 additional_msg = ''
                 perform_backup(f'{mentions[0].name} was cursed')
                 await ctx.reply(f"## Curse successful!\n\n**{mentions[0].display_name}:** -{number:,} {coin}\nBalance: {num:,} {coin}{additional_msg}")
@@ -7606,12 +7516,6 @@ class Currency(commands.Cog):
 async def setup():
     await client.add_cog(Currency(client))
     await client.add_cog(Lore(client))
-
-
-# @client.event
-# async def on_command_error(ctx, error):
-#     if isinstance(error, commands.MissingPermissions):
-#         await ctx.reply(f"You can't use this command due to lack of permissions :3")
 
 
 def log_shutdown():
@@ -7640,47 +7544,3 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
-
-
-# async def send_message(message, user_message):
-#     if not user_message:
-#         print("?")
-#         return
-#
-#     try:
-#         response = get_response(user_message)
-#         await message.channel.send(response)
-#
-#     except Exception as e:
-#         pass
-
-
-# @client.event
-# async def on_message(message):
-#     if message.author == client.user:
-#         return
-#     username = str(message.author)
-#     user_message = str(message.content)
-#     channel = str(message.channel)
-#
-#     print(f'[{channel}] {username}: "{user_message}"')
-#     await send_message(message, user_message)
-
-
-# @client.command()
-# async def ping(ctx, user: discord.Member = None):
-#     # Check if a user was mentioned
-#     if user:
-#         await ctx.send(f'{user.mention} was pinged!')
-#     else:
-#         await ctx.send('Please mention a user to ping!')
-
-
-# def get_response(user_input):
-#     lowered = user_input.lower()
-#
-#     if "hello" in lowered:
-#         return 'Hi'
-#     else:
-#         split_input = user_input.split()
-#         return ' '.join([split_input[i] for i in random.sample(range(len(split_input)), len(split_input))]) + '!'
