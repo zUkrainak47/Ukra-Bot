@@ -55,7 +55,7 @@ user_last_used = {}
 user_last_used_w = {}
 allowed_users = [369809123925295104]
 dev_mode_users = [694664131000795307]
-no_help_commands = {'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse'}
+no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse'}
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 fetched_users = {}
@@ -1581,7 +1581,7 @@ async def backshot(ctx):
     Cannot be used on users who have been shot or backshot
     !backshot @victim, gives victim the Backshot Role
     Has a 2-minute cooldown
-    Disabled by default. Run !enable backshot to enabl
+    Disabled by default. Run !enable backshot to enable
     """
     caller = ctx.author
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -3114,9 +3114,14 @@ class LottoView(discord.ui.View):
             except Exception as e:
                 print("Failed to update the message on timeout:", e)
 
-
-
+only_prefix = {'backshot', 'disable', 'enable', 'segs', 'setrole', 'settings', 'silence',
+                   'coinflip', 'redeem',
+                   'addlore'}
 class HelpView(discord.ui.View):
+    cmd_aliases = {'farm_dig': 'd', 'farm_mine': 'm', 'farm_work': 'w', 'farm_fish': 'f', 'gamble': 'g',
+                   'balance': 'bal', 'coinflip': 'c', 'dice': '1d', 'twodice': '2d', 'giveaway_pool': 'pool',
+                   'info': 'i', 'profile': 'p', 'inventory': 'inv', 'stock_prices': 'sp',
+                   'lore_compact': 'lore2', 'lore_leaderboard': 'lorelb'}
     # Add filtered_mapping and categories to the parameters
     def __init__(self, help_command, filtered_mapping, categories, ctx, items_per_page=6, initial_category="No Category", timeout=120.0):
         super().__init__(timeout=timeout)
@@ -3236,15 +3241,15 @@ class HelpView(discord.ui.View):
                 # Use the first line of the help doc if short_doc is missing but help exists
                 if not command.short_doc and command.help:
                     desc = desc.split('\n', 1)[0]
-                # Handle potential hybrid commands - show both prefixes if applicable
-                prefix_to_show = "/" if isinstance(command, app_commands.Command) else self.ctx.prefix
-                if isinstance(command, commands.HybridCommand):
-                    # Show both if it's hybrid (you might want to adjust formatting)
-                    signature_display = f"`{self.ctx.prefix}{command.name}`"
-                elif isinstance(command, app_commands.Command):
-                     signature_display = f"`/{command.name}`" # Assuming slash command
+                if command.name in only_prefix:
+                    cmd_called = command.name if command.name not in self.cmd_aliases else f"{self.cmd_aliases[command.name]} ({command.name})"
+                    signature_display = f"`!{cmd_called}`"
+                # elif isinstance(command, commands.HybridCommand):
+                #     signature_display = f"`{self.ctx.prefix}{command.name}`"
+                # elif isinstance(command, app_commands.Command):
+                #     signature_display = f"`/{command.name}`"
                 else:
-                     signature_display = f"`{self.ctx.prefix}{command.name}`" # Assuming prefix command
+                    signature_display = f"`{self.ctx.prefix}{command.name if self.ctx.prefix == '/' else command.name if command.name not in self.cmd_aliases else f"{self.cmd_aliases[command.name]} ({command.name})"}`"
 
                 # Use signature from get_command_signature for args formatting
                 # We replace the command name part to use our custom display above
@@ -3368,14 +3373,29 @@ class MyHelpCommand(commands.HelpCommand):
         # Filter commands asynchronously HERE
         filtered_mapping = {}
         categories = []
+
+        def custom_command_sort_key(command):
+            if command.name in sort_order_map:
+                return 0, sort_order_map[command.name]
+            else:
+                return 1, command.name
+
         for cog, cmds in mapping.items():
             filtered_cmds = [cmd for cmd in await self.filter_commands(cmds, sort=True) if cmd.name not in no_help_commands]
+            sort_order_map = {
+                'farm_dig': 1,
+                'farm_mine': 2,
+                'farm_work': 3,
+                'farm_fish': 4,
+                'e': 5,
+            }
+
+            filtered_cmds = sorted(filtered_cmds, key=custom_command_sort_key)
             if filtered_cmds:  # Only add if there are commands left after filtering
                 category_name = cog.qualified_name if cog else "No Category"
                 filtered_mapping[category_name] = filtered_cmds
                 if category_name not in categories:
                     categories.append(category_name)
-
         # Sort categories after collecting them
         categories.sort(key=lambda x: (x != "Currency", x != "No Category", x))  # Puts Currency/No Category first
 
@@ -3414,7 +3434,8 @@ class MyHelpCommand(commands.HelpCommand):
 
     # Optional: Override help for specific commands/cogs if needed
     async def send_command_help(self, command):
-        embed = discord.Embed(title=self.get_command_signature(command),
+        title_ = self.get_command_signature(command) if command.name not in only_prefix else '!' + self.get_command_signature(command)[1:]
+        embed = discord.Embed(title=title_,
                               description=command.help or "No description provided.",
                               color=0xffd000)
         if self.context.interaction:
@@ -3422,26 +3443,6 @@ class MyHelpCommand(commands.HelpCommand):
         else:
             await self.get_destination().send(embed=embed)
 
-    async def send_cog_help(self, cog):
-        embed = discord.Embed(title=f"{cog.qualified_name} Commands",
-                              description=cog.description or "",
-                              color=0xffd000)
-
-        filtered_commands = await self.filter_commands(cog.get_commands(), sort=True)
-        if not filtered_commands:
-            embed.description += "\nNo commands available in this category."
-        else:
-            for command in filtered_commands:
-                embed.add_field(name=self.get_command_signature(command),
-                                 value=command.short_doc or "No description.",
-                                 inline=False)
-
-        if self.context.interaction:
-            await self.context.interaction.followup.send(embed=embed)
-        else:
-            await self.get_destination().send(embed=embed)
-
-    # Optional: Handle command not found
     async def command_not_found(self, string):
         msg = f"Command `{string}` not found."
         if self.context.interaction:
@@ -4337,7 +4338,7 @@ class Lore(commands.Cog):
         )
         await pagination_view.send_embed()
 
-    @commands.hybrid_command(name="lore_compact", description="Displays a condensed version of a user's lore", aliases=['lore2'])
+    @commands.hybrid_command(name="lore_compact", description="Displays a condensed version of a user's lore, aka lore2", aliases=['lore2'])
     @app_commands.describe(user="The user whose lore you're checking", page="The page number to start on")
     async def lore_compact(self, ctx, user: typing.Optional[discord.Member] = None, page: int = 1):
         """
@@ -4410,8 +4411,9 @@ class Lore(commands.Cog):
         )
         await pagination_view.send_embed()
 
-    @commands.hybrid_command(name="removelore", description="Removes a lore entry by its message ID", aliases=['dellore', 'rmlore'])
-    async def remove_lore(self, ctx, message_id_to_remove):
+    @commands.hybrid_command(name="lore_remove", description="Removes a lore entry by its message ID",
+                             aliases=['removelore', 'dellore', 'deletelore', 'loredelete', 'rmlore'])
+    async def lore_remove(self, ctx, message_id_to_remove):
         """
         Removes a lore entry by its message ID
         You can remove your own lore, as well as lore you've created
@@ -4460,8 +4462,8 @@ class Lore(commands.Cog):
         lore_subject = await self.get_user(int(subject_id_of_found_entry), ctx)
         await ctx.reply(f"✅ Successfully removed a lore entry for **{lore_subject.display_name}**.")
 
-    @remove_lore.error
-    async def remove_lore_error(self, ctx, error):
+    @lore_remove.error
+    async def lore_remove_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.reply(f"Usage: `!removelore <Message ID>`")
 
@@ -4545,7 +4547,7 @@ class Currency(commands.Cog):
         self.update_stock_prices.cancel()  # Stop task when the cog is unloaded
 
     @commands.hybrid_command(name="help", description="Shows help information for commands.")
-    @app_commands.describe(command="The command or category you need help with (optional)")
+    @app_commands.describe(command="The command you need help with (optional)")
     async def help(self, ctx: commands.Context, *, command: str = None):
         """Shows help information for commands."""
         await ctx.defer(ephemeral=False)
@@ -4556,10 +4558,10 @@ class Currency(commands.Cog):
             mapping = help_cmd.get_bot_mapping()
             await help_cmd.send_bot_help(mapping)
         else:
-            cog = self.bot.get_cog(command)
-            if cog:
-                await help_cmd.send_cog_help(cog)
-                return
+            # cog = self.bot.get_cog(command)
+            # if cog:
+            #     await help_cmd.send_cog_help(cog)
+            #     return
 
             cmd = self.bot.get_command(command)
             if cmd:
@@ -5709,7 +5711,7 @@ class Currency(commands.Cog):
         # if ctx.author.id in dev_mode_users:
         #     ctx.command.reset_cooldown(ctx)
 
-    @commands.hybrid_command(name="dig", description="Dig and get a very small number of coins", aliases=['d', 'в'])
+    @commands.hybrid_command(name="farm_dig", description="Dig and get a very small number of coins", aliases=['dig', 'd', 'в'])
     @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
     async def dig(self, ctx):
         """
@@ -5814,7 +5816,7 @@ class Currency(commands.Cog):
         # if ctx.author.id in dev_mode_users:
         #     ctx.command.reset_cooldown(ctx)
 
-    @commands.hybrid_command(name="mine", description="Mine and get a small number of coins", aliases=['m', 'ь'])
+    @commands.hybrid_command(name="farm_mine", description="Mine and get a small number of coins", aliases=['mine', 'm', 'ь'])
     @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
     async def mine(self, ctx):
         """
@@ -5866,7 +5868,7 @@ class Currency(commands.Cog):
         # if ctx.author.id in dev_mode_users:
         #     ctx.command.reset_cooldown(ctx)
 
-    @commands.hybrid_command(name="work", description="Work and get a moderate number of coins", aliases=['w', 'ц'])
+    @commands.hybrid_command(name="farm_work", description="Work and get a moderate number of coins", aliases=['work', 'w', 'ц'])
     @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
     async def work(self, ctx):
         """
@@ -5990,7 +5992,7 @@ class Currency(commands.Cog):
         # if ctx.author.id in dev_mode_users:
         #     ctx.command.reset_cooldown(ctx)
 
-    @commands.hybrid_command(name="fish", description="Fish and get a random number of coins from 1 to 167", aliases=['fishinge', 'f', 'а'])
+    @commands.hybrid_command(name="farm_fish", description="Fish and get a random number of coins from 1 to 167", aliases=['fish', 'fishinge', 'f', 'а'])
     @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
     async def fishinge(self, ctx):
         """
@@ -6019,7 +6021,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.hybrid_command(name="e", description="Dig, mine, work and fish in one command")
+    @commands.hybrid_command(name="e", description="Farm dig, mine, work and fish in one command")
     async def e(self, ctx):
         """
         Dig, mine, work and fish in one command.
