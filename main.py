@@ -2704,21 +2704,21 @@ class PaginationView(discord.ui.View):
         # --- NEW LOGIC BRANCH ---
         if self.author.startswith('The Lore of'):
             entry = data[0]
+            page_content = entry['item'] if data else "No lore on this page."
 
             # !lore view
             if 'timestamp' in entry:
-                embed = discord.Embed(title="", color=self.color, timestamp=entry['timestamp'])
+                embed = discord.Embed(description=page_content, color=self.color, timestamp=entry['timestamp'])
                 embed.set_author(name=f"{self.author} - Entry {self.current_page} / {self.total_pages()}",
                                  icon_url=self.author_icon)
                 if entry.get('image_url'):
                     embed.set_image(url=entry['image_url'])
                 # Using add_field is correct here because it's a single, small entry.
-                embed.add_field(name='', value=entry['item'], inline=False)
+                # embed.add_field(name='', value=entry['item'], inline=False)
                 embed.set_footer(text=entry['label'])
                 return embed
 
             # !lore_compact view
-            page_content = entry['item'] if data else "No lore on this page."
             embed = discord.Embed(description=page_content, color=self.color)
             embed.set_author(name=f"{self.author} - Page {self.current_page} / {self.total_pages()}",
                              icon_url=self.author_icon)
