@@ -2702,18 +2702,27 @@ class PaginationView(discord.ui.View):
             return embed
 
         # --- NEW LOGIC BRANCH ---
-        # Case 2: The Lore View
         if self.author.startswith('The Lore of'):
-            # For the lore view, we have a specific title and a list of fields.
             entry = data[0]
-            embed = discord.Embed(title=f"", color=self.color, timestamp=entry['timestamp'])
-            embed.set_author(name=f"{self.author} - Entry {self.current_page} / {self.total_pages()}", icon_url=self.author_icon)
-            if entry['image_url'] is not None:
-                embed.set_image(url=entry['image_url'])
-            # The data is already formatted as a list of dicts with a 'label' and 'item'.
-            embed.add_field(name='', value=entry['item'], inline=False)
-            embed.set_footer(text=entry['label'])
 
+            # !lore view
+            if 'timestamp' in entry:
+                embed = discord.Embed(title="", color=self.color, timestamp=entry['timestamp'])
+                embed.set_author(name=f"{self.author} - Entry {self.current_page} / {self.total_pages()}",
+                                 icon_url=self.author_icon)
+                if entry.get('image_url'):
+                    embed.set_image(url=entry['image_url'])
+                # Using add_field is correct here because it's a single, small entry.
+                embed.add_field(name='', value=entry['item'], inline=False)
+                embed.set_footer(text=entry['label'])
+                return embed
+
+            # !lore_compact view
+            page_content = entry['item'] if data else "No lore on this page."
+            embed = discord.Embed(description=page_content, color=self.color)
+            embed.set_author(name=f"{self.author} - Page {self.current_page} / {self.total_pages()}",
+                             icon_url=self.author_icon)
+            embed.set_footer(text=self.footer, icon_url=self.footer_icon)
             return embed
 
         # --- EXISTING LOGIC BRANCH ---
@@ -4325,6 +4334,79 @@ class Lore(commands.Cog):
             footer_=[f"{user_lore[-1]['message_id']}", ""],
             ctx_=ctx,
             page_=min(page_num, len(user_lore))
+        )
+        await pagination_view.send_embed()
+
+    @commands.hybrid_command(name="lore_compact", description="Displays a condensed version of a user's lore", aliases=['lore2'])
+    @app_commands.describe(user="The user whose lore you're checking", page="The page number to start on")
+    async def lore_compact(self, ctx, user: typing.Optional[discord.Member] = None, page: int = 1):
+        """
+        Displays a condensed, multi-entry view of a user's lore.
+        """
+        if not ctx.guild:
+            return await ctx.reply("Lore can only be viewed in a server.")
+
+        target_user = user if user is not None else ctx.author
+        guild_id = str(ctx.guild.id)
+        user_id = str(target_user.id)
+
+        user_lore = lore_data.get(guild_id, {}).get(user_id, [])
+
+        if not user_lore:
+            return await ctx.reply(f"**{target_user.display_name}** has no lore yet.")
+
+        # --- Logic to group lore entries into pages ---
+        paginated_content = []
+        current_page_text = ""
+        character_limit = 4000
+        count = 0
+        for entry in reversed(user_lore):  # Iterate from newest to oldest
+            entry_text = entry['content']
+            message_url = f"https://discord.com/channels/{guild_id}/{entry['channel_id']}/{entry['message_id']}"
+
+            if entry['image_url']:
+                if entry_text:
+                    entry_text += f" ([Image/GIF]({message_url}))"
+                else:
+                    entry_text = f"[Image/GIF]({message_url})"
+
+            # Format each line with a bullet point
+            count += 1
+            line_to_add = f"[#{count}]({message_url}) - {entry_text}\n"
+
+            # If adding the new line exceeds the limit, finalize the current page
+            if len(current_page_text) + len(line_to_add) > character_limit and current_page_text:
+                paginated_content.append(current_page_text)
+                current_page_text = line_to_add
+            else:
+                current_page_text += line_to_add
+
+        # Add the last remaining page
+        if current_page_text:
+            paginated_content.append(current_page_text)
+
+        # If for some reason there's no content, prevent an error
+        if not paginated_content:
+            return await ctx.reply(f"Could not generate a compact lore view for **{target_user.display_name}**.")
+
+        # --- Prepare data for PaginationView ---
+        # Each item in the list will be the description for a page
+        embed_data = []
+        for content_chunk in paginated_content:
+            embed_data.append({
+                "label": "",  # Label is not used, but the structure is required
+                "item": content_chunk
+            })
+
+        pagination_view = PaginationView(
+            data_=embed_data,
+            author_=f"The Lore of {target_user.display_name}",
+            author_icon_=target_user.avatar.url,
+            title_='',
+            color_=target_user.color if not target_user.color == discord.Colour.default() else 0xffd000,
+            footer_=[f"{len(user_lore)} total entr{'ies' if len(user_lore) != 1 else 'y'}", ""],
+            ctx_=ctx,
+            page_=min(page, len(embed_data))
         )
         await pagination_view.send_embed()
 
