@@ -3125,7 +3125,7 @@ only_prefix = {'backshot', 'disable', 'enable', 'segs', 'setrole', 'settings', '
 
 
 class HelpView(discord.ui.View):
-    cmd_aliases = {'farm_dig': 'd', 'farm_mine': 'm', 'farm_work': 'w', 'farm_fish': 'f', 'gamble': 'g',
+    cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
                    'balance': 'bal', 'coinflip': 'c', 'dice': '1d', 'twodice': '2d', 'giveaway_pool': 'pool',
                    'info': 'i', 'profile': 'p', 'inventory': 'inv', 'stock_prices': 'sp',
                    'lore_compact': 'lore2', 'lore_leaderboard': 'lorelb'}
@@ -3391,10 +3391,10 @@ class MyHelpCommand(commands.HelpCommand):
         for cog, cmds in mapping.items():
             filtered_cmds = [cmd for cmd in await self.filter_commands(cmds, sort=True) if cmd.name not in no_help_commands]
             sort_order_map = {
-                'farm_dig': 1,
-                'farm_mine': 2,
-                'farm_work': 3,
-                'farm_fish': 4,
+                'dig': 1,
+                'mine': 2,
+                'work': 3,
+                'fish': 4,
                 'e': 5,
             }
 
@@ -5721,7 +5721,7 @@ class Currency(commands.Cog):
         # if ctx.author.id in dev_mode_users:
         #     ctx.command.reset_cooldown(ctx)
 
-    @commands.hybrid_command(name="farm_dig", description="Dig and get a very small number of coins", aliases=['dig', 'd', 'в'])
+    @commands.hybrid_command(name="dig", description="Dig and get a very small number of coins", aliases=['d', 'в'])
     @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
     async def dig(self, ctx):
         """
@@ -5826,7 +5826,7 @@ class Currency(commands.Cog):
         # if ctx.author.id in dev_mode_users:
         #     ctx.command.reset_cooldown(ctx)
 
-    @commands.hybrid_command(name="farm_mine", description="Mine and get a small number of coins", aliases=['mine', 'm', 'ь'])
+    @commands.hybrid_command(name="mine", description="Mine and get a small number of coins", aliases=['m', 'ь'])
     @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
     async def mine(self, ctx):
         """
@@ -5878,7 +5878,7 @@ class Currency(commands.Cog):
         # if ctx.author.id in dev_mode_users:
         #     ctx.command.reset_cooldown(ctx)
 
-    @commands.hybrid_command(name="farm_work", description="Work and get a moderate number of coins", aliases=['work', 'w', 'ц'])
+    @commands.hybrid_command(name="work", description="Work and get a moderate number of coins", aliases=['w', 'ц'])
     @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
     async def work(self, ctx):
         """
@@ -6002,7 +6002,7 @@ class Currency(commands.Cog):
         # if ctx.author.id in dev_mode_users:
         #     ctx.command.reset_cooldown(ctx)
 
-    @commands.hybrid_command(name="farm_fish", description="Fish and get a random number of coins from 1 to 167", aliases=['fish', 'fishinge', 'f', 'а'])
+    @commands.hybrid_command(name="fish", description="Fish and get a random number of coins from 1 to 167", aliases=['fishinge', 'f', 'а'])
     @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
     async def fishinge(self, ctx):
         """
