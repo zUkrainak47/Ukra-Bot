@@ -4193,9 +4193,9 @@ class Lore(commands.Cog):
         lore_subject = referenced_message.author
         adder = ctx.author
 
-        if lore_subject.bot:
-            ctx.command.reset_cooldown(ctx)
-            return await ctx.reply("You can't add lore for a bot.")
+        # if lore_subject.bot:
+        #     ctx.command.reset_cooldown(ctx)
+        #     return await ctx.reply("You can't add lore for a bot.")
         if lore_subject.id == adder.id:
             ctx.command.reset_cooldown(ctx)
             return await ctx.reply("You can't add lore for yourself.")
