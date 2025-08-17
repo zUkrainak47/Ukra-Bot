@@ -773,10 +773,10 @@ async def on_ready():
     try:
         client.add_command(rng)
         client.add_command(avatar)
-        client.add_command(custom)
-        client.add_command(custom_remove)
-        client.add_command(custom_list)
-        client.add_command(custom_inspect)
+        # client.add_command(custom)
+        # client.add_command(custom_remove)
+        # client.add_command(custom_list)
+        # client.add_command(custom_inspect)
         client.add_command(calc)
         client.add_command(dnd)
         client.add_command(choose)
@@ -1731,200 +1731,197 @@ async def silence(ctx):
         await ctx.send(f"*Silence role does not exist!*\nRun `!setrole silence @role` to use silence")
 
 
-@commands.hybrid_command(name='custom', description='Adds a custom command to the server',  aliases=['custom_add', 'add_custom'])
-@app_commands.describe(name='Custom command name', response='Custom response (!help custom for details)')
-@commands.check(custom_perms)
-async def custom(ctx, name: str, *, response: str):
-    """
-    Adds or updates a custom command for this server
-    Usage: !custom_add <command_name> <response_text>
+class CustomCommands(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.__cog_name__ = 'Custom Commands'
 
-    Include the following for additional functionality:
-    - `<user>       ` to take a user mention
-    - `<user_name>  ` to take a user mention (and send the mentioned user's nickname)
-    - `<author>     ` to mention the author
-    - `<author_name>` to send the author's nickname
-    - `<num1>       ` to require a number input and replace <num1> with it (multiple numbers can be accepted, check example)
-    - `<num1=5>     ` to give the option to set a specific number, but default to 5 if not passed
-    - `<word1>      ` to require a word input and replace <word1> with it
-    - `<word1=hello>` to give the option to set a specific word, but default to "hello" if not passed
-    - `<text>       ` to require some text input and replace <text> with it (can be more than one word)
-    - `<text=hi hi> ` to set a default value for text
-    - `[option1|...]` to choose randomly from all passed options
-    - `r(n1, n2)    ` to choose a random number between n1 and n2
-    - `{r(2,5) + 5 * <num1=2>}`  --  mathematical expressions are supported in {}
+    @commands.hybrid_command(name='custom', description='Adds a custom command to the server',  aliases=['custom_add', 'add_custom'])
+    @app_commands.describe(name='Custom command name', response='Custom response (!help custom for details)')
+    @commands.check(custom_perms)
+    async def custom(self, ctx, name: str, *, response: str):
+        """
+        Adds or updates a custom command for this server
+        Usage: !custom_add <command_name> <response_text>
 
-    Example:
-    - !custom kiss <author> kissed <user> :heart:
-    - !custom food Today we are getting [burger|pizza|asian]
-    - !custom fireball <user> took {<num1=1>*(r(1,8) + r(1,8) + r(1,8) + r(1,8) + r(1,8))} fire damage
-    - !custom numbers {<num1> + <num2> * <num3>}
-    - !custom random_multiply {[10|53] * [15|25|35] * r(3, 7)}
+        Include the following for additional functionality:
+        - `<user>       ` to take a user mention
+        - `<user_name>  ` to take a user mention (and send the mentioned user's nickname)
+        - `<author>     ` to mention the author
+        - `<author_name>` to send the author's nickname
+        - `<num1>       ` to require a number input and replace <num1> with it (multiple numbers can be accepted, check example)
+        - `<num1=5>     ` to give the option to set a specific number, but default to 5 if not passed
+        - `<word1>      ` to require a word input and replace <word1> with it
+        - `<word1=hello>` to give the option to set a specific word, but default to "hello" if not passed
+        - `<text>       ` to require some text input and replace <text> with it (can be more than one word)
+        - `<text=hi hi> ` to set a default value for text
+        - `[option1|...]` to choose randomly from all passed options
+        - `r(n1, n2)    ` to choose a random number between n1 and n2
+        - `{r(2,5) + 5 * <num1=2>}`  --  mathematical expressions are supported in {}
 
-    Only usable by Moderators as well as users with a role called "Custom Commands Manager"
-    """
-    if not ctx.guild:
-        await ctx.reply("Custom commands can only be added in servers.")
-        return
+        Example:
+        - !custom kiss <author> kissed <user> :heart:
+        - !custom food Today we are getting [burger|pizza|asian]
+        - !custom fireball <user> took {<num1=1>*(r(1,8) + r(1,8) + r(1,8) + r(1,8) + r(1,8))} fire damage
+        - !custom numbers {<num1> + <num2> * <num3>}
+        - !custom random_multiply {[10|53] * [15|25|35] * r(3, 7)}
 
-    guild_id = str(ctx.guild.id)
-    command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
+        Only usable by Moderators as well as users with a role called "Custom Commands Manager"
+        """
+        if not ctx.guild:
+            await ctx.reply("Custom commands can only be added in servers.")
+            return
 
-    # --- Input Validation ---
-    # if not command_name:
-    #     await ctx.reply("You need to provide a name for the custom command.")
-    #     return
-    # if not response:
-    #     await ctx.reply("You need to provide a response for the custom command.")
-    #     return
-    if len(response) > 1900:  # Leave some buffer for Discord limits
-        await ctx.reply("The response is too long (max ~1900 characters).")
-        return
+        guild_id = str(ctx.guild.id)
+        command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
 
-    # --- Check for Conflicts ---
-    if client.get_command(command_name):
-        await ctx.reply(f"`{command_name}` conflicts with a built-in bot command!")
-        return
+        # --- Input Validation ---
+        # if not command_name:
+        #     await ctx.reply("You need to provide a name for the custom command.")
+        #     return
+        # if not response:
+        #     await ctx.reply("You need to provide a response for the custom command.")
+        #     return
+        if len(response) > 1900:  # Leave some buffer for Discord limits
+            await ctx.reply("The response is too long (max ~1900 characters).")
+            return
 
-    # --- Add/Update the command ---
-    # Ensure the structure exists
-    make_sure_server_settings_exist(guild_id)
-    custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
+        # --- Check for Conflicts ---
+        if client.get_command(command_name):
+            await ctx.reply(f"`{command_name}` conflicts with a built-in bot command!")
+            return
 
-    action = "Updated" if command_name in custom_commands else "Added"
-    custom_commands[command_name] = response
-    save_settings()  # Save the updated settings
+        # --- Add/Update the command ---
+        # Ensure the structure exists
+        make_sure_server_settings_exist(guild_id)
+        custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
 
-    await ctx.reply(f"{action} custom command `!{command_name}` successfully.")
-
-
-@custom.error
-async def custom_error(ctx, error):
-    if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.reply(f"Usage: `!custom <command_name> <response_text>`\nExample: `!custom kiss <author> kissed <user> :heart:`")
-    elif isinstance(error, discord.ext.commands.errors.CheckFailure):
-        pass
-    elif isinstance(error, commands.BadArgument):
-        await ctx.reply(f"Couldn't properly understand the command name or response.")
-    else:
-        print(f"Error in custom: {error}")  # Log other errors
-        await ctx.reply("An unexpected error occurred.")
-
-
-@commands.hybrid_command(name='custom_remove', description='Removes a custom command from this server',  aliases=['custom_delete', 'delete_custom', 'remove_custom', 'del_custom', 'custom_del'])
-@app_commands.describe(name='Custom command name')
-@commands.check(custom_perms)
-async def custom_remove(ctx, name: str):
-    """
-    Removes a custom command from this server
-    Usage: !custom_remove <command_name>
-    """
-    if not ctx.guild:
-        await ctx.reply("Custom commands can only be handled in servers.")
-        return
-
-    guild_id = str(ctx.guild.id)
-    command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
-
-    # Ensure the structure exists
-    make_sure_server_settings_exist(guild_id)
-    custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
-
-    if command_name in custom_commands:
-        del custom_commands[command_name]
+        action = "Updated" if command_name in custom_commands else "Added"
+        custom_commands[command_name] = response
         save_settings()  # Save the updated settings
 
-        await ctx.reply(f"Removed custom command `!{command_name}` successfully.")
-        return
-    await ctx.reply(f"Custom command `!{command_name}` doesn't exist.")
+        await ctx.reply(f"{action} custom command `!{command_name}` successfully.")
 
+    @custom.error
+    async def custom_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply(f"Usage: `!custom <command_name> <response_text>`\nExample: `!custom kiss <author> kissed <user> :heart:`")
+        elif isinstance(error, discord.ext.commands.errors.CheckFailure):
+            pass
+        elif isinstance(error, commands.BadArgument):
+            await ctx.reply(f"Couldn't properly understand the command name or response.")
+        else:
+            print(f"Error in custom: {error}")  # Log other errors
+            await ctx.reply("An unexpected error occurred.")
 
-@custom_remove.error
-async def custom_remove_error(ctx, error):
-    if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.reply(f"Usage: `!custom_remove <command_name>`\nExample: `!custom_remove hello`")
-    elif isinstance(error, commands.MissingPermissions):
-        await ctx.reply("You need the 'Manage Server' permission to use this command.")
-    elif isinstance(error, commands.BadArgument):
-        await ctx.reply(f"Couldn't properly understand the command name or response.")
-    else:
-        print(f"Error in custom: {error}")  # Log other errors
-        await ctx.reply("An unexpected error occurred.")
+    @commands.hybrid_command(name='custom_remove', description='Removes a custom command from this server',  aliases=['custom_delete', 'delete_custom', 'remove_custom', 'del_custom', 'custom_del'])
+    @app_commands.describe(name='Custom command name')
+    @commands.check(custom_perms)
+    async def custom_remove(self, ctx, name: str):
+        """
+        Removes a custom command from this server
+        Usage: !custom_remove <command_name>
+        """
+        if not ctx.guild:
+            await ctx.reply("Custom commands can only be handled in servers.")
+            return
 
+        guild_id = str(ctx.guild.id)
+        command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
 
-@custom_remove.autocomplete("name")
-async def custom_remove_autocomplete(ctx, current: str):
-    choices = [
-        app_commands.Choice(name=cmd_name, value=cmd_name)
-        for cmd_name in sorted(server_settings[str(ctx.guild.id)]['custom_commands'].keys())
-        if current.lower() in cmd_name.lower()
-    ]
-    return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+        # Ensure the structure exists
+        make_sure_server_settings_exist(guild_id)
+        custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
 
+        if command_name in custom_commands:
+            del custom_commands[command_name]
+            save_settings()  # Save the updated settings
 
-@commands.hybrid_command(name='custom_list', description='Lists all custom commands for the server',  aliases=['custom_commands'])
-async def custom_list(ctx):
-    """
-    Lists all custom commands for the server
-    """
-    if not ctx.guild:
-        await ctx.reply("Custom commands can only be handled in servers.")
-        return
+            await ctx.reply(f"Removed custom command `!{command_name}` successfully.")
+            return
+        await ctx.reply(f"Custom command `!{command_name}` doesn't exist.")
 
-    guild_id = str(ctx.guild.id)
+    @custom_remove.error
+    async def custom_remove_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply(f"Usage: `!custom_remove <command_name>`\nExample: `!custom_remove hello`")
+        elif isinstance(error, commands.MissingPermissions):
+            await ctx.reply("You need the 'Manage Server' permission to use this command.")
+        elif isinstance(error, commands.BadArgument):
+            await ctx.reply(f"Couldn't properly understand the command name or response.")
+        else:
+            print(f"Error in custom: {error}")  # Log other errors
+            await ctx.reply("An unexpected error occurred.")
 
-    # Ensure the structure exists
-    make_sure_server_settings_exist(guild_id)
-    custom_commands = sorted(server_settings[guild_id].setdefault('custom_commands', {}).keys())
-    embed_color = 0xffd000
-    pagination_view = PaginationView(custom_commands, title_=f"", author_=f"Custom Commands", color_=embed_color, ctx_=ctx)
-    await pagination_view.send_embed()
+    @custom_remove.autocomplete("name")
+    async def custom_remove_autocomplete(self, ctx, current: str):
+        choices = [
+            app_commands.Choice(name=cmd_name, value=cmd_name)
+            for cmd_name in sorted(server_settings[str(ctx.guild.id)]['custom_commands'].keys())
+            if current.lower() in cmd_name.lower()
+        ]
+        return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
+    @commands.hybrid_command(name='custom_list', description='Lists all custom commands for the server',  aliases=['custom_commands'])
+    async def custom_list(self, ctx):
+        """
+        Lists all custom commands for the server
+        """
+        if not ctx.guild:
+            await ctx.reply("Custom commands can only be handled in servers.")
+            return
 
-@commands.hybrid_command(name='custom_inspect', description='Inspect a custom command on this server',  aliases=['custom_command'])
-@app_commands.describe(name='Custom command name')
-async def custom_inspect(ctx, name: str):
-    """
-    Inspect a custom command on this server
-    Usage: !custom_inspect <command_name>
-    """
-    if not ctx.guild:
-        await ctx.reply("Custom commands can only be handled in servers.")
-        return
+        guild_id = str(ctx.guild.id)
 
-    guild_id = str(ctx.guild.id)
-    command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
+        # Ensure the structure exists
+        make_sure_server_settings_exist(guild_id)
+        custom_commands = sorted(server_settings[guild_id].setdefault('custom_commands', {}).keys())
+        embed_color = 0xffd000
+        pagination_view = PaginationView(custom_commands, title_=f"", author_=f"Custom Commands", color_=embed_color, ctx_=ctx)
+        await pagination_view.send_embed()
 
-    # Ensure the structure exists
-    make_sure_server_settings_exist(guild_id)
-    custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
+    @commands.hybrid_command(name='custom_inspect', description='Inspect a custom command on this server',  aliases=['custom_command'])
+    @app_commands.describe(name='Custom command name')
+    async def custom_inspect(self, ctx, name: str):
+        """
+        Inspect a custom command on this server
+        Usage: !custom_inspect <command_name>
+        """
+        if not ctx.guild:
+            await ctx.reply("Custom commands can only be handled in servers.")
+            return
 
-    if command_name in custom_commands:
-        await ctx.reply(f"## !{command_name}\n```{custom_commands[command_name]}```")
-        return
+        guild_id = str(ctx.guild.id)
+        command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
 
-    await ctx.reply(f"Custom command `!{command_name}` doesn't exist.")
+        # Ensure the structure exists
+        make_sure_server_settings_exist(guild_id)
+        custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
 
+        if command_name in custom_commands:
+            await ctx.reply(f"## !{command_name}\n```{custom_commands[command_name]}```")
+            return
 
-@custom_inspect.error
-async def custom_inspect_error(ctx, error):
-    if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.reply(f"Usage: `!custom_inspect <command_name>`")
-    elif isinstance(error, commands.BadArgument):
-        await ctx.reply(f"Couldn't properly understand the command name or response.")
-    else:
-        print(f"Error in custom: {error}")  # Log other errors
-        await ctx.reply("An unexpected error occurred.")
+        await ctx.reply(f"Custom command `!{command_name}` doesn't exist.")
 
+    @custom_inspect.error
+    async def custom_inspect_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply(f"Usage: `!custom_inspect <command_name>`")
+        elif isinstance(error, commands.BadArgument):
+            await ctx.reply(f"Couldn't properly understand the command name or response.")
+        else:
+            print(f"Error in custom: {error}")  # Log other errors
+            await ctx.reply("An unexpected error occurred.")
 
-@custom_inspect.autocomplete("name")
-async def custom_inspect_autocomplete(ctx, current: str):
-    choices = [
-        app_commands.Choice(name=cmd_name, value=cmd_name)
-        for cmd_name in sorted(server_settings[str(ctx.guild.id)]['custom_commands'].keys())
-        if current.lower() in cmd_name.lower()
-    ]
-    return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+    @custom_inspect.autocomplete("name")
+    async def custom_inspect_autocomplete(self, ctx, current: str):
+        choices = [
+            app_commands.Choice(name=cmd_name, value=cmd_name)
+            for cmd_name in sorted(server_settings[str(ctx.guild.id)]['custom_commands'].keys())
+            if current.lower() in cmd_name.lower()
+        ]
+        return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
 
 # Helper data structure for placeholders
@@ -3423,6 +3420,7 @@ class MyHelpCommand(commands.HelpCommand):
                 'work': 3,
                 'fish': 4,
                 'e': 5,
+                'marry': 6
             }
 
             filtered_cmds = sorted(filtered_cmds, key=custom_command_sort_key)
@@ -7772,6 +7770,7 @@ class Marriage(commands.Cog):
         """
         Propose marriage to another user
         Usage: !marry @user
+        Marriages are global. You can be married to one discord user at a time
         """
         try:
             author_id = str(ctx.author.id)
@@ -7959,6 +7958,7 @@ class Marriage(commands.Cog):
         """
         Check your or someone else's marriage status
         Usage: !marriage (@user)
+        Marriages are global. You can be married to one discord user at a time
         """
         try:
             if user is None:
@@ -8049,6 +8049,7 @@ async def setup():
     await client.add_cog(Currency(client))
     await client.add_cog(Lore(client))
     await client.add_cog(Marriage(client))
+    await client.add_cog(CustomCommands(client))
 
 
 def log_shutdown():
