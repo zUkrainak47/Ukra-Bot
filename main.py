@@ -111,6 +111,7 @@ murmheart = '<:murmheart:1339935292739686400>'
 gladge = '<:gladge:1340021932707549204>'
 icant = '<:ICANT:1337236086941941762>'
 clueless = '<:clueless:1335599640279515167>'
+feelsstrongman = '<:FeelsStrongMan:1406639193722982481>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
 pupperrun = '<a:pupperrun:1336403935291773029>'
 
@@ -133,6 +134,7 @@ titles = [
 
     'Lottery Winner', 'Bug Hunter', 'Reached #1', 'Donator',  'Top Contributor',
     'lea :3',
+    'Married',
     'Ukra Bot Dev',
 ]
 sorted_titles = {title: number for number, title in enumerate(reversed(titles))}
@@ -770,6 +772,7 @@ async def on_guild_join(guild: discord.Guild):
 async def on_ready():
     try:
         client.add_command(rng)
+        client.add_command(avatar)
         client.add_command(custom)
         client.add_command(custom_remove)
         client.add_command(custom_list)
@@ -2013,6 +2016,30 @@ async def calc(ctx: commands.Context, *, expression: str):
         # Log the full error for debugging purposes
         print(f"Error in !calc: Expression='{expression}', Error='{e}'")
         # traceback.print_exc() # Uncomment to print full traceback to console if needed
+
+
+@commands.hybrid_command(name="avatar", description="Displays a user's pfp (profile picture).", aliases=['pfp', 'av'])
+@app_commands.describe(user="The user whose avatar you want to view.")
+async def avatar(ctx: commands.Context, user: typing.Optional[discord.Member] = None):
+    """
+    Displays a user's avatar.
+    Shows the server-specific avatar if they have one, otherwise shows their global avatar.
+    """
+    target_user = user or ctx.author
+
+    embed_color = target_user.color if isinstance(target_user, discord.Member) else discord.Color.default()
+    if embed_color == discord.Color.default():
+        embed_color = 0xffd000
+
+    embed = discord.Embed(
+        title="Avatar",
+        color=embed_color
+    )
+
+    embed.set_author(name=target_user.display_name, icon_url=target_user.display_avatar.url)
+    embed.set_image(url=target_user.display_avatar.url)
+
+    await ctx.reply(embed=embed)
 
 
 @calc.error
@@ -7607,9 +7634,421 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
 
+class Marriage(commands.Cog):
+    """Commands related to the marriage system"""
+
+    def __init__(self, bot):
+        self.bot = bot
+        self.active_proposals = set()  # Track active proposals to prevent spam
+        self.anniversary_check.start()  # Start the anniversary checker task
+
+    def cog_unload(self):
+        self.anniversary_check.cancel()  # Stop task when cog is unloaded
+
+    async def get_user(self, id_: int, ctx=None):
+        """Helper to get user object"""
+        if ctx is not None and ctx.guild:
+            user = ctx.guild.get_member(id_)
+            if user:
+                return user
+        global fetched_users
+        if id_ in fetched_users:
+            return fetched_users.get(id_)
+        try:
+            user = await self.bot.fetch_user(id_)
+            fetched_users[id_] = user
+            return user
+        except discord.errors.NotFound:
+            return None
+
+    def is_married(self, user_id: str) -> tuple:
+        """Check if user is married, returns (is_married, partner_id, marriage_date)"""
+        if user_id not in global_profiles:
+            return False, None, None
+
+        marriage_data = global_profiles[user_id].get('dict_2', {}).get('marriage', {})
+        if marriage_data and 'partner' in marriage_data:
+            partner_id = marriage_data['partner']
+            # Check if partner is banned
+            if int(partner_id) in ignored_users:
+                self.auto_divorce(user_id, partner_id)
+                return False, None, None
+            # Verify the marriage is mutual
+            partner_marriage = global_profiles.get(partner_id, {}).get('dict_2', {}).get('marriage', {})
+            if partner_marriage.get('partner') == user_id:
+                return True, partner_id, marriage_data.get('date')
+        return False, None, None
+
+    def auto_divorce(self, user1_id: str, user2_id: str):
+        """Automatically divorce a couple"""
+        # Remove marriage data from both users
+        if user1_id in global_profiles:
+            global_profiles[user1_id]['dict_2'].pop('marriage', None)
+            # Remove Married title
+            if 'Married' in global_profiles[user1_id]['items'].get('titles', []):
+                global_profiles[user1_id]['items']['titles'].remove('Married')
+
+        if user2_id in global_profiles:
+            global_profiles[user2_id]['dict_2'].pop('marriage', None)
+            # Remove Married title
+            if 'Married' in global_profiles[user2_id]['items'].get('titles', []):
+                global_profiles[user2_id]['items']['titles'].remove('Married')
+
+        save_profiles()
+
+    def create_marriage(self, user1_id: str, user2_id: str):
+        """Create a marriage between two users"""
+        marriage_date = datetime.now().isoformat()
+
+        # Set marriage data for both users
+        global_profiles[user1_id]['dict_2']['marriage'] = {
+            'partner': user2_id,
+            'date': marriage_date,
+            'anniversary_reminded': False
+        }
+
+        global_profiles[user2_id]['dict_2']['marriage'] = {
+            'partner': user1_id,
+            'date': marriage_date,
+            'anniversary_reminded': False
+        }
+
+        # Add Married title to both users
+        global_profiles[user1_id]['items'].setdefault('titles', [])
+        if 'Married' not in global_profiles[user1_id]['items']['titles']:
+            global_profiles[user1_id]['items']['titles'].append('Married')
+
+        global_profiles[user2_id]['items'].setdefault('titles', [])
+        if 'Married' not in global_profiles[user2_id]['items']['titles']:
+            global_profiles[user2_id]['items']['titles'].append('Married')
+
+        save_profiles()
+
+    @tasks.loop(hours=24)  # Check once per day
+    async def anniversary_check(self):
+        """Check for anniversaries and send reminders"""
+        try:
+            now = datetime.now()
+            for user_id in global_profiles:
+                marriage_data = global_profiles[user_id]['dict_2'].get('marriage', {})
+                if marriage_data and 'date' in marriage_data:
+                    marriage_date = datetime.fromisoformat(marriage_data['date'])
+                    # Check if today is the anniversary
+                    if (now.month == marriage_date.month and
+                            now.day == marriage_date.day and
+                            now.year > marriage_date.year and
+                            not marriage_data.get('anniversary_reminded', False)):
+
+                        years = now.year - marriage_date.year
+                        user = await self.get_user(int(user_id))
+                        partner = await self.get_user(int(marriage_data['partner']))
+
+                        if user and partner:
+                            anniversary_msg = f"🎉 **Happy {years} year anniversary!** 🎉\nYou and **{partner.name}** have been married for {years} year{'s' if years != 1 else ''}! {yay}"
+                            try:
+                                await user.send(anniversary_msg)
+                            except:
+                                pass  # User has DMs disabled
+
+                        # Mark as reminded for this year
+                        global_profiles[user_id]['dict_2']['marriage']['anniversary_reminded'] = True
+                        save_profiles()
+
+                    # Reset reminder flag if it's no longer the anniversary day
+                    elif (now.month != marriage_date.month or now.day != marriage_date.day) and marriage_data.get(
+                            'anniversary_reminded', False):
+                        global_profiles[user_id]['dict_2']['marriage']['anniversary_reminded'] = False
+                        save_profiles()
+        except Exception:
+            print(traceback.format_exc())
+
+    @anniversary_check.before_loop
+    async def before_anniversary_check(self):
+        await self.bot.wait_until_ready()
+
+    @commands.hybrid_command(name="marry", description="Propose marriage to another user", aliases=['propose'])
+    @app_commands.describe(user="The user you want to marry")
+    async def marry(self, ctx, user: discord.User):
+        """
+        Propose marriage to another user
+        Usage: !marry @user
+        """
+        try:
+            author_id = str(ctx.author.id)
+            target_id = str(user.id)
+
+            # Initialize profiles
+            make_sure_user_profile_exists('', author_id)
+            make_sure_user_profile_exists('', target_id)
+
+            # Check if proposer is trying to marry themselves
+            if ctx.author.id == user.id:
+                await ctx.reply("You can't marry yourself!")
+                return
+
+            # Check if proposer is trying to marry a bot
+            if user.bot:
+                if user.id == bot_id:
+                    await ctx.reply("Sorry, no can do")
+                else:
+                    await ctx.reply(f"You can't marry bots {feelsstrongman}")
+                return
+
+            # Check if target is banned
+            if user.id in ignored_users:
+                await ctx.reply(f"{user.display_name} is banned from {bot_name}")
+                return
+
+            # Check if target has access to the channel
+            if not user_has_access_to_channel(ctx, user):
+                await ctx.reply(f"**{user.display_name}** doesn't have access to this channel")
+                return
+
+            # Check if proposer is already married
+            is_married_proposer, current_partner_id, _ = self.is_married(author_id)
+            if is_married_proposer:
+                partner = await self.get_user(int(current_partner_id), ctx)
+                await ctx.reply(
+                    f"You're already married to **{partner.display_name if partner else 'Unknown User'}**! {stare}\nDivorce them first if you want to marry someone else")
+                return
+
+            # Check if target is already married
+            is_married_target, target_partner_id, _ = self.is_married(target_id)
+            if is_married_target:
+                partner = await self.get_user(int(target_partner_id), ctx)
+                await ctx.reply(
+                    f"**{user.display_name}** is already married to **{partner.display_name if partner else 'Unknown User'}**! {sadgebusiness}")
+                return
+
+            # Check if there's already an active proposal
+            if ctx.author.id in self.active_proposals:
+                await ctx.reply("You already have an active marriage proposal! Wait for it to be answered first")
+                return
+
+            if user.id in self.active_proposals:
+                await ctx.reply(
+                    f"**{user.display_name}** already has an active marriage proposal! Let them answer that first")
+                return
+
+            # Add to active proposals
+            self.active_proposals.add(ctx.author.id)
+            self.active_proposals.add(user.id)
+
+            try:
+                # Create confirmation view
+                view = ConfirmView(user, allowed_to_cancel=ctx.author, timeout=120.0)
+                message = await ctx.send(
+                    f"## 💍 Marriage Proposal!\n"
+                    f"**{ctx.author.display_name}** is proposing to **{user.mention}**!\n\n"
+                    f"*{user.display_name}, do you accept this proposal?*",
+                    view=view
+                )
+                view.message = message
+                await view.wait()
+
+                if view.value is True:
+                    # Marriage accepted!
+                    self.create_marriage(author_id, target_id)
+                    await message.reply(
+                        f"# 🎉 Congratulations! {yay}\n"
+                        f"**{ctx.author.display_name}** and **{user.display_name}** are now married!\n\n"
+                        f"*You both received the **Married** title!*"
+                    )
+                elif view.value is False:
+                    # Marriage rejected
+                    if view.cancel_pressed_by.id == user.id:
+                        await message.reply(
+                            f"**{user.display_name}** has declined the marriage proposal 💔")
+                    else:
+                        await message.reply(f"**{ctx.author.display_name}** has withdrawn the marriage proposal 💔")
+                else:
+                    # Timed out
+                    await message.reply(f"The marriage proposal has expired {o7}")
+
+            finally:
+                # Remove from active proposals
+                self.active_proposals.discard(ctx.author.id)
+                self.active_proposals.discard(user.id)
+
+        except Exception:
+            print(traceback.format_exc())
+            await ctx.reply("Something went wrong with the marriage proposal!")
+
+    @marry.error
+    async def marry_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply("You need to mention who you want to marry!\nUsage: `!marry @user`")
+        elif isinstance(error, commands.BadArgument):
+            await ctx.reply("Invalid user! Please mention a valid user")
+        else:
+            print(f"Unexpected error: {error}")
+
+    @commands.hybrid_command(name="divorce", description="Divorce your current partner")
+    async def divorce(self, ctx):
+        """
+        Divorce your current partner
+        Usage: !divorce
+        """
+        try:
+            author_id = str(ctx.author.id)
+            make_sure_user_profile_exists('', author_id)
+
+            # Check if user is married
+            is_married, partner_id, marriage_date = self.is_married(author_id)
+            if not is_married:
+                await ctx.reply(f"You're not married! {sadgebusiness}")
+                return
+
+            partner = await self.get_user(int(partner_id), ctx)
+
+            # Calculate marriage duration
+            if marriage_date:
+                marriage_datetime = datetime.fromisoformat(marriage_date)
+                duration = datetime.now() - marriage_datetime
+                days = duration.days
+                if days == 0:
+                    duration_str = "less than a day"
+                elif days == 1:
+                    duration_str = "1 day"
+                else:
+                    duration_str = f"{days} days"
+            else:
+                duration_str = "an unknown time"
+
+            # Create confirmation view (only author needs to confirm)
+            view = ConfirmView(ctx.author, timeout=60.0)
+            message = await ctx.reply(
+                f"## Are you sure you want to divorce **{partner.display_name if partner else 'Unknown User'}**?\n"
+                f"You've been married for **{duration_str}**",
+                view=view
+            )
+            view.message = message
+            await view.wait()
+
+            if view.value is True:
+                # Proceed with divorce
+                self.auto_divorce(author_id, partner_id)
+                await message.reply(
+                    f"## 💔 Divorce finalized\n"
+                    f"**{ctx.author.display_name}** and **{partner.display_name if partner else 'Unknown User'}** are no longer married {o7}"
+                )
+
+                # Try to notify the partner
+                if partner:
+                    try:
+                        await partner.send(
+                            f"## 💔 You've been divorced\n"
+                            f"**{ctx.author.name}** has divorced you after being married for **{duration_str}**"
+                        )
+                    except:
+                        pass  # Partner has DMs disabled
+            elif view.value is False:
+                await message.reply(f"Divorce cancelled. Your marriage continues! {gladge}")
+            else:
+                # Timed out
+                pass  # Message already says "Decision timed out"
+
+        except Exception:
+            print(traceback.format_exc())
+            await ctx.reply("Something went wrong with the divorce!")
+
+    @commands.hybrid_command(name="marriage", description="Check marriage status",
+                             aliases=['marriage_info', 'marriage_status'])
+    @app_commands.describe(user="The user whose marriage status to check (optional)")
+    async def marriage(self, ctx, user: discord.User = None):
+        """
+        Check your or someone else's marriage status
+        Usage: !marriage (@user)
+        """
+        try:
+            if user is None:
+                user = ctx.author
+
+            user_id = str(user.id)
+            make_sure_user_profile_exists('', user_id)
+
+            # Check marriage status
+            is_married, partner_id, marriage_date = self.is_married(user_id)
+
+            # Prepare embed
+            if ctx.guild and ctx.guild.get_member(user.id):
+                embed_color = ctx.guild.get_member(user.id).color
+                if embed_color == discord.Colour.default():
+                    embed_color = 0xffd000
+            else:
+                embed_color = 0xffd000
+
+            embed = discord.Embed(
+                title=f"💍 {user.display_name}'s Marriage Status",
+                color=embed_color
+            )
+            embed.set_thumbnail(url=user.avatar.url)
+
+            if is_married:
+                partner = await self.get_user(int(partner_id), ctx)
+
+                # Calculate marriage duration
+                if marriage_date:
+                    marriage_datetime = datetime.fromisoformat(marriage_date)
+                    duration = datetime.now() - marriage_datetime
+                    days = duration.days
+
+                    if days == 0:
+                        duration_str = "Less than a day"
+                    elif days == 1:
+                        duration_str = "1 day"
+                    elif days < 30:
+                        duration_str = f"{days} days"
+                    elif days < 365:
+                        months = days // 30
+                        duration_str = f"{months} month{'s' if months != 1 else ''}"
+                    else:
+                        years = days // 365
+                        remaining_days = days % 365
+                        if remaining_days < 30:
+                            duration_str = f"{years} year{'s' if years != 1 else ''}"
+                        else:
+                            months = remaining_days // 30
+                            duration_str = f"{years} year{'s' if years != 1 else ''} and {months} month{'s' if months != 1 else ''}"
+
+                    # Anniversary info
+                    next_anniversary = marriage_datetime.replace(year=datetime.now().year)
+                    if next_anniversary < datetime.now():
+                        next_anniversary = next_anniversary.replace(year=datetime.now().year + 1)
+                    days_until = (next_anniversary - datetime.now()).days
+
+                    embed.add_field(name="Status", value=f"Married {murmheart}", inline=True)
+                    embed.add_field(name="Partner", value=partner.mention if partner else "Unknown User", inline=True)
+                    embed.add_field(name="", value='', inline=True)
+
+                    embed.add_field(name="Duration", value=duration_str, inline=True)
+                    embed.add_field(name="Marriage Date", value=f"<t:{int(marriage_datetime.timestamp())}:D>", inline=True)
+                    embed.add_field(name="Next Anniversary", value=f"In {days_until} day{'s' if days_until != 1 else ''}", inline=True)
+                else:
+                    embed.add_field(name="Status", value=f"Married {murmheart}", inline=True)
+                    embed.add_field(name="Partner", value=partner.mention if partner else "Unknown User", inline=True)
+            else:
+                embed.add_field(name="Status", value="Single", inline=False)
+                embed.add_field(name="", value=f"*{user.display_name} is not married*", inline=False)
+
+            await ctx.send(embed=embed)
+
+        except Exception:
+            print(traceback.format_exc())
+            await ctx.reply("Something went wrong checking the marriage status!")
+
+    @marriage.error
+    async def marriage_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            await ctx.reply("Invalid user! Please provide a valid user mention or ID")
+        else:
+            print(f"Unexpected error: {error}")
+
+
 async def setup():
     await client.add_cog(Currency(client))
     await client.add_cog(Lore(client))
+    await client.add_cog(Marriage(client))
 
 
 def log_shutdown():
