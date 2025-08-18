@@ -2656,7 +2656,7 @@ class PaginationView(discord.ui.View):
         self.page_size = 1 if self.author.startswith('The Lore of') else \
                          5 if (self.footer and self.footer_icon) else \
                          15 if self.author == "Custom Commands" else \
-                         10 if self.title == 'Lore Leaderboard' else \
+                         10 if self.title in ('Lore Leaderboard', 'Marriage Leaderboard') else \
                          8
         self.current_page = page_
 
@@ -2718,7 +2718,7 @@ class PaginationView(discord.ui.View):
             embed.set_footer(text=self.footer, icon_url=self.footer_icon)
             return embed
 
-        elif self.title == 'Lore Leaderboard':
+        elif self.title in ('Lore Leaderboard', 'Marriage Leaderboard'):
             embed = discord.Embed(title=f"{self.title} - Page {self.current_page} / {self.total_pages()}",
                                   color=self.color)
             for item in data:
@@ -8043,6 +8043,81 @@ class Marriage(commands.Cog):
             await ctx.reply("Invalid user! Please provide a valid user mention or ID")
         else:
             print(f"Unexpected error: {error}")
+
+
+    @commands.hybrid_command(name="marriagelb", description="Shows the server's marriage leaderboard", aliases=['marrylb'])
+    @app_commands.describe(page="The page number to view")
+    async def marriage_leaderboard(self, ctx, page: int = 1):
+        """
+        Displays a leaderboard of all married couples in the server, sorted by duration.
+        """
+        if not ctx.guild:
+            return await ctx.reply("This command can only be used in a server.")
+
+        server_member_ids = {str(member.id) for member in ctx.guild.members}
+        all_couples = []
+        processed_couples = set()
+
+        for user_id_str, profile in global_profiles.items():
+            is_married, partner_id_str, marriage_date_iso = self.is_married(user_id_str)
+
+            if is_married:
+                # Create a unique key for the couple to avoid duplicates
+                couple_key = tuple(sorted((user_id_str, partner_id_str)))
+                if couple_key in processed_couples:
+                    continue
+
+                # Check if at least one member is in the current server
+                if user_id_str in server_member_ids or partner_id_str in server_member_ids:
+                    marriage_date = datetime.fromisoformat(marriage_date_iso)
+                    duration = datetime.now() - marriage_date
+                    all_couples.append({
+                        'user1_id': user_id_str,
+                        'user2_id': partner_id_str,
+                        'duration': duration
+                    })
+                    processed_couples.add(couple_key)
+
+        if not all_couples:
+            return await ctx.reply("There are no married couples involving members of this server yet!")
+
+        # Sort couples by duration (longest marriage first)
+        all_couples.sort(key=lambda x: x['duration'], reverse=True)
+
+        embed_data = []
+        for rank, couple in enumerate(all_couples, start=1):
+            user1 = await self.get_user(int(couple['user1_id']), ctx)
+            user2 = await self.get_user(int(couple['user2_id']), ctx)
+
+            # Format the duration string
+            days = couple['duration'].days
+            if days == 0:
+                duration_str = "less than a day"
+            elif days == 1:
+                duration_str = "1 day"
+            elif days < 365:
+                duration_str = f"{days} days"
+            else:
+                years = days // 365
+                duration_str = f"{years} year{'s' if years != 1 else ''}"
+
+            # user1_name = user1.display_name if user1 else "Unknown User"
+            # user2_name = user2.display_name if user2 else "Unknown User"
+
+            embed_data.append({
+                # 'label': f"#{rank} - **{user1_name}** ❤️ **{user2_name}**",
+                'label': f"**#{rank}** - <@{couple['user1_id']}> ❤️ <@{couple['user2_id']}>",
+                'item': duration_str
+            })
+
+        pagination_view = PaginationView(
+            data_=embed_data,
+            title_='Marriage Leaderboard',
+            color_=0xff69b4,  # Pink color for the embed
+            ctx_=ctx,
+            page_=min(page, math.ceil(len(embed_data) / 10))
+        )
+        await pagination_view.send_embed()
 
 
 async def setup():
