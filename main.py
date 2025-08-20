@@ -2654,9 +2654,9 @@ class PaginationView(discord.ui.View):
         self.ctx = ctx_
         self.message = None
         self.page_size = 1 if self.author.startswith('The Lore of') else \
+                         10 if self.title in ('Lore Leaderboard', 'Marriage Leaderboard') else \
                          5 if (self.footer and self.footer_icon) else \
                          15 if self.author == "Custom Commands" else \
-                         10 if self.title in ('Lore Leaderboard', 'Marriage Leaderboard') else \
                          8
         self.current_page = page_
 
@@ -2693,7 +2693,7 @@ class PaginationView(discord.ui.View):
         current_data = self.get_current_page_data()
         embed = self.create_embed(current_data)
         self.update_buttons()
-        if self.author.startswith('The Lore of'):
+        if self.author.startswith('The Lore of') or self.title in ('Lore Leaderboard', 'Marriage Leaderboard'):
             pass
         elif not (self.footer and self.footer_icon):
             self.update_item_buttons()
@@ -2703,7 +2703,7 @@ class PaginationView(discord.ui.View):
 
     def create_embed(self, data):
         # Case 1: Title/Footer mode (your original logic for !title)
-        if self.footer and self.footer_icon:
+        if self.title not in ('Lore Leaderboard', 'Marriage Leaderboard') and self.footer and self.footer_icon:
             embed = discord.Embed(title=f"{self.title.capitalize()} - Page {self.current_page} / {self.total_pages()}",
                                   color=self.color)
             for item in data:
@@ -2723,6 +2723,8 @@ class PaginationView(discord.ui.View):
                                   color=self.color)
             for item in data:
                 embed.add_field(name='', value=f"{item['label']}: {item['item']}", inline=False)
+            if self.footer and self.footer_icon:
+                embed.set_footer(text=self.footer, icon_url=self.footer_icon)
             return embed
 
         # --- NEW LOGIC BRANCH ---
@@ -2802,7 +2804,7 @@ class PaginationView(discord.ui.View):
 
     async def update_message(self, data):
         self.update_buttons()
-        if self.author.startswith('The Lore of'):
+        if self.author.startswith('The Lore of') or self.title in ('Lore Leaderboard', 'Marriage Leaderboard'):
             pass
         elif not (self.footer and self.footer_icon):
             self.update_item_buttons()
@@ -2853,7 +2855,7 @@ class PaginationView(discord.ui.View):
 
         # Add a new button for each item on the current page.
         # This only happens when NOT using the footer/footer_icon mode.
-        if not (self.footer and self.footer_icon):
+        if not (self.footer and self.footer_icon) or self.title in ('Lore Leaderboard', 'Marriage Leaderboard'):
             count = 0
             for item in self.get_current_page_data():
                 # Assuming that in this mode each item is a tuple or dict.
@@ -2897,9 +2899,7 @@ class PaginationView(discord.ui.View):
             if getattr(child, "is_title_button", False):
                 self.remove_item(child)
 
-        # Add a new button for each title on the current page.
-        # This only happens when NOT using the footer/footer_icon mode.
-        if self.footer and self.footer_icon:
+        if self.footer and self.footer_icon and self.title not in ('Lore Leaderboard', 'Marriage Leaderboard'):
             count = 0
             for title in self.get_current_page_data():
                 title = title['label'].split(' - ')[1]
@@ -2956,7 +2956,7 @@ class PaginationView(discord.ui.View):
     async def first_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page = 1
-        if self.footer and self.footer_icon:
+        if self.footer and self.footer_icon and self.title not in ('Lore Leaderboard', 'Marriage Leaderboard'):
             current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
             self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
@@ -2965,7 +2965,7 @@ class PaginationView(discord.ui.View):
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page -= 1
-        if self.footer and self.footer_icon:
+        if self.footer and self.footer_icon and self.title not in ('Lore Leaderboard', 'Marriage Leaderboard'):
             current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
             self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
@@ -2974,7 +2974,7 @@ class PaginationView(discord.ui.View):
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page += 1
-        if self.footer and self.footer_icon:
+        if self.footer and self.footer_icon and self.title not in ('Lore Leaderboard', 'Marriage Leaderboard'):
             current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
             self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
@@ -2983,7 +2983,7 @@ class PaginationView(discord.ui.View):
     async def last_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.current_page = self.total_pages()
-        if self.footer and self.footer_icon:
+        if self.footer and self.footer_icon and self.title not in ('Lore Leaderboard', 'Marriage Leaderboard'):
             current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
             self.footer = f'Your current title is {'not set' if not current_title else current_title}'
         await self.update_message(self.get_current_page_data())
@@ -4395,7 +4395,7 @@ class Lore(commands.Cog):
         character_limit = 4000
         count = 0
         for entry in reversed(user_lore):  # Iterate from newest to oldest
-            entry_text = entry['content']
+            entry_text = entry['content'][:150] + '..' * (len(entry['content']) > 150)
             message_url = f"https://discord.com/channels/{guild_id}/{entry['channel_id']}/{entry['message_id']}"
 
             if entry['image_url']:
@@ -8044,8 +8044,7 @@ class Marriage(commands.Cog):
         else:
             print(f"Unexpected error: {error}")
 
-
-    @commands.hybrid_command(name="marriagelb", description="Shows the server's marriage leaderboard", aliases=['marrylb'])
+    @commands.hybrid_command(name="marrylb", description="Shows the server's marriage leaderboard", aliases=['marriagelb'])
     @app_commands.describe(page="The page number to view")
     async def marriage_leaderboard(self, ctx, page: int = 1):
         """
@@ -8085,9 +8084,12 @@ class Marriage(commands.Cog):
         all_couples.sort(key=lambda x: x['duration'], reverse=True)
 
         embed_data = []
+        footer = ["You're not married!", ctx.author.avatar.url]
         for rank, couple in enumerate(all_couples, start=1):
-            user1 = await self.get_user(int(couple['user1_id']), ctx)
-            user2 = await self.get_user(int(couple['user2_id']), ctx)
+            user1_id = int(couple['user1_id'])
+            user2_id = int(couple['user2_id'])
+            user1 = await self.get_user(user1_id, ctx)
+            user2 = await self.get_user(user2_id, ctx)
 
             # Format the duration string
             days = couple['duration'].days
@@ -8101,21 +8103,25 @@ class Marriage(commands.Cog):
                 years = days // 365
                 duration_str = f"{years} year{'s' if years != 1 else ''}"
 
-            # user1_name = user1.display_name if user1 else "Unknown User"
-            # user2_name = user2.display_name if user2 else "Unknown User"
+            user1_name = user1.display_name if user1 else "Unknown User"
+            user2_name = user2.display_name if user2 else "Unknown User"
 
             embed_data.append({
-                # 'label': f"#{rank} - **{user1_name}** ❤️ **{user2_name}**",
-                'label': f"**#{rank}** - <@{couple['user1_id']}> ❤️ <@{couple['user2_id']}>",
+                'label': f"**#{rank}** - **{user1_name}** ​ ❤️ ​ **{user2_name}**",
+                # 'label': f"**#{rank}** - <@{couple['user1_id']}> ❤️ <@{couple['user2_id']}>",
                 'item': duration_str
             })
+
+            if ctx.author.id in (user1_id, user2_id):
+                footer = [f"Your marriage is at #{rank}", ctx.author.avatar.url]
 
         pagination_view = PaginationView(
             data_=embed_data,
             title_='Marriage Leaderboard',
             color_=0xff69b4,  # Pink color for the embed
             ctx_=ctx,
-            page_=min(page, math.ceil(len(embed_data) / 10))
+            page_=min(page, math.ceil(len(embed_data) / 10)),
+            footer_=footer
         )
         await pagination_view.send_embed()
 
