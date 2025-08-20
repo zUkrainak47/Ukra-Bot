@@ -2641,7 +2641,7 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
 
 # taken from https://youtu.be/PRC4Ev5TJwc + chatgpt refined
 class PaginationView(discord.ui.View):
-    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', ctx_=None, timeout: float = 120, page_: int = 1):
+    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', ctx_=None, timeout: float = 120, page_: int = 1, cog_ = None):
         super().__init__(timeout=timeout)
         self.data = data_
         self.title = title_
@@ -2653,12 +2653,14 @@ class PaginationView(discord.ui.View):
         self.author_icon = author_icon_
         self.ctx = ctx_
         self.message = None
+        self.cog = cog_
         self.page_size = 1 if self.author.startswith('The Lore of') else \
-                         10 if self.title in ('Lore Leaderboard', 'Marriage Leaderboard') else \
+                         10 if 'Leaderboard' in self.title else \
                          5 if (self.footer and self.footer_icon) else \
                          15 if self.author == "Custom Commands" else \
                          8
         self.current_page = page_
+        self.is_loading = False
 
     def total_pages(self) -> int:
         """
@@ -2691,9 +2693,9 @@ class PaginationView(discord.ui.View):
     async def send_embed(self):
         # Prepare the embed with the first page's data
         current_data = self.get_current_page_data()
-        embed = self.create_embed(current_data)
+        embed = await self.create_embed(current_data)
         self.update_buttons()
-        if self.author.startswith('The Lore of') or self.title in ('Lore Leaderboard', 'Marriage Leaderboard'):
+        if self.author.startswith('The Lore of') or 'Leaderboard' in self.title:
             pass
         elif not (self.footer and self.footer_icon):
             self.update_item_buttons()
@@ -2701,9 +2703,9 @@ class PaginationView(discord.ui.View):
             self.update_title_buttons()
         self.message = await self.ctx.reply(embed=embed, view=self)
 
-    def create_embed(self, data):
+    async def create_embed(self, data):
         # Case 1: Title/Footer mode (your original logic for !title)
-        if self.title not in ('Lore Leaderboard', 'Marriage Leaderboard') and self.footer and self.footer_icon:
+        if 'Leaderboard' not in self.title and self.footer and self.footer_icon:
             embed = discord.Embed(title=f"{self.title.capitalize()} - Page {self.current_page} / {self.total_pages()}",
                                   color=self.color)
             for item in data:
@@ -2718,7 +2720,37 @@ class PaginationView(discord.ui.View):
             embed.set_footer(text=self.footer, icon_url=self.footer_icon)
             return embed
 
-        elif self.title in ('Lore Leaderboard', 'Marriage Leaderboard'):
+        elif self.title in ('Global Leaderboard', 'Global Leaderboard (real)', 'Leaderboard'):
+            embed = discord.Embed(title=f"{self.title} - Page {self.current_page} / {self.total_pages()}", color=self.color)
+            guild_id = '' if not self.ctx.guild else str(self.ctx.guild.id)
+            for rank, (user_id, coins) in enumerate(data, start=1 + (self.current_page - 1) * self.page_size):
+                try:
+                    user = await self.cog.get_user(int(user_id), self.ctx)
+                    make_sure_user_profile_exists(guild_id, user_id)
+                    highest_rank = global_profiles[user_id]['highest_global_rank']
+                    if rank < highest_rank or highest_rank == -1:
+                        global_profiles[user_id]['highest_global_rank'] = rank
+                        if rank == 1:
+                            if 'Reached #1' not in global_profiles[user_id]['items'].setdefault('titles', []):
+                                global_profiles[user_id]['items']['titles'].append('Reached #1')
+                            await self.ctx.send(
+                                f"{user.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
+                        save_profiles()
+
+                    display_name = user.mention if user and user.id == self.ctx.author.id else (user.global_name or user.name) if user else f"Unknown User ({user_id})"
+
+                    number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
+                    rank_display = number_dict.get(rank, f"**#{rank}**")
+
+                    embed.add_field(name="", value=f"{rank_display} - **{display_name}**: {coins:,} {coin}", inline=False)
+                except discord.NotFound:
+                    global_currency.remove(user_id)
+                    save_currency()
+            if self.footer and self.footer_icon:
+                embed.set_footer(text=self.footer, icon_url=self.footer_icon)
+            return embed
+
+        elif 'Leaderboard' in self.title:
             embed = discord.Embed(title=f"{self.title} - Page {self.current_page} / {self.total_pages()}",
                                   color=self.color)
             for item in data:
@@ -2804,13 +2836,13 @@ class PaginationView(discord.ui.View):
 
     async def update_message(self, data):
         self.update_buttons()
-        if self.author.startswith('The Lore of') or self.title in ('Lore Leaderboard', 'Marriage Leaderboard'):
+        if self.author.startswith('The Lore of') or 'Leaderboard' in self.title:
             pass
         elif not (self.footer and self.footer_icon):
             self.update_item_buttons()
         else:
             self.update_title_buttons()
-        await self.message.edit(embed=self.create_embed(data), view=self)
+        await self.message.edit(embed=await self.create_embed(data), view=self)
 
     def update_buttons(self):
         for child in self.children:
@@ -2855,7 +2887,7 @@ class PaginationView(discord.ui.View):
 
         # Add a new button for each item on the current page.
         # This only happens when NOT using the footer/footer_icon mode.
-        if not (self.footer and self.footer_icon) or self.title in ('Lore Leaderboard', 'Marriage Leaderboard'):
+        if not (self.footer and self.footer_icon) or 'Leaderboard' in self.title:
             count = 0
             for item in self.get_current_page_data():
                 # Assuming that in this mode each item is a tuple or dict.
@@ -2899,7 +2931,7 @@ class PaginationView(discord.ui.View):
             if getattr(child, "is_title_button", False):
                 self.remove_item(child)
 
-        if self.footer and self.footer_icon and self.title not in ('Lore Leaderboard', 'Marriage Leaderboard'):
+        if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
             count = 0
             for title in self.get_current_page_data():
                 title = title['label'].split(' - ')[1]
@@ -2954,39 +2986,91 @@ class PaginationView(discord.ui.View):
 
     @discord.ui.button(label="|<", style=discord.ButtonStyle.green, row=0, custom_id='left_full')
     async def first_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
-        self.current_page = 1
-        if self.footer and self.footer_icon and self.title not in ('Lore Leaderboard', 'Marriage Leaderboard'):
-            current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-            self.footer = f'Your current title is {'not set' if not current_title else current_title}'
-        await self.update_message(self.get_current_page_data())
+        if self.is_loading:
+            await interaction.response.send_message("Please wait for the current page to load.", ephemeral=True)
+            return
+        self.is_loading = True
+        try:
+            await interaction.response.defer()
+
+            for child in self.children:
+                if isinstance(child, discord.ui.Button):
+                    child.disabled = True
+            await self.message.edit(view=self)
+
+            self.current_page = 1
+            if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
+                current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+                self.footer = f'Your current title is {'not set' if not current_title else current_title}'
+            await self.update_message(self.get_current_page_data())
+        finally:
+            self.is_loading = False
 
     @discord.ui.button(label="<", style=discord.ButtonStyle.primary, row=0, custom_id='left')
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
-        self.current_page -= 1
-        if self.footer and self.footer_icon and self.title not in ('Lore Leaderboard', 'Marriage Leaderboard'):
-            current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-            self.footer = f'Your current title is {'not set' if not current_title else current_title}'
-        await self.update_message(self.get_current_page_data())
+        if self.is_loading:
+            await interaction.response.send_message("Please wait for the current page to load.", ephemeral=True)
+            return
+        self.is_loading = True
+        try:
+            await interaction.response.defer()
+
+            for child in self.children:
+                if isinstance(child, discord.ui.Button):
+                    child.disabled = True
+            await self.message.edit(view=self)
+
+            self.current_page -= 1
+            if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
+                current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+                self.footer = f'Your current title is {'not set' if not current_title else current_title}'
+            await self.update_message(self.get_current_page_data())
+        finally:
+            self.is_loading = False
 
     @discord.ui.button(label=">", style=discord.ButtonStyle.primary, row=0, custom_id='right')
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
-        self.current_page += 1
-        if self.footer and self.footer_icon and self.title not in ('Lore Leaderboard', 'Marriage Leaderboard'):
-            current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-            self.footer = f'Your current title is {'not set' if not current_title else current_title}'
-        await self.update_message(self.get_current_page_data())
+        if self.is_loading:
+            await interaction.response.send_message("Please wait for the current page to load.", ephemeral=True)
+            return
+        self.is_loading = True
+        try:
+            await interaction.response.defer()
+
+            for child in self.children:
+                if isinstance(child, discord.ui.Button):
+                    child.disabled = True
+            await self.message.edit(view=self)
+
+            self.current_page += 1
+            if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
+                current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+                self.footer = f'Your current title is {'not set' if not current_title else current_title}'
+            await self.update_message(self.get_current_page_data())
+        finally:
+            self.is_loading = False
 
     @discord.ui.button(label=">|", style=discord.ButtonStyle.green, row=0, custom_id='right_full')
     async def last_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
-        self.current_page = self.total_pages()
-        if self.footer and self.footer_icon and self.title not in ('Lore Leaderboard', 'Marriage Leaderboard'):
-            current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-            self.footer = f'Your current title is {'not set' if not current_title else current_title}'
-        await self.update_message(self.get_current_page_data())
+        if self.is_loading:
+            await interaction.response.send_message("Please wait for the current page to load.", ephemeral=True)
+            return
+        self.is_loading = True
+        try:
+            await interaction.response.defer()
+
+            for child in self.children:
+                if isinstance(child, discord.ui.Button):
+                    child.disabled = True
+            await self.message.edit(view=self)
+
+            self.current_page = self.total_pages()
+            if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
+                current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+                self.footer = f'Your current title is {'not set' if not current_title else current_title}'
+            await self.update_message(self.get_current_page_data())
+        finally:
+            self.is_loading = False
 
     async def on_timeout(self):
         # Disable all buttons in the view.
@@ -6461,6 +6545,62 @@ class Currency(commands.Cog):
 
     @global_leaderboard.error
     async def global_leaderboard_error(self, ctx, error):
+        print(error)
+        await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
+
+    @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
+    @commands.hybrid_command(name="glbe", description="View the global leaderboard of the 10 richest users of the bot", aliases=['global_leaderboard_embed', 'glibe'])
+    @app_commands.describe(page="Leaderboard page")
+    async def global_leaderboard_embed(self, ctx, *, page: int = 1):
+        """
+        View the top 10 richest users of the bot globally (optionally accepts a page)
+        Also shows your global rank
+        """
+        try:
+            guild_id = '' if not ctx.guild else str(ctx.guild.id)
+            if currency_allowed(ctx) and bot_down_check(guild_id):
+                author_id = str(ctx.author.id)
+                make_sure_user_has_currency(guild_id, author_id)
+
+                sorted_members = get_net_leaderboard()
+                #  FIXME probably not the best approach
+                footer = ['', '']
+                try:
+                    user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
+                    rank = user_to_index[str(ctx.author.id)] + 1
+                    highest_rank = global_profiles[str(ctx.author.id)]['highest_global_rank']
+                    if rank < highest_rank or highest_rank == -1:
+                        global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
+                        if rank == 1:
+                            if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
+                                global_profiles[author_id]['items']['titles'].append('Reached #1')
+                            await ctx.send(
+                                f"{ctx.author.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
+                        save_profiles()
+                    footer = [f"You're at #{rank}", ctx.author.avatar.url]
+                except KeyError:
+                    pass
+
+                pagination_view = PaginationView(
+                    data_=sorted_members,
+                    title_='Global Leaderboard',
+                    color_=0xffd000,
+                    cog_=self,
+                    ctx_=ctx,
+                    page_=min(page, math.ceil(len(sorted_members) / 10)),
+                    footer_=footer
+                )
+
+                await pagination_view.send_embed()
+
+            elif currency_allowed(ctx):
+                await ctx.reply(f'{reason}, currency commands are disabled')
+
+        except Exception as e:
+            print(traceback.format_exc())
+
+    @global_leaderboard_embed.error
+    async def global_leaderboard_embed_error(self, ctx, error):
         print(error)
         await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
 
