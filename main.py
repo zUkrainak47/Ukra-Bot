@@ -4518,12 +4518,13 @@ class Lore(commands.Cog):
         entry_counts = {user_id: len(entries) for user_id, entries in guild_lore.items()}
         sorted_entries = sorted(entry_counts.items(), key=lambda item: item[1], reverse=True)
         rank = 1
-
+        footer = ['', '']
         for user_id, message_count in sorted_entries:
             user = await self.get_user(int(user_id), ctx)
-
+            if int(user_id) == ctx.author.id:
+                footer = [f"You're at #{rank}", ctx.author.avatar.url]
             embed_data.append({
-                'label': f"#{rank} - {user.display_name}",
+                'label': f"**#{rank}** - {user.display_name}",
                 'item': f"**{message_count}** entr{'ies' if message_count != 1 else 'y'}"
             })
             rank += 1
@@ -4533,7 +4534,8 @@ class Lore(commands.Cog):
             title_='Lore Leaderboard',
             color_=0xffd000,
             ctx_=ctx,
-            page_=min(page, len(embed_data))
+            page_=min(page, len(embed_data)),
+            footer_=footer
         )
         await pagination_view.send_embed()
 
