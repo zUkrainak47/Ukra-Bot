@@ -2721,7 +2721,7 @@ class PaginationView(discord.ui.View):
             embed.set_footer(text=self.footer, icon_url=self.footer_icon)
             return embed
 
-        elif self.title in ('Global Leaderboard', 'Global Leaderboard (Real)', 'Leaderboard'):
+        elif self.title in ('Global Leaderboard', 'Global Leaderboard (Real)', 'Leaderboard', 'Giveaway Funding Leaderboard'):
             embed = discord.Embed(title=f"{self.title} - Page {self.current_page} / {self.total_pages()}", color=self.color)
             guild_id = '' if not self.ctx.guild else str(self.ctx.guild.id)
             for rank, (user_id, coins) in enumerate(data, start=1 + (self.current_page - 1) * self.page_size):
@@ -3997,7 +3997,6 @@ async def user_fund(ctx: commands.Context, author: discord.User, amount):
             if get_user_balance(guild_id, author_id) < amount:
                 await ctx.reply(f"**{author.display_name}**, you don't own {amount:,} {coin} {sadgebusiness}")
                 return
-
 
             bal = remove_coins_from_user(guild_id, author_id, amount)
             global_profiles[author_id]['num_1'] += amount
@@ -6147,6 +6146,7 @@ class Currency(commands.Cog):
         """
         Dig, mine, work and fish in one command.
         Unlocks after funding 250k worth of official giveaways.
+        (!fund)
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
@@ -6391,163 +6391,6 @@ class Currency(commands.Cog):
             else:
                 print(f"Unexpected error: {error}")  # Log other errors for debugging
 
-    # @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
-    # @commands.hybrid_command(name="lb", description="View the leaderboard of the 10 richest users in this server", aliases=['leaderboard'])
-    # @app_commands.describe(page="Leaderboard page")
-    # async def leaderboard(self, ctx, *, page: int = 1):
-    #     """
-    #     View the top 10 richest users of the server (optionally accepts a page)
-    #     Also shows your rank
-    #     """
-    #     try:
-    #         guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    #         if currency_allowed(ctx) and bot_down_check(guild_id):
-    #             if not guild_id:
-    #                 await ctx.reply("Can't use leaderboard in DMs! Try `!glb`")
-    #                 return
-    #             author_id = str(ctx.author.id)
-    #             make_sure_user_has_currency(guild_id, author_id)
-    #             members = server_settings.get(guild_id).get('members')
-    #             # sorted_members = sorted(members, key=lambda x: global_currency[x], reverse=True)
-    #             sorted_members = get_net_leaderboard(members)
-    #             #  FIXME probably not the best approach
-    #             top_users = []
-    #             c = 0
-    #             found_author = False
-    #             if getattr(ctx, "interaction", None) is None:
-    #                 contents = ctx.message.content.split()[1:]
-    #                 if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
-    #                     page = int(contents[0])
-    #                 else:
-    #                     page = 1
-    #             page = min(int(page), math.ceil(len(sorted_members)/10))
-    #
-    #             if page == 1:
-    #                 page_msg = ''
-    #             else:
-    #                 page_msg = f' - page #{page}'
-    #
-    #             page -= 1
-    #             for member_id, coins in sorted_members[page*10:]:
-    #                 # coins = get_user_balance(guild_id, member_id)
-    #                 if c == 10 or page*10 + c == len(sorted_members):
-    #                     break
-    #                 try:
-    #                     member = ctx.guild.get_member(int(member_id))
-    #                     if member:
-    #                         if int(member_id) != ctx.author.id:
-    #                             top_users.append([member.display_name, coins])
-    #                         else:
-    #                             top_users.append([f"{member.mention}", coins])
-    #                             found_author = True
-    #                         c += 1
-    #                     else:
-    #                         server_settings[guild_id]['members'].remove(member_id)
-    #                 except discord.NotFound:
-    #                     # FIXME literally broken, handle members not in server better
-    #                     server_settings[guild_id]['members'].remove(member_id)
-    #                     global_currency.remove(member_id)
-    #                     save_currency()
-    #             save_settings()
-    #             if not found_author:
-    #                 user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
-    #                 rank = user_to_index[str(ctx.author.id)] + 1
-    #                 you = f"\n\nYou're at **#{rank}**"
-    #             else:
-    #                 you = ''
-    #             number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-    #             await ctx.send(f"# Leaderboard{page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
-    #         elif currency_allowed(ctx):
-    #             await ctx.reply(f'{reason}, currency commands are disabled')
-    #     except Exception:
-    #         print(traceback.format_exc())
-    #
-    # @leaderboard.error
-    # async def leaderboard_error(self, ctx, error):
-    #     await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
-    #
-    # @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
-    # @commands.hybrid_command(name="glb", description="View the global leaderboard of the 10 richest users of the bot", aliases=['global_leaderboard', 'glib'])
-    # @app_commands.describe(page="Leaderboard page")
-    # async def global_leaderboard(self, ctx, *, page: int = 1):
-    #     """
-    #     View the top 10 richest users of the bot globally (optionally accepts a page)
-    #     Also shows your global rank
-    #     """
-    #     global fetched_users
-    #     guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    #     if currency_allowed(ctx) and bot_down_check(guild_id):
-    #         author_id = str(ctx.author.id)
-    #         make_sure_user_has_currency(guild_id, author_id)
-    #         # sorted_members = sorted(global_currency.items(), key=lambda x: x[1], reverse=True)
-    #         sorted_members = get_net_leaderboard()
-    #         #  FIXME probably not the best approach
-    #         top_users = []
-    #         found_author = False
-    #         if getattr(ctx, "interaction", None) is None:
-    #             contents = ctx.message.content.split()[1:]
-    #             if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
-    #                 page = contents[0]
-    #             else:
-    #                 page = 1
-    #         page = min(int(page), math.ceil(len(sorted_members)/10))
-    #
-    #         if page == 1:
-    #             page_msg = ''
-    #         else:
-    #             page_msg = f' - page #{page}'
-    #
-    #         page -= 1
-    #         c = 0
-    #         for user_id, coins in sorted_members[page*10:page*10+10]:
-    #             try:
-    #                 user = await self.get_user(int(user_id), ctx)
-    #
-    #                 if int(user_id) != ctx.author.id:
-    #                     name_ = user.global_name or user.name
-    #                     top_users.append([name_, coins])
-    #                 else:
-    #                     top_users.append([f"{user.mention}", coins])
-    #                     found_author = True
-    #                 make_sure_user_profile_exists(guild_id, user_id)
-    #                 c += 1
-    #                 rank = page*10 + c
-    #                 highest_rank = global_profiles[user_id]['highest_global_rank']
-    #                 if rank < highest_rank or highest_rank == -1:
-    #                     global_profiles[user_id]['highest_global_rank'] = rank
-    #                     if rank == 1:
-    #                         if 'Reached #1' not in global_profiles[user_id]['items'].setdefault('titles', []):
-    #                             global_profiles[user_id]['items']['titles'].append('Reached #1')
-    #                         await ctx.send(f"{user.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
-    #                     save_profiles()
-    #             except discord.NotFound:
-    #                 global_currency.remove(user_id)
-    #                 save_currency()
-    #         if not found_author:
-    #             # rank = sorted_members.index((str(ctx.author.id), global_currency[str(ctx.author.id)]))+1
-    #             user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
-    #             rank = user_to_index[str(ctx.author.id)] + 1
-    #             highest_rank = global_profiles[str(ctx.author.id)]['highest_global_rank']
-    #             if rank < highest_rank or highest_rank == -1:
-    #                 global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
-    #                 if rank == 1:
-    #                     if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
-    #                         global_profiles[author_id]['items']['titles'].append('Reached #1')
-    #                     await ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
-    #                 save_profiles()
-    #             you = f"\n\nYou're at **#{rank}**"
-    #         else:
-    #             you = ''
-    #         number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-    #         await ctx.send(f"# Global Leaderboard{page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
-    #     elif currency_allowed(ctx):
-    #         await ctx.reply(f'{reason}, currency commands are disabled')
-    #
-    # @global_leaderboard.error
-    # async def global_leaderboard_error(self, ctx, error):
-    #     print(error)
-    #     await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
-
     async def send_leaderboard_embed(self, ctx, t, page: int = 1):
         """
         Sends the embed for a leaderboard of choice
@@ -6558,9 +6401,12 @@ class Currency(commands.Cog):
                 author_id = str(ctx.author.id)
                 make_sure_user_has_currency(guild_id, author_id)
 
-                sorted_members = get_net_leaderboard() if t == 'global' else get_net_leaderboard([], True) if t == 'real' else get_net_leaderboard(server_settings.get(guild_id).get('members'))
+                sorted_members = get_net_leaderboard() if t == 'global' else \
+                                 get_net_leaderboard([], True) if t == 'real' else \
+                                 get_net_leaderboard(server_settings.get(guild_id).get('members')) if t == 'local' else \
+                                 sorted({funder_id: global_profiles[funder_id]['num_1'] for funder_id in global_profiles if global_profiles[funder_id]['num_1']}.items(), key=lambda x: x[1], reverse=True)
                 #  FIXME probably not the best approach
-                footer = ['', '']
+                footer = [f"Go !fund, at 250k you unlock !e", ctx.author.avatar.url] if t == 'funders' else ['', '']
                 try:
                     user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
                     rank = user_to_index[str(ctx.author.id)] + 1
@@ -6579,7 +6425,7 @@ class Currency(commands.Cog):
 
                 pagination_view = PaginationView(
                     data_=sorted_members,
-                    title_='Global Leaderboard' if t == 'global' else 'Global Leaderboard (Real)' if t == 'real' else 'Leaderboard',
+                    title_='Global Leaderboard' if t == 'global' else 'Global Leaderboard (Real)' if t == 'real' else 'Leaderboard' if t == 'local' else 'Giveaway Funding Leaderboard',
                     color_=0xffd000,
                     cog_=self,
                     ctx_=ctx,
@@ -6599,116 +6445,40 @@ class Currency(commands.Cog):
     @commands.hybrid_command(name="glb", description="View the global leaderboard of the 10 richest users of the bot", aliases=['global_leaderboard', 'glib'])
     @app_commands.describe(page="Leaderboard page")
     async def global_leaderboard_embed(self, ctx, *, page: int = 1):
+        """
+        View the top 10 richest users of the bot globally (optionally accepts a page)
+        Also shows your global rank
+        """
         await self.send_leaderboard_embed(ctx, 'global', page)
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="glbr", description="View the global leaderboard with LOANS", aliases=['global_leaderboard_read', 'glibr', 'glrb', 'glirb'])
     @app_commands.describe(page="Leaderboard page")
     async def global_leaderboard_real_embed(self, ctx, *, page: int = 1):
+        """
+        View the top 10 richest users of the bot globally with LOANS (optionally accepts a page)
+        Also shows your global rank
+        """
         await self.send_leaderboard_embed(ctx, 'real', page)
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="lb", description="View the leaderboard of the 10 richest users of this server", aliases=['leaderboard'])
     @app_commands.describe(page="Leaderboard page")
     async def leaderboard_embed(self, ctx, *, page: int = 1):
+        """
+        View the top 10 richest users of the server (optionally accepts a page)
+        Also shows your rank
+        """
         if not ctx.guild:
             await ctx.reply("Can't use leaderboard in DMs! Try `!glb`")
             return
 
         await self.send_leaderboard_embed(ctx, 'local', page)
 
-    @global_leaderboard_embed.error
-    @global_leaderboard_real_embed.error
-    # @leaderboard_embed.error
-    async def embed_error(self, ctx, error):
-        print(error)
-        await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
-
-    # @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
-    # @commands.hybrid_command(name="glbr", description="View the global leaderboard with LOANS", aliases=['global_leaderboard_real', 'glibr', 'glrb', 'glirb'])
-    # @app_commands.describe(page="Leaderboard page")
-    # async def global_leaderboard_real(self, ctx, *, page: int = 1):
-    #     """
-    #     View the top 10 richest users of the bot globally with LOANS (optionally accepts a page)
-    #     Also shows your global rank
-    #     """
-    #     global fetched_users
-    #     guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    #     if currency_allowed(ctx) and bot_down_check(guild_id):
-    #         author_id = str(ctx.author.id)
-    #         make_sure_user_has_currency(guild_id, author_id)
-    #         # sorted_members = sorted(global_currency.items(), key=lambda x: x[1], reverse=True)
-    #         sorted_members = get_net_leaderboard([], True)
-    #         #  FIXME probably not the best approach
-    #         top_users = []
-    #         found_author = False
-    #         if getattr(ctx, "interaction", None) is None:
-    #             contents = ctx.message.content.split()[1:]
-    #             if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
-    #                 page = contents[0]
-    #             else:
-    #                 page = 1
-    #         page = min(int(page), math.ceil(len(sorted_members)/10))
-    #
-    #         if page == 1:
-    #             page_msg = ''
-    #         else:
-    #             page_msg = f' - page #{page}'
-    #
-    #         page -= 1
-    #         c = 0
-    #         for user_id, coins in sorted_members[page*10:page*10+10]:
-    #             try:
-    #                 user = await self.get_user(int(user_id), ctx)
-    #                 if int(user_id) != ctx.author.id:
-    #                     name_ = user.global_name or user.name
-    #                     top_users.append([name_, coins])
-    #                 else:
-    #                     top_users.append([f"{user.mention}", coins])
-    #                     found_author = True
-    #                 make_sure_user_profile_exists(guild_id, user_id)
-    #                 c += 1
-    #                 rank = page*10 + c
-    #                 highest_rank = global_profiles[user_id]['highest_global_rank']
-    #                 if rank < highest_rank or highest_rank == -1:
-    #                     global_profiles[user_id]['highest_global_rank'] = rank
-    #                     if rank == 1:
-    #                         if 'Reached #1' not in global_profiles[user_id]['items'].setdefault('titles', []):
-    #                             global_profiles[user_id]['items']['titles'].append('Reached #1')
-    #                         await ctx.send(f"{user.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
-    #                     save_profiles()
-    #             except discord.NotFound:
-    #                 global_currency.remove(user_id)
-    #                 save_currency()
-    #         if not found_author:
-    #             # rank = sorted_members.index((str(ctx.author.id), global_currency[str(ctx.author.id)]))+1
-    #             user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
-    #             rank = user_to_index[str(ctx.author.id)] + 1
-    #             highest_rank = global_profiles[str(ctx.author.id)]['highest_global_rank']
-    #             if rank < highest_rank or highest_rank == -1:
-    #                 global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
-    #                 if rank == 1:
-    #                     if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
-    #                         global_profiles[author_id]['items']['titles'].append('Reached #1')
-    #                     await ctx.send(f"{ctx.author.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
-    #                 save_profiles()
-    #             you = f"\n\nYou're at **#{rank}**"
-    #         else:
-    #             you = ''
-    #         number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-    #         await ctx.send(f"# Global Leaderboard (real) {page_msg}:\n{'\n'.join([f"**{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:** {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
-    #     elif currency_allowed(ctx):
-    #         await ctx.reply(f'{reason}, currency commands are disabled')
-    #
-    # @global_leaderboard_real.error
-    # async def global_leaderboard_real_error(self, ctx, error):
-    #     print(error)
-    #     await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
-
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="funders", description="View the top 10 giveaway funders globally")
     @app_commands.describe(page="Leaderboard page")
-    async def funders(self, ctx, *, page: int = 1):
+    async def funders_embed(self, ctx, *, page: int = 1):
         """
         View the top 10 giveaway funders globally (optionally accepts a page)
         In order to get on this leaderboard use !fund
@@ -6716,58 +6486,14 @@ class Currency(commands.Cog):
         Reaching 250k given away unlocks the !e command
         !help e for more info
         """
-        global fetched_users
-        guild_id = '' if not ctx.guild else str(ctx.guild.id)
-        if currency_allowed(ctx) and bot_down_check(guild_id):
-            author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)
-            funder_list = {funder_id: global_profiles[funder_id]['num_1'] for funder_id in global_profiles if global_profiles[funder_id]['num_1']}
-            sorted_members = sorted(funder_list.items(), key=lambda x: x[1], reverse=True)
-            # sorted_members = get_net_leaderboard()
-            #  FIXME probably not the best approach
-            top_users = []
-            found_author = False
-            if getattr(ctx, "interaction", None) is None:
-                contents = ctx.message.content.split()[1:]
-                if len(contents) == 1 and contents[0].isdecimal() and contents[0] != '0':
-                    page = contents[0]
-                else:
-                    page = 1
-            page = min(int(page), math.ceil(len(sorted_members)/10))
+        await self.send_leaderboard_embed(ctx, 'funders', page)
 
-            if page == 1:
-                page_msg = ''
-            else:
-                page_msg = f' - page #{page}'
-
-            page -= 1
-            for user_id, coins in sorted_members[page*10:page*10+10]:
-                try:
-                    user = await self.get_user(int(user_id), ctx)
-
-                    if int(user_id) != ctx.author.id:
-                        name_ = user.global_name or user.name
-                        top_users.append([name_, coins])
-                    else:
-                        top_users.append([f"{user.mention}", coins])
-                        found_author = True
-                except discord.NotFound:
-                    global_currency.remove(user_id)
-                    save_currency()
-            if not found_author and author_id in funder_list.keys():
-                # rank = sorted_members.index((str(ctx.author.id), global_currency[str(ctx.author.id)]))+1
-                user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
-                rank = user_to_index[str(ctx.author.id)] + 1
-                you = f"\n\nYou're at **#{rank}**"
-            else:
-                you = ''
-            number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
-            await ctx.send(f"# Giveaway Funding Leaderboard{page_msg}:\n{'\n'.join([f"{'**' if top_user_coins >= 250000 else ''}{str(index+page*10) + ' -' if index+page*10 not in number_dict else number_dict[index]} {top_user_nickname}:{'**' if top_user_coins >= 250000 else ''} {top_user_coins:,} {coin}" for index, (top_user_nickname, top_user_coins) in enumerate(top_users, start=1)])}" + you)
-        elif currency_allowed(ctx):
-            await ctx.reply(f'{reason}, currency commands are disabled')
-
-    @funders.error
-    async def funders_error(self, ctx, error):
+    @global_leaderboard_embed.error
+    @global_leaderboard_real_embed.error
+    @leaderboard_embed.error
+    @funders_embed.error
+    async def embed_error(self, ctx, error):
+        print(error)
         await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
 
     @commands.command(aliases=['coin', 'c'])
