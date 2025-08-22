@@ -4278,6 +4278,67 @@ class Lore(commands.Cog):
         except discord.errors.NotFound:
             return None
 
+    # @commands.hybrid_command(name="toggle_lore", description="Enables or disables lore functionality for you", aliases=['opt_out_of_lore'])
+    # async def toggle_lore(self, ctx):
+    #     """
+    #     Having lore deactivated means none of your messages can be added to your lore
+    #     If you have lore activated in this server, will deactivate it for you and vice versa
+    #     """
+    #     guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    #     if not guild_id:
+    #         await ctx.reply("Can't use this in DMs!")
+    #         return
+    #     make_sure_server_settings_exist(guild_id)
+    #     if 'currency_system' in server_settings.get(guild_id).get('allowed_commands') and ctx.channel.id in ignored_channels:
+    #         ignored_channels.remove(ctx.channel.id)
+    #         save_ignored_channels()
+    #         await ctx.send(f"{bot_name} will no longer ignore currency system commands in this channel")
+    #     elif currency_allowed(ctx):
+    #         ignored_channels.append(ctx.channel.id)
+    #         save_ignored_channels()
+    #         await ctx.send(f"{bot_name} will now ignore currency system commands in this channel")
+    #     else:
+    #         await ctx.send("Currency system is disabled in your server already. This command won't do anything")
+
+    @commands.command(name="tml", aliases=['toggle_message_lore'])
+    async def toggle_message_lore(self, ctx):
+        """
+        Disallows (or allows) adding a message to lore by replying to it
+        If you don't want a message to be added to your lore, you can run this command
+        Only usable for your own messages
+        Moderators can use this on any message
+        """
+        if not ctx.guild:
+            return await ctx.reply("Lore can only be managed in a server.")
+
+        if not ctx.message.reference:
+            return await ctx.reply("You need to reply to the message you want to toggle.")
+
+        try:
+            referenced_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+        except discord.NotFound:
+            return await ctx.reply("I couldn't find the message you replied to.")
+
+        if referenced_message.author != ctx.author and not await is_manager(ctx):
+            return await ctx.reply("You can only toggle your own messages and you're not a moderator c:")
+
+        guild_id = str(ctx.guild.id)
+        msg_id = str(referenced_message.id)
+        subject_id = str(referenced_message.author.id)
+
+        make_sure_server_settings_exist(guild_id)
+        if msg_id not in server_settings.get(guild_id).setdefault('not_lore_messages', []):
+            server_settings[guild_id]['not_lore_messages'].append(msg_id)
+            save_settings()
+            lore_data.setdefault(guild_id, {}).setdefault(subject_id, [])
+            if any(entry['message_id'] == msg_id for entry in lore_data[guild_id][subject_id]):
+                return await ctx.send(f"This message will no longer be addable to lore\n"
+                                      f"If you also want to remove it from your lore, now run `!rmlore {msg_id}`")
+            return await ctx.send(f"This message will no longer be addable to lore")
+        server_settings[guild_id]['not_lore_messages'].remove(msg_id)
+        save_settings()
+        return await ctx.send(f"This message is now addable to lore")
+
     @commands.command(name="addlore")
     @commands.cooldown(1, 300, commands.BucketType.user)  # 1 use per 5 minutes per user
     async def add_lore(self, ctx):
@@ -4298,8 +4359,12 @@ class Lore(commands.Cog):
             ctx.command.reset_cooldown(ctx)
             return await ctx.reply("I couldn't find the message you replied to.")
 
+        msg_id = str(referenced_message.id)
+
         lore_subject = referenced_message.author
         adder = ctx.author
+        guild_id = str(ctx.guild.id)
+        subject_id = str(lore_subject.id)
 
         # if lore_subject.bot:
         #     ctx.command.reset_cooldown(ctx)
@@ -4307,6 +4372,11 @@ class Lore(commands.Cog):
         if lore_subject.id == adder.id:
             ctx.command.reset_cooldown(ctx)
             return await ctx.reply("You can't add lore for yourself.")
+
+        make_sure_server_settings_exist(guild_id)
+        if msg_id in server_settings[guild_id].setdefault('not_lore_messages', []):
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.reply("You can't add this message to lore.\n-# (!help tml)")
 
         lore_content = referenced_message.content
         lore_image_url = referenced_message.attachments[0].url if referenced_message.attachments else None
@@ -4327,19 +4397,16 @@ class Lore(commands.Cog):
             ctx.command.reset_cooldown(ctx)
             return await ctx.reply("You can't add a message with no usable content to lore.")
 
-        guild_id = str(ctx.guild.id)
-        subject_id = str(lore_subject.id)
-
         # Ensure guild and user keys exist
         lore_data.setdefault(guild_id, {}).setdefault(subject_id, [])
 
         # Check for duplicates
-        if any(entry['message_id'] == str(referenced_message.id) for entry in lore_data[guild_id][subject_id]):
+        if any(entry['message_id'] == msg_id for entry in lore_data[guild_id][subject_id]):
             ctx.command.reset_cooldown(ctx)
             return await ctx.reply("This message is already part of their lore!")
 
         new_entry = {
-            "message_id": str(referenced_message.id),
+            "message_id": msg_id,
             "channel_id": str(referenced_message.channel.id),
             "adder_id": str(adder.id),
             "timestamp": referenced_message.created_at.isoformat(),  # Use original message time
@@ -4561,11 +4628,11 @@ class Lore(commands.Cog):
             return await ctx.reply(f"Could not find a lore entry with the ID `{message_id_to_remove}`.")
 
         # Permission Check
-        is_admin = ctx.author.guild_permissions.manage_guild
+        is_admin_ = ctx.author.guild_permissions.manage_guild
         is_adder = str(ctx.author.id) == found_entry['adder_id']
         is_subject = str(ctx.author.id) == subject_id_of_found_entry
 
-        if not (is_admin or is_adder or is_subject):
+        if not (is_admin_ or is_adder or is_subject):
             return await ctx.reply("You do not have permission to remove this lore entry.")
 
         # Remove the entry
