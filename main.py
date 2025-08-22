@@ -4278,27 +4278,29 @@ class Lore(commands.Cog):
         except discord.errors.NotFound:
             return None
 
-    # @commands.hybrid_command(name="toggle_lore", description="Enables or disables lore functionality for you", aliases=['opt_out_of_lore'])
-    # async def toggle_lore(self, ctx):
-    #     """
-    #     Having lore deactivated means none of your messages can be added to your lore
-    #     If you have lore activated in this server, will deactivate it for you and vice versa
-    #     """
-    #     guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    #     if not guild_id:
-    #         await ctx.reply("Can't use this in DMs!")
-    #         return
-    #     make_sure_server_settings_exist(guild_id)
-    #     if 'currency_system' in server_settings.get(guild_id).get('allowed_commands') and ctx.channel.id in ignored_channels:
-    #         ignored_channels.remove(ctx.channel.id)
-    #         save_ignored_channels()
-    #         await ctx.send(f"{bot_name} will no longer ignore currency system commands in this channel")
-    #     elif currency_allowed(ctx):
-    #         ignored_channels.append(ctx.channel.id)
-    #         save_ignored_channels()
-    #         await ctx.send(f"{bot_name} will now ignore currency system commands in this channel")
-    #     else:
-    #         await ctx.send("Currency system is disabled in your server already. This command won't do anything")
+    @commands.hybrid_command(name="toggle_lore", description="Enables or disables lore functionality for you", aliases=['opt_out_of_lore'])
+    async def toggle_lore(self, ctx):
+        """
+        Having lore deactivated means none of your messages can be added to your lore
+        If you have lore activated in this server, will deactivate it for you and vice versa
+        """
+        if not ctx.guild:
+            return await ctx.reply("Lore can only be managed in a server.")
+
+        guild_id = str(ctx.guild.id)
+        author_id = str(ctx.author.id)
+        make_sure_server_settings_exist(guild_id)
+
+        if author_id not in server_settings.get(guild_id).setdefault('not_lore_users', []):
+            server_settings[guild_id]['not_lore_users'].append(author_id)
+            save_settings()
+            if lore_data.setdefault(guild_id, {}).get(author_id, []):
+                return await ctx.send(f"Done. No more messages can be added to your lore\n"
+                                      f"Your current lore is still intact. Use `!rmlore` to remove entries")
+            return await ctx.send(f"Done. No more messages can be added to your lore")
+        server_settings[guild_id]['not_lore_users'].remove(author_id)
+        save_settings()
+        return await ctx.send(f"Done. Messages can be added to your lore again")
 
     @commands.command(name="tml", aliases=['toggle_message_lore'])
     async def toggle_message_lore(self, ctx):
@@ -4333,7 +4335,7 @@ class Lore(commands.Cog):
             lore_data.setdefault(guild_id, {}).setdefault(subject_id, [])
             if any(entry['message_id'] == msg_id for entry in lore_data[guild_id][subject_id]):
                 return await ctx.send(f"This message will no longer be addable to lore\n"
-                                      f"If you also want to remove it from your lore, now run `!rmlore {msg_id}`")
+                                      f"If you also want to remove it from lore, now run `!rmlore {msg_id}`")
             return await ctx.send(f"This message will no longer be addable to lore")
         server_settings[guild_id]['not_lore_messages'].remove(msg_id)
         save_settings()
@@ -4372,6 +4374,10 @@ class Lore(commands.Cog):
         if lore_subject.id == adder.id:
             ctx.command.reset_cooldown(ctx)
             return await ctx.reply("You can't add lore for yourself.")
+
+        if subject_id in server_settings[guild_id].setdefault('not_lore_users', []):
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.reply("This user has lore disabled.\n-# (!help toggle_lore)")
 
         make_sure_server_settings_exist(guild_id)
         if msg_id in server_settings[guild_id].setdefault('not_lore_messages', []):
