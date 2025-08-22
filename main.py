@@ -4295,8 +4295,9 @@ class Lore(commands.Cog):
             server_settings[guild_id]['not_lore_users'].append(author_id)
             save_settings()
             if lore_data.setdefault(guild_id, {}).get(author_id, []):
-                return await ctx.send(f"Done. No more messages can be added to your lore\n"
-                                      f"Your current lore is still intact. Use `!rmlore` to remove entries")
+                return await ctx.send(f"Done. No more messages can be added to your lore.\n"
+                                      f"Your current lore is still intact.\n"
+                                      f"Use `!rmlore` to remove specific entries or `!clear_all_lore` to remove all of them.")
             return await ctx.send(f"Done. No more messages can be added to your lore")
         server_settings[guild_id]['not_lore_users'].remove(author_id)
         save_settings()
@@ -4334,7 +4335,7 @@ class Lore(commands.Cog):
             save_settings()
             lore_data.setdefault(guild_id, {}).setdefault(subject_id, [])
             if any(entry['message_id'] == msg_id for entry in lore_data[guild_id][subject_id]):
-                return await ctx.send(f"This message will no longer be addable to lore\n"
+                return await ctx.send(f"This message will no longer be addable to lore.\n"
                                       f"If you also want to remove it from lore, now run `!rmlore {msg_id}`")
             return await ctx.send(f"This message will no longer be addable to lore")
         server_settings[guild_id]['not_lore_messages'].remove(msg_id)
@@ -4615,7 +4616,7 @@ class Lore(commands.Cog):
         if not message_id_to_remove.isdigit():
             return await ctx.reply("Please provide a Message ID or a link to the message.")
         guild_id = str(ctx.guild.id)
-        guild_lore = lore_data.get(guild_id, {})
+        guild_lore = lore_data.setdefault(guild_id, {})
 
         found_entry = None
         subject_id_of_found_entry = None
@@ -4657,6 +4658,49 @@ class Lore(commands.Cog):
     async def lore_remove_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.reply(f"Usage: `!removelore <Message ID>`")
+
+    @commands.hybrid_command(name="clear_all_lore", description="Used to remove all lore entries")
+    async def clear_all_lore(self, ctx, user: discord.User = None):
+        """
+        Removes all lore entries for a user
+        You can only clear your own lore
+        Server admins can clear anyone's lore
+        """
+        if not ctx.guild:
+            return await ctx.reply("Lore can only be managed in a server.")
+
+        if user is None:
+            user = ctx.author
+
+        guild_id = str(ctx.guild.id)
+
+        # Permission Check
+        if user != ctx.author and not await is_admin(ctx):
+            return await ctx.reply("You do not have permission to clear lore of other users.\n"
+                                   "Only server Administrators can do that.")
+
+        try:
+            # Create confirmation view
+            view = ConfirmView(ctx.author, timeout=120.0)
+            message = await ctx.send(
+                f"Are you sure you want to remove ALL lore entries{f" of {user.display_name}" if user != ctx.author else ''}?",
+                view=view
+            )
+            view.message = message
+            await view.wait()
+
+            if view.value is True:
+                user_id = str(user.id)
+                lore_data.setdefault(guild_id, {})[user_id] = []
+                del lore_data[guild_id][user_id]
+                save_lore()
+                await ctx.reply(f"✅ Successfully removed all lore entries of **{user.display_name}**.")
+
+            elif view.value is False:
+                await ctx.reply(f"Lore removal aborted.")
+
+        except Exception as e:
+            print(traceback.format_exc())
 
     @commands.hybrid_command(name="lore_leaderboard", description="Removes a lore entry by its message ID", aliases=['lorelb'])
     async def lore_leaderboard(self, ctx, page: int = 1):
