@@ -4243,7 +4243,7 @@ async def fetch_price(stock):
                 percent_change = ((current_price - previous_close) / previous_close) * 100
                 percent_sign = "📈" if percent_change >= 0 else "📉"
 
-                print(stock, current_price, previous_close, percent_change)
+                # print(stock, current_price, previous_close, percent_change)
                 return stock, round(current_price,2), f"{percent_sign} `{'+' if percent_change >= 0 else ''}{percent_change:.2f}%`"
     except Exception:
         print(traceback.format_exc())
@@ -4387,6 +4387,10 @@ class Lore(commands.Cog):
 
         lore_content = referenced_message.content
         lore_image_url = referenced_message.attachments[0].url if referenced_message.attachments else None
+
+        if lore_content.startswith('!tml') or lore_content.startswith('!toggle_message_lore'):
+            ctx.command.reset_cooldown(ctx)
+            return await ctx.reply(stare)
 
         # Check if the content is JUST a URL pointing to an image/gif
         image_extensions = ('.gif', '.png', '.jpg', '.jpeg', '.webp')
