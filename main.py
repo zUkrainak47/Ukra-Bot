@@ -3236,7 +3236,7 @@ class HelpView(discord.ui.View):
     cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
                    'balance': 'bal', 'coinflip': 'c', 'dice': '1d', 'twodice': '2d', 'giveaway_pool': 'pool',
                    'info': 'i', 'profile': 'p', 'inventory': 'inv', 'stock_prices': 'sp',
-                   'lore_compact': 'lore2', 'lore_leaderboard': 'lorelb'}
+                   'lore_compact': 'lore2', 'lore_leaderboard': 'lorelb', 'lore_remove': 'rmlore'}
 
     # Add filtered_mapping and categories to the parameters
     def __init__(self, help_command, filtered_mapping, categories, ctx, items_per_page=6, initial_category="No Category", timeout=120.0):
@@ -4281,8 +4281,8 @@ class Lore(commands.Cog):
     @commands.hybrid_command(name="toggle_lore", description="Enables or disables lore functionality for you", aliases=['opt_out_of_lore'])
     async def toggle_lore(self, ctx):
         """
-        Having lore deactivated means none of your messages can be added to your lore
         If you have lore activated in this server, will deactivate it for you and vice versa
+        Having lore deactivated means none of your messages can be added to your lore
         """
         if not ctx.guild:
             return await ctx.reply("Lore can only be managed in a server.")
@@ -4297,7 +4297,7 @@ class Lore(commands.Cog):
             if lore_data.setdefault(guild_id, {}).get(author_id, []):
                 return await ctx.send(f"Done. No more messages can be added to your lore.\n"
                                       f"Your current lore is still intact.\n"
-                                      f"Use `!rmlore` to remove specific entries or `!clear_all_lore` to remove all of them.")
+                                      f"Use `!rmlore` to remove specific entries or `!remove_all_lore` to remove all of them.")
             return await ctx.send(f"Done. No more messages can be added to your lore")
         server_settings[guild_id]['not_lore_users'].remove(author_id)
         save_settings()
@@ -4607,14 +4607,19 @@ class Lore(commands.Cog):
 
     @commands.hybrid_command(name="lore_remove", description="Removes a lore entry by its message ID (or a link to the message)",
                              aliases=['removelore', 'dellore', 'deletelore', 'loredelete', 'rmlore'])
-    async def lore_remove(self, ctx, message_id_to_remove):
+    async def lore_remove(self, ctx, message_id_to_remove=None):
         """
-        Removes a lore entry by its message ID (or a link to the message)
+        Removes a lore entry by its message ID, a link to the message, or by replying to it.
         You can remove your own lore, as well as lore you've created
         Server admins can remove any lore
         """
         if not ctx.guild:
             return await ctx.reply("Lore can only be managed in a server.")
+        if message_id_to_remove is None:
+            if ctx.message.reference:
+                message_id_to_remove = str(ctx.message.reference.message_id)
+            else:
+                return await ctx.reply(f"Usage: `!rmlore <Message ID>`")
         if message_id_to_remove.startswith("https://discord.com/channels/") and message_id_to_remove.split("/")[-1].isdigit():
             message_id_to_remove = message_id_to_remove.split("/")[-1]
         if not message_id_to_remove.isdigit():
@@ -4658,13 +4663,13 @@ class Lore(commands.Cog):
         lore_subject = await self.get_user(int(subject_id_of_found_entry), ctx)
         await ctx.reply(f"✅ Successfully removed a lore entry for **{lore_subject.display_name}**.")
 
-    @lore_remove.error
-    async def lore_remove_error(self, ctx, error):
-        if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.reply(f"Usage: `!removelore <Message ID>`")
+    # @lore_remove.error
+    # async def lore_remove_error(self, ctx, error):
+    #     if isinstance(error, commands.MissingRequiredArgument):
+    #         await ctx.reply(f"Usage: `!rmlore <Message ID>`")
 
-    @commands.hybrid_command(name="clear_all_lore", description="Used to remove all lore entries")
-    async def clear_all_lore(self, ctx, user: discord.User = None):
+    @commands.hybrid_command(name="remove_all_lore", description="Used to remove all lore entries")
+    async def remove_all_lore(self, ctx, user: discord.User = None):
         """
         Removes all lore entries for a user
         You can only clear your own lore
@@ -4956,7 +4961,7 @@ class Currency(commands.Cog):
     @app_commands.describe(user="Whose profile you want to view")
     async def profile(self, ctx, *, user: discord.User = None):
         """
-        Check your or someone else's profile (stats being collected since 12 Jan 2025)
+        Check your or someone else's profile
         """
         if user is None:
             user = ctx.author
@@ -4973,7 +4978,7 @@ class Currency(commands.Cog):
     @app_commands.describe(user="Whose info you want to view")
     async def info(self, ctx, *, user: discord.User = None):
         """
-        Check your or someone else's info (stats being collected since 12 Jan 2025)
+        Check your or someone else's info
         """
         if user is None:
             user = ctx.author
@@ -6563,11 +6568,11 @@ class Currency(commands.Cog):
             print(traceback.format_exc())
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
-    @commands.hybrid_command(name="glb", description="View the global leaderboard of the 10 richest users of the bot", aliases=['global_leaderboard', 'glib'])
+    @commands.hybrid_command(name="glb", description="View the global leaderboard of the richest users of the bot", aliases=['global_leaderboard', 'glib'])
     @app_commands.describe(page="Leaderboard page")
     async def global_leaderboard_embed(self, ctx, *, page: int = 1):
         """
-        View the top 10 richest users of the bot globally (optionally accepts a page)
+        View the richest users of the bot globally (optionally accepts a page)
         Also shows your global rank
         """
         await self.send_leaderboard_embed(ctx, 'global', page)
@@ -6577,7 +6582,7 @@ class Currency(commands.Cog):
     @app_commands.describe(page="Leaderboard page")
     async def global_leaderboard_real_embed(self, ctx, *, page: int = 1):
         """
-        View the top 10 richest users of the bot globally with LOANS (optionally accepts a page)
+        View the richest users of the bot globally with LOANS (optionally accepts a page)
         Also shows your global rank
         """
         await self.send_leaderboard_embed(ctx, 'real', page)
@@ -6587,7 +6592,7 @@ class Currency(commands.Cog):
     @app_commands.describe(page="Leaderboard page")
     async def leaderboard_embed(self, ctx, *, page: int = 1):
         """
-        View the top 10 richest users of the server (optionally accepts a page)
+        View the richest users of the server (optionally accepts a page)
         Also shows your rank
         """
         if not ctx.guild:
@@ -6597,11 +6602,11 @@ class Currency(commands.Cog):
         await self.send_leaderboard_embed(ctx, 'local', page)
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
-    @commands.hybrid_command(name="funders", description="View the top 10 giveaway funders globally")
+    @commands.hybrid_command(name="funders", description="View the giveaway funders globally")
     @app_commands.describe(page="Leaderboard page")
     async def funders_embed(self, ctx, *, page: int = 1):
         """
-        View the top 10 giveaway funders globally (optionally accepts a page)
+        View the giveaway funders globally (optionally accepts a page)
         In order to get on this leaderboard use !fund
 
         Reaching 250k given away unlocks the !e command
