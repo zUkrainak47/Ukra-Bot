@@ -1746,6 +1746,7 @@ class CustomCommands(commands.Cog):
         """
         Adds or updates a custom command for this server
         Usage: !custom_add <command_name> <response_text>
+        !! Keep in mind that bots can send messages up to 2000 characters in length !!
 
         Include the following for additional functionality:
         - `<user>       ` to take a user mention
@@ -1785,8 +1786,8 @@ class CustomCommands(commands.Cog):
         # if not response:
         #     await ctx.reply("You need to provide a response for the custom command.")
         #     return
-        if len(response) > 1900:  # Leave some buffer for Discord limits
-            await ctx.reply("The response is too long (max ~1900 characters).")
+        if len(response) > 10000:
+            await ctx.reply("No more than 10k symbols even if you know what you're doing, sorry")
             return
 
         # --- Check for Conflicts ---
@@ -2333,14 +2334,16 @@ async def on_command_error(ctx, error):
                                     response_after_math_and_choices)
 
             try:
+                if len(final_response) > 2000:
+                    return await ctx.send('The resulting message is too long (>2000 characters)\nTry modifying the custom command')
                 if not final_response.strip():
-                    print(
-                        f"Custom command '{potential_command_name}' resulted in empty response for template: {response_template} with args: {full_argument_string}")
+                    print(f"Custom command '{potential_command_name}' resulted in empty response for template: {response_template} with args: {full_argument_string}")
                     return
-                await ctx.send(final_response)
-                return
+                return await ctx.send(final_response)
             except discord.Forbidden:
                 pass
+            except discord.HTTPException:
+                return await ctx.send("Please contact @zukrainak47, this shouldn't happen")
             except Exception as e:
                 print(f"Error sending custom command '{potential_command_name}': {e}")
                 traceback.print_exc()
