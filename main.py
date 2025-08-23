@@ -928,6 +928,8 @@ async def on_ready():
         traceback.print_exc()
     # await refund_giveaways()
 
+kms = ["kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing myself']
+
 
 @client.event
 async def on_message(message: discord.Message):
@@ -935,7 +937,7 @@ async def on_message(message: discord.Message):
         if message.author == client.user:
             return
         content = message.content.lower()
-        if "kys" in content or "kill yourself" in content or "killyourself" in content or "kms" in content:
+        if any(x in content for x in kms):
             try:
                 await message.reply("https://cdn.discordapp.com/attachments/1360213211315704039/1371060548141187093/neverkys.mov?ex=6821c323&is=682071a3&hm=14b2b2776a7026c1eeded946082433d76566889dde3aec91fb103c7576b38d34&")
             except discord.Forbidden:
@@ -4606,10 +4608,10 @@ class Lore(commands.Cog):
         await pagination_view.send_embed()
 
     @commands.hybrid_command(name="lore_remove", description="Removes a lore entry by its message ID (or a link to the message)",
-                             aliases=['removelore', 'dellore', 'deletelore', 'loredelete', 'rmlore'])
+                             aliases=['rmlore'])
     async def lore_remove(self, ctx, message_id_to_remove=None):
         """
-        Removes a lore entry by its message ID, a link to the message, or by replying to it.
+        Removes a lore entry by its message ID, a link to the message, or by replying to it
         You can remove your own lore, as well as lore you've created
         Server admins can remove any lore
         """
