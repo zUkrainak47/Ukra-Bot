@@ -58,6 +58,8 @@ dev_mode_users = [694664131000795307]
 no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse'}
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
+MAX_INITIAL_RESPONSE_LENGTH  = 1950
+MAX_TOTAL_RESPONSE_LENGTH = 15000
 fetched_users = {}
 stock_cache = {}
 market_closed_message = ""
@@ -1734,6 +1736,45 @@ async def silence(ctx):
         await ctx.send(f"*Silence role does not exist!*\nRun `!setrole silence @role` to use silence")
 
 
+async def add_custom_command(ctx, name: str, response: str, mode):
+    if not ctx.guild:
+        await ctx.reply("Custom commands can only be added in servers.")
+        return
+
+    guild_id = str(ctx.guild.id)
+    command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
+
+    if response[0] == response[-1] == '"':
+        response = response[1:-1]
+
+    if len(response) > MAX_INITIAL_RESPONSE_LENGTH:
+        await ctx.reply("No more than 1950 symbols at a time")
+        return
+
+    # Ensure the structure exists
+    make_sure_server_settings_exist(guild_id)
+    custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
+
+    # --- Check for Conflicts ---
+    if mode == 'add' and client.get_command(command_name):
+        return await ctx.reply(f"`{command_name}` conflicts with a built-in bot command!")
+
+    if mode == 'append':
+        if command_name not in custom_commands:
+            return await ctx.reply(f"Custom command `{command_name}` doesn't exist yet. Use !custom to create one")
+
+        response = custom_commands[command_name] + response
+        if len(response) > MAX_TOTAL_RESPONSE_LENGTH:
+            return await ctx.reply("No more than 15k symbols even if you know what you're doing, sorry")
+
+    # --- Add/Update the command ---
+    action = "Updated" if command_name in custom_commands else "Added"
+    custom_commands[command_name] = response
+    save_settings()  # Save the updated settings
+
+    await ctx.reply(f"{action} custom command `!{command_name}` successfully.")
+
+
 class CustomCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -1746,7 +1787,8 @@ class CustomCommands(commands.Cog):
         """
         Adds or updates a custom command for this server
         Usage: !custom_add <command_name> <response_text>
-        !! Keep in mind that bots can send messages up to 2000 characters in length !!
+
+        !!! Keep in mind that bots can send messages up to 2000 characters in length !!!
 
         Include the following for additional functionality:
         - `<user>       ` to take a user mention
@@ -1772,44 +1814,56 @@ class CustomCommands(commands.Cog):
 
         Only usable by Moderators as well as users with a role called "Custom Commands Manager"
         """
-        if not ctx.guild:
-            await ctx.reply("Custom commands can only be added in servers.")
-            return
-
-        guild_id = str(ctx.guild.id)
-        command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
-
-        # --- Input Validation ---
-        # if not command_name:
-        #     await ctx.reply("You need to provide a name for the custom command.")
-        #     return
-        # if not response:
-        #     await ctx.reply("You need to provide a response for the custom command.")
-        #     return
-        if len(response) > 10000:
-            await ctx.reply("No more than 10k symbols even if you know what you're doing, sorry")
-            return
-
-        # --- Check for Conflicts ---
-        if client.get_command(command_name):
-            await ctx.reply(f"`{command_name}` conflicts with a built-in bot command!")
-            return
-
-        # --- Add/Update the command ---
-        # Ensure the structure exists
-        make_sure_server_settings_exist(guild_id)
-        custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
-
-        action = "Updated" if command_name in custom_commands else "Added"
-        custom_commands[command_name] = response
-        save_settings()  # Save the updated settings
-
-        await ctx.reply(f"{action} custom command `!{command_name}` successfully.")
+        await add_custom_command(ctx, name, response, 'add')
 
     @custom.error
     async def custom_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.reply(f"Usage: `!custom <command_name> <response_text>`\nExample: `!custom kiss <author> kissed <user> :heart:`")
+        elif isinstance(error, discord.ext.commands.errors.CheckFailure):
+            pass
+        elif isinstance(error, commands.BadArgument):
+            await ctx.reply(f"Couldn't properly understand the command name or response.")
+        else:
+            print(f"Error in custom: {error}")  # Log other errors
+            await ctx.reply("An unexpected error occurred.")
+
+    @commands.hybrid_command(name='custom_append', description='Extends an existing custom command by adding something to the end of the existing response',  aliases=['append_custom'])
+    @app_commands.describe(name='Custom command name', appended_response="What you're appending to the existing response")
+    @commands.check(custom_perms)
+    async def custom_append(self, ctx, name: str, *, appended_response: str):
+        """
+        Extends an existing custom command by adding something to the end of the existing response. This command is created mostly to allow a lot of randomized items to be passed (in [opt1|opt2|opt3|...|opt500])
+        There is a maximum length of 15000 characters per custom command (counting [ and | too) however.
+
+        You can start and end the appended response with quotation marks " (useful to append starting with a space or newline etc)
+
+        Usage: !custom_append <command_name> <appended_response>
+        !!! Keep in mind that bots can send messages up to 2000 characters in length !!!
+
+        Include the following for additional functionality:
+        - `<user>       ` to take a user mention
+        - `<user_name>  ` to take a user mention (and send the mentioned user's nickname)
+        - `<author>     ` to mention the author
+        - `<author_name>` to send the author's nickname
+        - `<num1>       ` to require a number input and replace <num1> with it (multiple numbers can be accepted, check example)
+        - `<num1=5>     ` to give the option to set a specific number, but default to 5 if not passed
+        - `<word1>      ` to require a word input and replace <word1> with it
+        - `<word1=hello>` to give the option to set a specific word, but default to "hello" if not passed
+        - `<text>       ` to require some text input and replace <text> with it (can be more than one word)
+        - `<text=hi hi> ` to set a default value for text
+        - `[option1|...]` to choose randomly from all passed options
+        - `r(n1, n2)    ` to choose a random number between n1 and n2
+        - `{r(2,5) + 5 * <num1=2>}`  --  mathematical expressions are supported in {}
+
+        Only usable by Moderators as well as users with a role called "Custom Commands Manager"
+        """
+        await add_custom_command(ctx, name, appended_response, 'append')
+
+    @custom_append.error
+    async def custom_append_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply(f"Usage: `!custom_append <command_name> <appended_response>`")
         elif isinstance(error, discord.ext.commands.errors.CheckFailure):
             pass
         elif isinstance(error, commands.BadArgument):
@@ -1903,7 +1957,11 @@ class CustomCommands(commands.Cog):
         custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
 
         if command_name in custom_commands:
-            await ctx.reply(f"## !{command_name}\n```{custom_commands[command_name]}```")
+            response = custom_commands[command_name]
+            responses = [response[i:i+1950] for i in range(0, len(response), 1950)]
+            # await ctx.reply(f"## !{command_name}")
+            for r in responses:
+                await ctx.send(f"```{r}```")
             return
 
         await ctx.reply(f"Custom command `!{command_name}` doesn't exist.")
