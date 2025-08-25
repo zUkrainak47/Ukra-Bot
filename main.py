@@ -1833,7 +1833,7 @@ class CustomCommands(commands.Cog):
     @commands.check(custom_perms)
     async def custom_append(self, ctx, name: str, *, appended_response: str):
         """
-        Extends an existing custom command by adding something to the end of the existing response.
+        Extends an existing custom command by adding something to the end of the existing response
         Usage: !custom_append <command_name> <appended_response>
 
         - This command is created mostly to allow a lot of randomized items to be passed (in [opt1|opt2|opt3|...|opt500]) i.e. https://cdn.discordapp.com/attachments/696842659989291130/1409176988853473410/image.png?ex=68ac6dd7&is=68ab1c57&hm=881bc3bc7021ffa61e2a8a423e0d7977aa26be36822077648c8c8bafccb841e3&
@@ -1986,6 +1986,12 @@ class CustomCommands(commands.Cog):
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
+    @commands.command(name='!')
+    async def random_custom(self, ctx):
+        """
+        Sends a random custom command from the server!
+        """
+        await send_custom_command(ctx, None, 'random')
 
 # Helper data structure for placeholders
 class Placeholder:
@@ -2120,8 +2126,14 @@ async def calc_error(ctx, error):
 
 @client.event
 async def on_command_error(ctx, error):
+    await send_custom_command(ctx, error, 'normal')
+
+templates = ['<word', '<text>', '<user', '<num']
+
+
+async def send_custom_command(ctx, error, mode='normal'):
     # --- Custom Command Handling ---
-    if isinstance(error, commands.CommandNotFound):
+    if isinstance(error, commands.CommandNotFound) or mode == 'random':
         if not ctx.guild:  # Custom commands are guild-specific
             return
         guild_id = str(ctx.guild.id)
@@ -2130,8 +2142,9 @@ async def on_command_error(ctx, error):
         guild_settings = server_settings.setdefault(guild_id, {})
         custom_commands = guild_settings.setdefault('custom_commands', {})
 
-        if potential_command_name in custom_commands:
-            response_template = custom_commands[potential_command_name]
+        if potential_command_name in custom_commands or mode == 'random':
+            response_template = custom_commands[potential_command_name] if mode == 'normal' \
+                         else random.choice([t for t in custom_commands.values() if not any(x in t for x in templates)])
             command_part = f"{ctx.prefix}{ctx.invoked_with}"
             full_argument_string = ctx.message.content[len(command_part):].strip()
 
@@ -3293,7 +3306,7 @@ class LottoView(discord.ui.View):
 
 only_prefix = {'backshot', 'disable', 'enable', 'segs', 'setrole', 'settings', 'silence',
                'coinflip', 'redeem',
-               'addlore'}
+               'addlore', '!'}
 
 
 class HelpView(discord.ui.View):
@@ -3615,7 +3628,7 @@ class MyHelpCommand(commands.HelpCommand):
 
     # Optional: Override help for specific commands/cogs if needed
     async def send_command_help(self, command):
-        title_ = self.get_command_signature(command) if command.name not in only_prefix else '!' + self.get_command_signature(command)[1:]
+        title_ = self.get_command_signature(command).replace('*', '\*') if command.name not in only_prefix else '!' + self.get_command_signature(command)[1:]
         embed = discord.Embed(title=title_,
                               description=command.help or "No description provided.",
                               color=0xffd000)
