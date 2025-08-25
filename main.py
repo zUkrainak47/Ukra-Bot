@@ -4502,12 +4502,28 @@ class Lore(commands.Cog):
     @commands.hybrid_command(name="lore", description="Displays the lore of a user in this server")
     @app_commands.describe(user="The user whose lore you're checking", page="Entry number")
     async def view_lore(self, ctx, user: typing.Optional[discord.Member] = None, page: int = 1):
-        await self.send_lore(ctx, user, page)
+        """
+        Displays the lore of a user in this server
+        Use !addlore to add lore
+        """
+        await self.send_lore(ctx, user, page, 'normal')
 
     @commands.hybrid_command(name="lore_random", description="Displays a random lore entry of a user in this server", aliases=['lore*', 'lore_r', 'rl', 'lr'])
     @app_commands.describe(user="The user whose lore you're checking")
     async def lore_random(self, ctx, user: typing.Optional[discord.Member] = None):
+        """
+        Displays a random lore entry of a specific user in this server
+        Use !addlore to add lore
+        """
         await self.send_lore(ctx, user, 1, 'random')
+
+    @commands.hybrid_command(name="server_lore", description="Displays a random lore entry of a random user in this server", aliases=['lore**', 'rl*', 'lr*', 'sl'])
+    async def server_lore(self, ctx):
+        """
+        Displays a random lore entry of a random user in this server
+        Use !addlore to add lore
+        """
+        await self.send_lore(ctx, ctx.author, 1, 'server')
 
     @view_lore.error
     @lore_random.error
@@ -4516,12 +4532,19 @@ class Lore(commands.Cog):
             await ctx.send("Lore can't be used in DMs!")
 
     async def send_lore(self, ctx, user, page, mode='normal'):
-        """
-        Displays the lore for a specific user in this server
-        Use !addlore to add lore
-        """
+        if not ctx.guild:
+            return await ctx.reply("Lore can only be viewed in a server.")
 
-        if ctx.interaction is None:
+        guild_id = str(ctx.guild.id)
+
+        if mode == 'server':
+            server_lore = lore_data.get(guild_id, {})
+            if not server_lore:
+                return await ctx.reply('Nobody in your server has any lore yet!')
+            user_id = random.choice(list(server_lore.keys()))
+            target_user = await self.get_user(int(user_id), ctx)
+
+        elif ctx.interaction is None:
             # Reset to defaults
             target_user = None
             page_num = 1
@@ -4555,15 +4578,7 @@ class Lore(commands.Cog):
             target_user = user if user is not None else ctx.author
             page_num = page
 
-        if not ctx.guild:
-            return await ctx.reply("Lore can only be viewed in a server.")
-
-        # if user is None:
-        #     user = ctx.author
-
-        guild_id = str(ctx.guild.id)
         user_id = str(target_user.id)
-
         user_lore = lore_data.get(guild_id, {}).get(user_id, [])
 
         if not user_lore:
@@ -4606,7 +4621,7 @@ class Lore(commands.Cog):
             color_=target_user.color if not target_user.color == discord.Colour.default() else 0xffd000,
             footer_=[f"{user_lore[-1]['message_id']}", ""],
             ctx_=ctx,
-            page_=random.randint(1, len(user_lore)) if mode == 'random' else min(page_num, len(user_lore))
+            page_=random.randint(1, len(user_lore)) if mode in ('random', 'server') else min(page_num, len(user_lore))
         )
         await pagination_view.send_embed()
 
