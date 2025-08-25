@@ -60,6 +60,7 @@ bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 MAX_INITIAL_RESPONSE_LENGTH  = 1950
 MAX_TOTAL_RESPONSE_LENGTH = 15000
+NO_PFP = 'https://media.discordapp.net/attachments/696842659989291130/1409589423292547263/image.png?ex=68adedf3&is=68ac9c73&hm=4625fc93a280e231c119f2c799148de88171f70d8dceaf8b2836c865daeceee3&=&width=230&height=230'
 fetched_users = {}
 stock_cache = {}
 market_closed_message = ""
@@ -2981,7 +2982,7 @@ class PaginationView(discord.ui.View):
                         embed_color = 0xffd000
                     owned = global_profiles[str(interaction.user.id)]['items'].setdefault(item_data, 0)
                     view = UseItemView(self.ctx, target, items[item_data], owned)
-                    await interaction.response.send_message(embed=items[item_data].describe(embed_color, owned, target.avatar.url), view=view)  # Send the response
+                    await interaction.response.send_message(embed=items[item_data].describe(embed_color, owned, target.avatar.url if target.avatar else NO_PFP), view=view)  # Send the response
                     view.message = await interaction.original_response()
                 button.callback = item_callback
 
@@ -4616,7 +4617,7 @@ class Lore(commands.Cog):
         pagination_view = PaginationView(
             data_=embed_data,
             author_=f"The Lore of {target_user.display_name}",
-            author_icon_=target_user.avatar.url,
+            author_icon_=target_user.avatar.url if target_user.avatar else NO_PFP,
             title_='',
             color_=target_user.color if not target_user.color == discord.Colour.default() else 0xffd000,
             footer_=[f"{user_lore[-1]['message_id']}", ""],
@@ -4689,7 +4690,7 @@ class Lore(commands.Cog):
         pagination_view = PaginationView(
             data_=embed_data,
             author_=f"The Lore of {target_user.display_name}",
-            author_icon_=target_user.avatar.url,
+            author_icon_=target_user.avatar.url if target_user.avatar else NO_PFP,
             title_='',
             color_=target_user.color if not target_user.color == discord.Colour.default() else 0xffd000,
             footer_=[f"{len(user_lore)} total entr{'ies' if len(user_lore) != 1 else 'y'}", ""],
@@ -4824,7 +4825,7 @@ class Lore(commands.Cog):
         for user_id, message_count in sorted_entries:
             user = await self.get_user(int(user_id), ctx)
             if int(user_id) == ctx.author.id:
-                footer = [f"You're at #{rank}", ctx.author.avatar.url]
+                footer = [f"You're at #{rank}", ctx.author.avatar.url if ctx.author.avatar else NO_PFP]
             embed_data.append({
                 'label': f"**#{rank}** - {user.display_name}",
                 'item': f"**{message_count}** entr{'ies' if message_count != 1 else 'y'}"
@@ -4993,7 +4994,7 @@ class Currency(commands.Cog):
                         profile_embed = discord.Embed(title=f"{target.display_name}{embed_title}", description=f"*{target_profile['title']}*", color=embed_color)
                     else:
                         profile_embed = discord.Embed(title=f"{target.display_name}{embed_title}", color=embed_color)
-                    profile_embed.set_thumbnail(url=target.avatar.url)
+                    profile_embed.set_thumbnail(url=target.avatar.url if target.avatar else NO_PFP)
 
                     # profile_embed.add_field(name="Balance", value=f"{num:,} {coin}{laundry_msg}", inline=True)
                     profile_embed.add_field(name="Net Worth", value=f"{num:,} {coin}", inline=True)
@@ -5129,7 +5130,7 @@ class Currency(commands.Cog):
                     else:
                         embed_color = 0xffd000
 
-                    pagination_view = PaginationView(user_items, title_=f"", author_=f"{user.display_name}'s Inventory", author_icon_=user.avatar.url, color_=embed_color, description_=desc, ctx_=ctx)
+                    pagination_view = PaginationView(user_items, title_=f"", author_=f"{user.display_name}'s Inventory", author_icon_=user.avatar.url if user.avatar else NO_PFP, color_=embed_color, description_=desc, ctx_=ctx)
                     await pagination_view.send_embed()
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
@@ -5183,7 +5184,7 @@ class Currency(commands.Cog):
                     embed_color = 0xffd000
                 owned = global_profiles[author_id]['items'].setdefault(found_item, 0)
                 view = UseItemView(ctx, ctx.author, items[found_item], owned)
-                message = await ctx.reply(embed=items[found_item].describe(embed_color, owned, ctx.author.avatar.url), view=view)
+                message = await ctx.reply(embed=items[found_item].describe(embed_color, owned, ctx.author.avatar.url if ctx.author.avatar else NO_PFP), view=view)
                 view.message = message
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
@@ -5718,7 +5719,7 @@ class Currency(commands.Cog):
                 else:
                     embed_color = 0xffd000
 
-                pagination_view = PaginationView(embed_data, title_='Titles', color_=embed_color, footer_=[footer, ctx.author.avatar.url], ctx_=ctx)
+                pagination_view = PaginationView(embed_data, title_='Titles', color_=embed_color, footer_=[footer, ctx.author.avatar.url if ctx.author.avatar else NO_PFP], ctx_=ctx)
                 await pagination_view.send_embed()
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
@@ -6625,7 +6626,7 @@ class Currency(commands.Cog):
                                  get_net_leaderboard(server_settings.get(guild_id).get('members')) if t == 'local' else \
                                  sorted({funder_id: global_profiles[funder_id]['num_1'] for funder_id in global_profiles if global_profiles[funder_id]['num_1']}.items(), key=lambda x: x[1], reverse=True)
                 #  FIXME probably not the best approach
-                footer = [f"Go !fund, at 250k you unlock !e", ctx.author.avatar.url] if t == 'funders' else ['', '']
+                footer = [f"Go !fund, at 250k you unlock !e", ctx.author.avatar.url if ctx.author.avatar else NO_PFP] if t == 'funders' else ['', '']
                 try:
                     user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
                     rank = user_to_index[str(ctx.author.id)] + 1
@@ -6638,7 +6639,7 @@ class Currency(commands.Cog):
                             await ctx.send(
                                 f"{ctx.author.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
                         save_profiles()
-                    footer = [f"You're at #{rank}", ctx.author.avatar.url]
+                    footer = [f"You're at #{rank}", ctx.author.avatar.url if ctx.author.avatar else NO_PFP]
                 except KeyError:
                     pass
 
@@ -8089,7 +8090,7 @@ class Marriage(commands.Cog):
                 title=f"💍 {user.display_name}'s Marriage Status",
                 color=embed_color
             )
-            embed.set_thumbnail(url=user.avatar.url)
+            embed.set_thumbnail(url=user.avatar.url if user.avatar else NO_PFP)
 
             if is_married:
                 partner = await self.get_user(int(partner_id), ctx)
@@ -8191,7 +8192,7 @@ class Marriage(commands.Cog):
         all_couples.sort(key=lambda x: x['duration'], reverse=True)
 
         embed_data = []
-        footer = ["You're not married!", ctx.author.avatar.url]
+        footer = ["You're not married!", ctx.author.avatar.url if ctx.author.avatar else NO_PFP]
         for rank, couple in enumerate(all_couples, start=1):
             user1_id = int(couple['user1_id'])
             user2_id = int(couple['user2_id'])
@@ -8220,7 +8221,7 @@ class Marriage(commands.Cog):
             })
 
             if ctx.author.id in (user1_id, user2_id):
-                footer = [f"Your marriage is at #{rank}", ctx.author.avatar.url]
+                footer = [f"Your marriage is at #{rank}", ctx.author.avatar.url if ctx.author.avatar else NO_PFP]
 
         pagination_view = PaginationView(
             data_=embed_data,
