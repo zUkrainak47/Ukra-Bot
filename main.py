@@ -1833,12 +1833,13 @@ class CustomCommands(commands.Cog):
     @commands.check(custom_perms)
     async def custom_append(self, ctx, name: str, *, appended_response: str):
         """
-        Extends an existing custom command by adding something to the end of the existing response. This command is created mostly to allow a lot of randomized items to be passed (in [opt1|opt2|opt3|...|opt500])
-        There is a maximum length of 15000 characters per custom command (counting [ and | too) however.
-
-        You can start and end the appended response with quotation marks " (useful to append starting with a space or newline etc)
-
+        Extends an existing custom command by adding something to the end of the existing response.
         Usage: !custom_append <command_name> <appended_response>
+
+        - This command is created mostly to allow a lot of randomized items to be passed (in [opt1|opt2|opt3|...|opt500]) i.e. https://cdn.discordapp.com/attachments/696842659989291130/1409176988853473410/image.png?ex=68ac6dd7&is=68ab1c57&hm=881bc3bc7021ffa61e2a8a423e0d7977aa26be36822077648c8c8bafccb841e3&
+        - You can start and end the appended response with quotation marks " (useful to append starting with a space or newline)
+        - There is a maximum length of 15000 characters per custom command (counting [ and | too)
+
         !!! Keep in mind that bots can send messages up to 2000 characters in length !!!
 
         Include the following for additional functionality:
@@ -4498,9 +4499,23 @@ class Lore(commands.Cog):
         if isinstance(error, commands.CommandOnCooldown):
             await print_reset_time(int(error.retry_after), ctx, f"You're adding lore too quickly! ")
 
-    @commands.hybrid_command(name="lore", description="Displays the lore for a specific user in this server")
+    @commands.hybrid_command(name="lore", description="Displays the lore of a user in this server")
     @app_commands.describe(user="The user whose lore you're checking", page="Entry number")
     async def view_lore(self, ctx, user: typing.Optional[discord.Member] = None, page: int = 1):
+        await self.send_lore(ctx, user, page)
+
+    @commands.hybrid_command(name="lore_random", description="Displays a random lore entry of a user in this server", aliases=['lore*', 'lore_r', 'rl', 'lr'])
+    @app_commands.describe(user="The user whose lore you're checking")
+    async def lore_random(self, ctx, user: typing.Optional[discord.Member] = None):
+        await self.send_lore(ctx, user, 1, 'random')
+
+    @view_lore.error
+    @lore_random.error
+    async def lore_error(self, ctx, error):
+        if isinstance(error, commands.HybridCommandError):
+            await ctx.send("Lore can't be used in DMs!")
+
+    async def send_lore(self, ctx, user, page, mode='normal'):
         """
         Displays the lore for a specific user in this server
         Use !addlore to add lore
@@ -4591,7 +4606,7 @@ class Lore(commands.Cog):
             color_=target_user.color if not target_user.color == discord.Colour.default() else 0xffd000,
             footer_=[f"{user_lore[-1]['message_id']}", ""],
             ctx_=ctx,
-            page_=min(page_num, len(user_lore))
+            page_=random.randint(1, len(user_lore)) if mode == 'random' else min(page_num, len(user_lore))
         )
         await pagination_view.send_embed()
 
