@@ -2086,7 +2086,7 @@ async def calc(ctx: commands.Context, *, expression: str):
 
 @commands.hybrid_command(name="avatar", description="Displays a user's pfp (profile picture).", aliases=['pfp', 'av'])
 @app_commands.describe(user="The user whose avatar you want to view.")
-async def avatar(ctx: commands.Context, user: typing.Optional[discord.Member] = None):
+async def avatar(ctx: commands.Context, user: typing.Optional[discord.User] = None):
     """
     Displays a user's avatar.
     Shows the server-specific avatar if they have one, otherwise shows their global avatar.
@@ -4517,7 +4517,7 @@ class Lore(commands.Cog):
 
     @commands.hybrid_command(name="lore", description="Displays the lore of a user in this server")
     @app_commands.describe(user="The user whose lore you're checking", page="Entry number")
-    async def view_lore(self, ctx, user: typing.Optional[discord.Member] = None, page: int = 1):
+    async def view_lore(self, ctx, user: typing.Optional[discord.User] = None, page: int = 1):
         """
         Displays the lore of a user in this server
         Use !addlore to add lore
@@ -4526,7 +4526,7 @@ class Lore(commands.Cog):
 
     @commands.hybrid_command(name="lore_random", description="Displays a random lore entry of a user in this server", aliases=['lore*', 'lore_r', 'rl', 'lr'])
     @app_commands.describe(user="The user whose lore you're checking")
-    async def lore_random(self, ctx, user: typing.Optional[discord.Member] = None):
+    async def lore_random(self, ctx, user: typing.Optional[discord.User] = None):
         """
         Displays a random lore entry of a specific user in this server
         Use !addlore to add lore
@@ -4552,6 +4552,8 @@ class Lore(commands.Cog):
             return await ctx.reply("Lore can only be viewed in a server.")
 
         guild_id = str(ctx.guild.id)
+        target_user = None
+        page_num = 1
 
         if mode == 'server':
             server_lore = lore_data.get(guild_id, {})
@@ -4561,38 +4563,39 @@ class Lore(commands.Cog):
             target_user = await self.get_user(int(user_id), ctx)
 
         elif ctx.interaction is None:
-            # Reset to defaults
-            target_user = None
-            page_num = 1
-            args = ctx.message.content.split()[1:]  # Get all arguments after the command name
+            # Logic for prefix commands
+            args = ctx.message.content.split()[1:]
 
             if not args:
-                # Case: !lore (no arguments)
                 target_user = ctx.author
                 page_num = 1
             else:
-                # Try to convert the first argument to a Member
+                # Try to resolve the first argument as a user
                 try:
-                    # Use a converter to handle mentions, IDs, and names
-                    target_user = await commands.MemberConverter().convert(ctx, args[0])
-                    # If successful, the rest of the arguments could be the page number
+                    # commands.UserConverter can handle mentions, IDs, and names
+                    target_user = await commands.UserConverter().convert(ctx, args[0])
+                    # If successful, check if the next argument is a page number
                     if len(args) > 1 and args[1].isdigit():
                         page_num = int(args[1])
                     else:
-                        page_num = 1  # Default page if only a user is provided
-                except commands.MemberNotFound:
-                    # The first argument was NOT a user. Assume it's a page number.
+                        page_num = 1
+                except commands.UserNotFound:
+                    # If the first argument is not a user, assume it's a page number
                     target_user = ctx.author
                     if args[0].isdigit():
                         page_num = int(args[0])
                     else:
-                        # Invalid first argument, could show an error or default
+                        # The first argument was neither a user nor a number
                         await ctx.reply("Invalid argument. Please provide a valid user or page number.")
                         return
         else:
-            # If invoked via slash command, the arguments are already parsed correctly
+            # Logic for slash commands
             target_user = user if user is not None else ctx.author
             page_num = page
+
+        if target_user is None:  # A fallback just in case
+            await ctx.reply("Could not identify the target user.")
+            return
 
         user_id = str(target_user.id)
         user_lore = lore_data.get(guild_id, {}).get(user_id, [])
@@ -4600,30 +4603,18 @@ class Lore(commands.Cog):
         if not user_lore:
             return await ctx.reply(f"**{target_user.display_name}** has no lore yet.")
 
-        # You can reuse your PaginationView here.
-        # We'll format the data for it.
         embed_data = []
         for entry in user_lore[::-1]:
-            # Fetch adder's name. Use cache or fetch.
-            # This is simplified; you have a good get_user helper for this.
             adder = await self.get_user(int(entry['adder_id']), ctx)
             adder_name = adder.display_name if adder else "Unknown User"
-
-            # Create the message URL
             message_url = f"https://discord.com/channels/{guild_id}/{entry['channel_id']}/{entry['message_id']}"
-
-            # Format for display
             value_string = (
                 f"{entry['content']}\n\n"
-                # f"-# <t:{int(datetime.fromisoformat(entry['timestamp']).timestamp())}:D>"
-                # f"\n\n"
                 f"Added by {adder_name} "
-                # f"on <t:{int(datetime.fromisoformat(entry['timestamp']).timestamp())}:D>\n"
                 f"\n[Jump to Message]({message_url})"
-                # f" | ID: `{entry['message_id']}`"
             )
             embed_data.append({
-                "label": f"{entry['message_id']}",  # message id in this case lol
+                "label": f"{entry['message_id']}",
                 "item": value_string,
                 "image_url": entry['image_url'],
                 "timestamp": datetime.fromisoformat(entry['timestamp'])
@@ -4634,7 +4625,7 @@ class Lore(commands.Cog):
             author_=f"The Lore of {target_user.display_name}",
             author_icon_=get_pfp(target_user),
             title_='',
-            color_=target_user.color if not target_user.color == discord.Colour.default() else 0xffd000,
+            color_=target_user.color if hasattr(target_user, 'color') and not target_user.color == discord.Colour.default() else 0xffd000,
             footer_=[f"{user_lore[-1]['message_id']}", ""],
             ctx_=ctx,
             page_=random.randint(1, len(user_lore)) if mode in ('random', 'server') else min(page_num, len(user_lore))
@@ -4643,7 +4634,7 @@ class Lore(commands.Cog):
 
     @commands.hybrid_command(name="lore_compact", description="Displays a condensed version of a user's lore, aka lore2", aliases=['lore2'])
     @app_commands.describe(user="The user whose lore you're checking", page="The page number to start on")
-    async def lore_compact(self, ctx, user: typing.Optional[discord.Member] = None, page: int = 1):
+    async def lore_compact(self, ctx, user: typing.Optional[discord.User] = None, page: int = 1):
         """
         Displays a condensed, multi-entry view of a user's lore.
         """
