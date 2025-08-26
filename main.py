@@ -2838,19 +2838,26 @@ class PaginationView(discord.ui.View):
 
         # --- NEW LOGIC BRANCH ---
         if self.author.startswith('The Lore of'):
-            entry = data[0]
-            page_content = entry['item'] if data else "No lore on this page."
+            entry = data[0] if data else {}
+            page_content = entry.get('item', "No lore on this page.")
 
-            # !lore view
+            # !lore view (normal, single-entry view)
             if 'timestamp' in entry:
-                embed = discord.Embed(description=page_content, color=self.color, timestamp=entry['timestamp'])
+                embed = discord.Embed(color=self.color, timestamp=entry['timestamp'])
                 embed.set_author(name=f"{self.author} - Entry {self.current_page} / {self.total_pages()}",
                                  icon_url=self.author_icon)
-                if entry.get('image_url'):
-                    embed.set_image(url=entry['image_url'])
-                # Using add_field is correct here because it's a single, small entry.
-                # embed.add_field(name='', value=entry['item'], inline=False)
-                embed.set_footer(text=entry['label'])
+
+                media_url = entry.get('image_url')
+                if media_url:
+                    # Check if the URL is for a video
+                    # if any(x in media_url.lower() for x in ('.mp4?ex=', '.mov?ex=', '.webm?ex=')):
+                    #     page_content += f"\n\n([Video Attachment]({media_url}))"
+                    # else:
+                        # For images and gifs, use set_image.
+                        embed.set_image(url=media_url)
+
+                embed.description = page_content
+                embed.set_footer(text=entry.get('label'))
                 return embed
 
             # !lore_compact view
@@ -4660,12 +4667,20 @@ class Lore(commands.Cog):
             message_url = f"https://discord.com/channels/{guild_id}/{entry['channel_id']}/{entry['message_id']}"
 
             if entry['image_url']:
-                if entry['image_url'].startswith("https://cdn.discordapp.com/stickers"):
-                    entry_text = f"[{entry_text}]({message_url})"
-                elif entry_text:
-                    entry_text += f" ([Image/GIF]({message_url}))"
+                # Determine the type of media for a more descriptive link
+                media_url = entry['image_url']
+                if media_url.startswith("https://cdn.discordapp.com/stickers"):
+                    media_type = "Sticker"
+                elif any(x in media_url.lower() for x in ('.mp4?ex=', '.mov?ex=', '.webm?ex=')):
+                    media_type = "Video"
                 else:
-                    entry_text = f"[Image/GIF]({message_url})"
+                    media_type = "Image/GIF"
+
+                # Create the descriptive link
+                if entry_text:
+                    entry_text += f" ([{media_type}]({message_url}))"
+                else:
+                    entry_text = f"[{media_type}]({message_url})"
 
             # Format each line with a bullet point
             count += 1
