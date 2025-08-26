@@ -4480,16 +4480,15 @@ class Lore(commands.Cog):
             lore_image_url = sticker.url  # Use the sticker's image URL
         elif referenced_message.attachments:
             lore_image_url = referenced_message.attachments[0].url
-        elif "tenor.com/view/" in lore_content or (lore_content.startswith('https') and lore_content.lower().endswith(('.gif', '.png', '.jpg', '.jpeg', '.webp'))):
-            image_extensions = ('.gif', '.png', '.jpg', '.jpeg', '.webp')
-            if lore_content.startswith('https') and lore_content.lower().endswith(image_extensions):
-                lore_image_url = lore_content
-                lore_content = ""
-            elif "tenor.com/view/" in lore_content:
-                direct_url = await get_direct_tenor_url(lore_content)
-                if direct_url:
-                    lore_image_url = direct_url
-                    lore_content = ""
+        elif "tenor.com/view/" in lore_content:
+            direct_url = await get_direct_tenor_url(lore_content)
+            if direct_url:
+                lore_image_url = direct_url
+                lore_content = lore_content.split('/')[-1].split('?ex=')[0]
+        elif ((lore_content.startswith('https') and lore_content.lower().endswith(('.gif', '.png', '.jpg', '.jpeg', '.webp')))
+           or (lore_content.startswith('https://cdn.discordapp.com/attachments/') and (' ' not in lore_content) and any(x in lore_content.lower() for x in [x + '?ex=' for x in ('.mp4', '.mov', '.webm', '.gif', '.png', '.jpg', '.jpeg', '.webp')]))):
+            lore_image_url = lore_content
+            lore_content = lore_content.split('/')[-1].split('?ex=')[0]
 
         if not lore_content and not lore_image_url:
             ctx.command.reset_cooldown(ctx)
@@ -4615,9 +4614,10 @@ class Lore(commands.Cog):
             adder = await self.get_user(int(entry['adder_id']), ctx)
             adder_name = adder.display_name if adder else "Unknown User"
             message_url = f"https://discord.com/channels/{guild_id}/{entry['channel_id']}/{entry['message_id']}"
+            content_ = entry['image_url'].split('/')[-1].split('?ex=')[0] if entry['image_url'] and not entry['content'] else entry['content']
             video_ = f"\n([Video Attachment]({message_url}))\n\n" if entry['image_url'] and any(x in entry['image_url'].lower() for x in ('.mp4?ex=', '.mov?ex=', '.webm?ex=')) else "\n\n"
             value_string = (
-                f"{entry['content']}"
+                f"{content_}"
                 f"{video_}"
                 f"Added by {adder_name} "
                 f"\n[Jump to Message]({message_url})"
@@ -4671,18 +4671,27 @@ class Lore(commands.Cog):
             if entry['image_url']:
                 # Determine the type of media for a more descriptive link
                 media_url = entry['image_url']
+                media_name = media_url.split('/')[-1].split('?ex=')[0]
                 if media_url.startswith("https://cdn.discordapp.com/stickers"):
                     media_type = "Sticker"
                 elif any(x in media_url.lower() for x in ('.mp4?ex=', '.mov?ex=', '.webm?ex=')):
                     media_type = "Video"
+                elif 'https://media.tenor.com/' in media_url or media_name.lower().endswith('.gif'):
+                    media_type = 'GIF'
+                elif media_name.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                    media_type = "Image"
                 else:
-                    media_type = "Image/GIF"
+                    media_type = "Attachment"
 
                 # Create the descriptive link
                 if entry_text:
                     entry_text += f" ([{media_type}]({message_url}))"
                 else:
-                    entry_text = f"[{media_type}]({message_url})"
+                    media_name = media_name[:150] + '..' * (len(media_name) > 150)
+                    if 'https://media.tenor.com/' in media_url:
+                        entry_text = f"{media_name} ([GIF]({message_url}))"
+                    else:
+                        entry_text = f"{media_name} ([{media_type}]({message_url}))"
 
             # Format each line with a bullet point
             count += 1
