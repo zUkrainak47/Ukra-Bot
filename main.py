@@ -4615,8 +4615,10 @@ class Lore(commands.Cog):
             adder = await self.get_user(int(entry['adder_id']), ctx)
             adder_name = adder.display_name if adder else "Unknown User"
             message_url = f"https://discord.com/channels/{guild_id}/{entry['channel_id']}/{entry['message_id']}"
+            video_ = f"\n([Video Attachment]({message_url}))\n\n" if entry['image_url'] and any(x in entry['image_url'].lower() for x in ('.mp4?ex=', '.mov?ex=', '.webm?ex=')) else "\n\n"
             value_string = (
-                f"{entry['content']}\n\n"
+                f"{entry['content']}"
+                f"{video_}"
                 f"Added by {adder_name} "
                 f"\n[Jump to Message]({message_url})"
             )
