@@ -794,7 +794,6 @@ async def on_ready():
         client.add_command(ping)
         client.add_command(tcc)
         client.add_command(tuc)
-        client.add_command(sticker_to_image)
         await client.tree.sync()
         await update_stock_cache()
         # for s in server_settings:
@@ -2159,38 +2158,6 @@ async def avatar(ctx: commands.Context, user: typing.Optional[discord.User] = No
 
     embed.set_author(name=target_user.display_name, icon_url=target_user.display_avatar.url)
     embed.set_image(url=target_user.display_avatar.url)
-
-    await ctx.reply(embed=embed)
-
-
-@commands.command(name="sticker", description="Sends a sticker as PNG", aliases=['sticker_to_image'])
-async def sticker_to_image(ctx: commands.Context):
-    """
-    Displays a user's avatar.
-    Shows the server-specific avatar if they have one, otherwise shows their global avatar.
-    """
-
-    embed_color = ctx.author.color if hasattr(ctx.author, 'color') else discord.Color.default()
-    if embed_color == discord.Color.default():
-        embed_color = 0xffd000
-
-    if not ctx.message.reference:
-        return await ctx.reply("You need to reply to a sticker!")
-
-    referenced_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-
-    if referenced_message.stickers:
-        sticker = referenced_message.stickers[0]
-    else:
-        return await ctx.reply('You need to reply to a sticker!')
-
-    embed = discord.Embed(
-        title=sticker.name,
-        color=embed_color
-    )
-
-    embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
-    embed.set_image(url=sticker.url)
 
     await ctx.reply(embed=embed)
 
