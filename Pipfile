@@ -8,6 +8,10 @@ rapidfuzz = "*"
 matplotlib = "*"
 yfinance = "*"
 asteval = "*"
+stockdex = "*"
+discord = "*"
+dotenv = "*"
+mplfinance = "*"
 
 [dev-packages]
 
