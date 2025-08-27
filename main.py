@@ -31,6 +31,9 @@ import math
 from rapidfuzz import process
 from stockdex import Ticker
 # import yfinance
+from PIL import Image
+from io import BytesIO
+from apnggif import apnggif
 
 start = time.perf_counter()
 
@@ -776,6 +779,7 @@ async def on_ready():
     try:
         client.add_command(rng)
         client.add_command(avatar)
+        client.add_command(sticker_to_image)
         # client.add_command(custom)
         # client.add_command(custom_remove)
         # client.add_command(custom_list)
@@ -2138,6 +2142,22 @@ async def calc(ctx: commands.Context, *, expression: str):
         # traceback.print_exc() # Uncomment to print full traceback to console if needed
 
 
+@calc.error
+async def calc_error(ctx, error):
+    """Error handler specifically for the calc command."""
+    if isinstance(error, commands.CommandOnCooldown):
+        # await ctx.reply(f"This command is on cooldown. Please wait {error.retry_after:.1f} seconds.")
+        pass
+    elif isinstance(error, commands.MissingRequiredArgument):
+        # This might occur if the user just types "!calc"
+        await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
+    else:
+        # Log other unexpected errors related to the command framework itself
+        print(f'Ignoring unexpected exception in calc command: {error}')
+        # Optionally inform the user about a generic error
+        # await ctx.reply("An unexpected error occurred while processing the command.")
+
+
 @commands.hybrid_command(name="avatar", description="Displays a user's pfp (profile picture).", aliases=['pfp', 'av'])
 @app_commands.describe(user="The user whose avatar you want to view.")
 async def avatar(ctx: commands.Context, user: typing.Optional[discord.User] = None):
@@ -2162,21 +2182,56 @@ async def avatar(ctx: commands.Context, user: typing.Optional[discord.User] = No
     await ctx.reply(embed=embed)
 
 
-@calc.error
-async def calc_error(ctx, error):
-    """Error handler specifically for the calc command."""
-    if isinstance(error, commands.CommandOnCooldown):
-        # await ctx.reply(f"This command is on cooldown. Please wait {error.retry_after:.1f} seconds.")
-        pass
-    elif isinstance(error, commands.MissingRequiredArgument):
-        # This might occur if the user just types "!calc"
-        await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
-    else:
-        # Log other unexpected errors related to the command framework itself
-        print(f'Ignoring unexpected exception in calc command: {error}')
-        # Optionally inform the user about a generic error
-        # await ctx.reply("An unexpected error occurred while processing the command.")
+@commands.command(name="sticker")
+async def sticker_to_image(ctx: commands.Context):
+    """
+    Sends a sticker as a PNG or GIF
+    Respond to a sticker with this command to initiate
+    """
+    embed_color = ctx.author.color if hasattr(ctx.author, 'color') else discord.Color.default()
+    if embed_color == discord.Color.default():
+        embed_color = 0xffd000
 
+    if not ctx.message.reference:
+        return await ctx.reply("You need to reply to a sticker!")
+
+    referenced_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+
+    if not referenced_message.stickers:
+        return await ctx.reply('You need to reply to a sticker!')
+
+    sticker = referenced_message.stickers[0]
+
+    embed = discord.Embed(
+        title=sticker.name,
+        color=embed_color
+    )
+    embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(sticker.url) as resp:
+            if resp.status != 200:
+                return await ctx.reply('Could not download the sticker.')
+            sticker_data = await resp.read()
+
+    if sticker.format == discord.StickerFormatType.apng:
+        # Convert APNG to GIF
+        extension = f'_{ctx.message.id}'
+        with open(f'temp_sticker{extension}.png', 'wb') as f:
+            f.write(sticker_data)
+        apnggif(f'temp_sticker{extension}.png', f'sticker{extension}.gif')
+        file = discord.File(f'sticker{extension}.gif', filename=f'sticker{extension}.gif')
+        embed.set_image(url=f"attachment://sticker{extension}.gif")
+        await ctx.reply(file=file, embed=embed)
+        os.remove(f"temp_sticker{extension}.png")
+        os.remove(f"sticker{extension}.gif")
+
+    # elif sticker.format == discord.StickerFormatType.lottie:
+    #     return await ctx.reply("Lottie stickers are not yet supported.")
+
+    else: # PNG
+        embed.set_image(url=sticker.url)
+        await ctx.reply(embed=embed)
 
 @client.event
 async def on_command_error(ctx, error):
@@ -6449,7 +6504,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    @commands.hybrid_command(name="e", description="Farm dig, mine, work and fish in one command")
+    @commands.hybrid_command(name="e", description="Farm dig, mine, work and fish in one command", aliases=['у'])
     async def e(self, ctx):
         """
         Dig, mine, work and fish in one command.

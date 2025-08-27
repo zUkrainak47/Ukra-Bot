@@ -12,6 +12,7 @@ stockdex = "*"
 discord = "*"
 dotenv = "*"
 mplfinance = "*"
+apnggif = "*"
 
 [dev-packages]
 
