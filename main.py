@@ -757,7 +757,7 @@ async def print_reset_time(r: int, ctx, custom_message=''):
         time_ = 'minutes'
     else:
         time_ = 'seconds'
-    reply = custom_message + f"try again {get_timestamp(r, time_)}"
+    reply = custom_message + f"Try again {get_timestamp(r, time_)}"
     await ctx.reply(reply)
 
 
@@ -1786,7 +1786,7 @@ class CustomCommands(commands.Cog):
     async def custom(self, ctx, name: str, *, response: str):
         """
         Adds or updates a custom command for this server
-        Usage: !custom_add <command_name> <response_text>
+        Usage: !custom <command_name> <response_text>
 
         !!! Keep in mind that bots can send messages up to 2000 characters in length !!!
 
@@ -1873,13 +1873,13 @@ class CustomCommands(commands.Cog):
             print(f"Error in custom: {error}")  # Log other errors
             await ctx.reply("An unexpected error occurred.")
 
-    @commands.hybrid_command(name='custom_remove', description='Removes a custom command from this server',  aliases=['custom_delete', 'delete_custom', 'remove_custom', 'del_custom', 'custom_del'])
+    @commands.hybrid_command(name='custom_remove', description='Removes a custom command from this server',  aliases=['rmc'])
     @app_commands.describe(name='Custom command name')
     @commands.check(custom_perms)
     async def custom_remove(self, ctx, name: str):
         """
         Removes a custom command from this server
-        Usage: !custom_remove <command_name>
+        Usage: !rmc <command_name>
         """
         if not ctx.guild:
             await ctx.reply("Custom commands can only be handled in servers.")
@@ -1921,7 +1921,7 @@ class CustomCommands(commands.Cog):
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
-    @commands.hybrid_command(name='custom_list', description='Lists all custom commands for the server',  aliases=['custom_commands'])
+    @commands.hybrid_command(name='custom_list', description='Lists all custom commands for the server',  aliases=['custom_commands', 'cl'])
     async def custom_list(self, ctx):
         """
         Lists all custom commands for the server
@@ -1939,7 +1939,61 @@ class CustomCommands(commands.Cog):
         pagination_view = PaginationView(custom_commands, title_=f"", author_=f"Custom Commands", color_=embed_color, ctx_=ctx)
         await pagination_view.send_embed()
 
-    @commands.hybrid_command(name='custom_inspect', description='Inspect a custom command on this server',  aliases=['custom_command'])
+    @commands.cooldown(1, 120, commands.BucketType.user)
+    @commands.hybrid_command(name='custom_list_dm', description='cldm - Sends you a message containing all custom command of this server', aliases=['cldm'])
+    async def custom_list_dm(self, ctx):
+        """
+        Sends you a message containing all custom command of this server
+        """
+        if not ctx.guild:
+            await ctx.reply("Custom commands can only be handled in servers.")
+            return
+
+        guild_id = str(ctx.guild.id)
+
+        # Ensure the structure exists
+        make_sure_server_settings_exist(guild_id)
+        custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
+        if not custom_commands:
+            await ctx.reply("This server doesn't have any custom commands configured yet.")
+            return
+
+        # Sanitize the server name to create a valid filename
+        # This removes characters that are not allowed in filenames on most OS
+        server_name = re.sub(r'[\\/*?:"<>|]', "", ctx.guild.name)
+        filename = f"{server_name}.json"
+
+        # Use a try...finally block to ensure the file is always deleted
+        try:
+            # 1. Save the contents to a temporary JSON file
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(custom_commands, f, indent=4, ensure_ascii=False)
+
+            # 2. DM the file to the user who triggered the command
+            try:
+                await ctx.author.send(
+                    f"Here are the custom commands for **{ctx.guild.name}**:",
+                    file=discord.File(filename)
+                )
+                # Let the user know to check their DMs
+                await ctx.reply("I've sent the list of custom commands to your DMs!", ephemeral=True)
+            except discord.Forbidden:
+                # This error occurs if the user has DMs disabled
+                await ctx.reply("I couldn't send you a DM. Please check your privacy settings and try again.", ephemeral=True)
+
+        finally:
+            # 4. Delete the file afterwards
+            if os.path.exists(filename):
+                os.remove(filename)
+
+    @custom_list_dm.error
+    async def custom_list_dm_error(self, ctx, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            # await ctx.reply(f". Try again in {error.retry_after:.1f} seconds.")
+            await print_reset_time(int(error.retry_after), ctx, f"You can use this command once every 2 minutes\n")
+            pass
+
+    @commands.hybrid_command(name='custom_inspect', description='Inspect a custom command on this server',  aliases=['custom_command', 'ci'])
     @app_commands.describe(name='Custom command name')
     async def custom_inspect(self, ctx, name: str):
         """
@@ -2007,7 +2061,7 @@ class Placeholder:
 
 
 @commands.hybrid_command(name="calc", description="Simple calculator")
-@commands.cooldown(1, 5, commands.BucketType.user) # Add a reasonable cooldown (1 use per 5s per user)
+@commands.cooldown(1, 3, commands.BucketType.user) # Add a reasonable cooldown (1 use per 5s per user)
 async def calc(ctx: commands.Context, *, expression: str):
     """
     Calculates the result of a mathematical expression.
@@ -5129,7 +5183,7 @@ class Currency(commands.Cog):
         known_data = ("```json\n"
                       f"{global_profiles[str(ctx.author.id)]}\n"
                       "```\n\n"
-                      "`dict_1` - loans, `list_1` - used codes, `list_2` - dice win rate, `num_1` - total funded giveaways, `num_5` - total donated")
+                      "`dict_1` - loans, `dict_2` - family, `list_1` - used codes, `list_2` - dice win rate, `num_1` - total funded giveaways, `num_5` - total donated")
         if guild_id:
             await ctx.reply('Check your DMs', ephemeral=True)
             await ctx.author.send(known_data)
