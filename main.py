@@ -34,6 +34,8 @@ from stockdex import Ticker
 from PIL import Image
 from io import BytesIO
 from apnggif import apnggif
+from concurrent.futures import ProcessPoolExecutor
+import psutil
 
 start = time.perf_counter()
 
@@ -2064,6 +2066,88 @@ class Placeholder:
         return f"Placeholder(full='{self.full_match}', type='{self.type}', index={self.index}, default='{self.default_value}', required={self.is_required})"
 
 
+def worker_initializer():
+    """
+    This function is run when a new worker process is created.
+    It sets the process to the lowest priority and pins it to a single CPU core.
+    """
+    print("Initializing new worker process...")
+    try:
+        p = psutil.Process(os.getpid())
+
+        # --- Set CPU Affinity ---
+        # Pin the process to the *last* available CPU core.
+        # cpu_count() is 0-indexed, so the last core is count - 1.
+        # This leaves all other cores free for important tasks like gaming.
+        all_cores = psutil.cpu_count(logical=True)
+        if all_cores > 1:
+            target_core = all_cores - 1
+            p.cpu_affinity([target_core])
+            print(f"Worker {p.pid} pinned to CPU core {target_core}.")
+
+        # --- Set Process Priority ---
+        # This is the most critical step for preventing system lag.
+        if psutil.WINDOWS:
+            # On Windows, IDLE_PRIORITY_CLASS is the lowest possible priority.
+            p.nice(psutil.IDLE_PRIORITY_CLASS)
+            print(f"Worker {p.pid} priority set to IDLE on Windows.")
+        else:
+            # On Linux/macOS, 'nice' values range from -20 (high) to 19 (low).
+            # We set it to the absolute lowest priority.
+            p.nice(19)
+            print(f"Worker {p.pid} 'nice' value set to 19.")
+
+    except Exception as e:
+        # Log if something goes wrong during initialization, but don't crash.
+        print(f"Error during worker initialization: {e}")
+
+
+executor = ProcessPoolExecutor(
+    max_workers=2,
+    initializer=worker_initializer
+)
+
+
+def evaluate_expression_sync(expression: str):
+    """
+    A simple, synchronous function to be run in a separate process.
+    It evaluates the given expression using asteval with a safe symbol table.
+    """
+    # max_time is a cooperative, secondary check. The real timeout is handled by the caller.
+    aeval = Interpreter(max_time=3.0, use_numpy=False)
+
+    # --- Create a Whitelist of Safe Functions ---
+
+    # Start with functions from the math module
+    safe_math_functions = {
+        'sqrt': math.sqrt, 'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
+        'asin': math.asin, 'acos': math.acos, 'atan': math.atan, 'atan2': math.atan2,
+        'log': math.log, 'log10': math.log10, 'exp': math.exp, 'pow': math.pow,
+        'pi': math.pi, 'e': math.e, 'inf': float('inf')
+    }
+
+    # Add a selection of safe, useful built-in functions
+    safe_builtins = {
+        'sum': sum,
+        'abs': abs, 'min': min, 'max': max,
+        'round': round, 'len': len
+    }
+
+    # Combine the dictionaries to create the final, safe symbol table
+    final_symtable = safe_math_functions.copy()
+    final_symtable.update(safe_builtins)
+
+    # Use our carefully crafted symbol table for the evaluation
+    aeval.symtable = final_symtable
+    return aeval.eval(expression)
+
+
+FORBIDDEN_KEYWORDS = {
+    'while', 'for', 'import', 'open', 'eval', 'exec',
+    '__import__', 'def', 'class', 'lambda'
+}
+
+
 @commands.hybrid_command(name="calc", description="Simple calculator")
 @commands.cooldown(1, 3, commands.BucketType.user) # Add a reasonable cooldown (1 use per 5s per user)
 async def calc(ctx: commands.Context, *, expression: str):
@@ -2080,66 +2164,58 @@ async def calc(ctx: commands.Context, *, expression: str):
         await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
         return
 
-    if expression in ('9 + 10', '9+10'):
-        await ctx.reply("```9 + 10\n= 21```")
+    lowered_expression = expression.lower()
+    for keyword in FORBIDDEN_KEYWORDS:
+        # A simple `in` check is sufficient for these highly specific keywords.
+        if keyword in lowered_expression:
+            await ctx.reply(f"Error: Use of forbidden keyword (`{keyword}`) is not allowed.")
+            return
+
+    if expression.strip() in ('9 + 10', '9+10', '9+ 10', '9 +10'):
+        await ctx.reply(f"```{expression.strip()}\n= 21```")
         return
 
-    # Create interpreter with a 3-second timeout
-    # use_numpy=False is generally recommended for safety unless you specifically need numpy functions
-    aeval = Interpreter(max_time=3.0, use_numpy=False)
-
-    # You can optionally pre-populate the symbol table with safe functions/constants
-    # aeval.symtable.update(math.__dict__) # Adds everything from math module
-    # Or be more selective:
-    # aeval.symtable['sqrt'] = math.sqrt
-    # aeval.symtable['pi'] = math.pi
-    # aeval.symtable['e'] = math.e
-    # etc. (asteval includes many by default)
+    safe_expression = expression.replace('^', '**').replace('ˆ', '**').replace('∞', 'inf')
 
     try:
-        # --- Evaluation ---
-        # Run the evaluation. asteval handles the timeout internally.
-        expression = expression.replace('^', '**')
-        expression = expression.replace('ˆ', '**')
-        result = aeval(expression)
+        loop = asyncio.get_running_loop()
+
+        eval_task = loop.run_in_executor(
+            executor, evaluate_expression_sync, safe_expression
+        )
+
+        result = await asyncio.wait_for(eval_task, timeout=3.0)
 
         # --- Formatting Output ---
         result_str = ""
         if isinstance(result, (int, float)):
-            # Format integers and floats that are whole numbers
             if isinstance(result, float) and result.is_integer():
                 result_str = f"{int(result):,}"
             else:
-                # Consider limiting decimal places for floats if needed, e.g., f"{result:,.4f}"
-                result_str = f"{result:,}" # Apply comma formatting
+                result_str = f"{result:,}"
         else:
-            # Handle non-numeric results (like strings or lists if asteval produces them)
             result_str = str(result)
 
         # --- Limit Output Length ---
-        max_len = 1800 # Keep it well below Discord's 2000 char limit
+        max_len = 1800
         if len(result_str) > max_len:
             result_str = result_str[:max_len] + "...\n(Output truncated)"
 
         await ctx.reply(f"```\n{expression.replace('**', '^')}\n= {result_str}\n```")
 
+    except asyncio.TimeoutError:
+        await ctx.reply("Error: Evaluation timed out (> 3 seconds) and was terminated.")
+
     except Exception as e:
         # --- Error Handling ---
-        error_str = str(e).lower()
-        # Check if the error message indicates a timeout from asteval
-        # asteval often raises RuntimeError for time limits.
-        if isinstance(e, RuntimeError) and ("time limit" in error_str or "exceeded" in error_str or "timed out" in error_str):
-             await ctx.reply("Evaluation timed out (> 3 seconds).")
-        else:
-            # Handle other evaluation errors (syntax, unknown variables, etc.)
-            # Keep error message concise for the user
-            error_snippet = str(e).split('\n')[0] # Get first line of error
-            if len(error_snippet) > 300: error_snippet = error_snippet[:300] + "..."
-            await ctx.reply(f"Error evaluating expression: ```\n{error_snippet}\n```")
+        # These are now errors from within the evaluation (e.g., syntax errors)
+        error_snippet = str(e).split('\n')[-1]
+        if len(error_snippet) > 300:
+            error_snippet = error_snippet[:300] + "..."
+        await ctx.reply(f"Error evaluating expression: ```\n{error_snippet}\n```")
 
-        # Log the full error for debugging purposes
-        print(f"Error in !calc: Expression='{expression}', Error='{e}'")
-        # traceback.print_exc() # Uncomment to print full traceback to console if needed
+        # Log the full error for debugging
+        print(f"Error in !calc: Expression='{safe_expression}', Error='{e}'")
 
 
 @calc.error
@@ -4095,14 +4171,14 @@ async def use_item(author: discord.User, item: Item, item_message, reply_func, a
         if item.real_name in ['math_potion'] and not additional_context:
             await reply_func("`/use math number` to use this item")
             return
-        decision, msg = await confirm_item(reply_func, author, item, amount, additional_context, f"\n> {item.description.split('\n\n')[0].replace('\n', '\n> ')}", interaction=item_message)
-        if msg is not None:
+        decision, returned_obj = await confirm_item(reply_func, author, item, amount, additional_context, f"\n> {item.description.split('\n\n')[0].replace('\n', '\n> ')}", interaction=item_message)
+        if returned_obj is not None:
+            msg = await item_message.original_response()
             reply_func = msg.reply
         else:
             reply_func = item_message.followup.send
             msg = await item_message.original_response()
         if decision is None:
-            # await msg.reply("Decision timed out.")
             pass
         elif decision:
             if item.real_name in item_use_functions:

@@ -13,6 +13,7 @@ discord = "*"
 dotenv = "*"
 mplfinance = "*"
 apnggif = "*"
+psutil = "*"
 
 [dev-packages]
 
