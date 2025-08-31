@@ -60,6 +60,7 @@ user_last_used = {}
 user_last_used_w = {}
 allowed_users = [369809123925295104]
 dev_mode_users = [694664131000795307]
+the_users = allowed_users + dev_mode_users
 no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse'}
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
@@ -1964,6 +1965,9 @@ class CustomCommands(commands.Cog):
             await ctx.reply("This server doesn't have any custom commands configured yet.")
             return
 
+        if ctx.author.id in the_users:
+            ctx.command.reset_cooldown(ctx)
+
         # Sanitize the server name to create a valid filename
         # This removes characters that are not allowed in filenames on most OS
         server_name = re.sub(r'[\\/*?:"<>|]', "", ctx.guild.name)
@@ -2068,34 +2072,17 @@ class Placeholder:
 
 def worker_initializer():
     """
-    This function is run when a new worker process is created.
-    It sets the process to the lowest priority and pins it to a single CPU core.
+    This function runs when a new worker process is created.
+    It sets the process to the lowest priority to prevent system lag.
     """
-    print("Initializing new worker process...")
     try:
         p = psutil.Process(os.getpid())
-
-        # --- Set CPU Affinity ---
-        # Pin the process to the *last* available CPU core.
-        # cpu_count() is 0-indexed, so the last core is count - 1.
-        # This leaves all other cores free for important tasks like gaming.
-        all_cores = psutil.cpu_count(logical=True)
-        if all_cores > 1:
-            target_core = all_cores - 1
-            p.cpu_affinity([target_core])
-            print(f"Worker {p.pid} pinned to CPU core {target_core}.")
-
-        # --- Set Process Priority ---
-        # This is the most critical step for preventing system lag.
         if psutil.WINDOWS:
-            # On Windows, IDLE_PRIORITY_CLASS is the lowest possible priority.
             p.nice(psutil.IDLE_PRIORITY_CLASS)
-            print(f"Worker {p.pid} priority set to IDLE on Windows.")
-        else:
-            # On Linux/macOS, 'nice' values range from -20 (high) to 19 (low).
-            # We set it to the absolute lowest priority.
-            p.nice(19)
-            print(f"Worker {p.pid} 'nice' value set to 19.")
+        else:  # Linux/macOS
+            p.nice(19)  # Lowest priority
+    except Exception as e:
+        print(f"Error during worker initialization: {e}")
 
     except Exception as e:
         # Log if something goes wrong during initialization, but don't crash.
@@ -2117,34 +2104,25 @@ def evaluate_expression_sync(expression: str):
     aeval = Interpreter(max_time=3.0, use_numpy=False)
 
     # --- Create a Whitelist of Safe Functions ---
-
-    # Start with functions from the math module
     safe_math_functions = {
         'sqrt': math.sqrt, 'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
         'asin': math.asin, 'acos': math.acos, 'atan': math.atan, 'atan2': math.atan2,
         'log': math.log, 'log10': math.log10, 'exp': math.exp, 'pow': math.pow,
-        'pi': math.pi, 'e': math.e, 'inf': float('inf')
+        'pi': math.pi, 'e': math.e, 'inf': float('inf'), 'floor': math.floor,
+        'ceil': math.ceil
     }
-
-    # Add a selection of safe, useful built-in functions
     safe_builtins = {
-        'sum': sum,
-        'abs': abs, 'min': min, 'max': max,
-        'round': round, 'len': len
+        'sum': sum, 'abs': abs, 'min': min, 'max': max, 'round': round, 'len': len, 'format': format
     }
+    final_symtable = {**safe_math_functions, **safe_builtins}
 
-    # Combine the dictionaries to create the final, safe symbol table
-    final_symtable = safe_math_functions.copy()
-    final_symtable.update(safe_builtins)
-
-    # Use our carefully crafted symbol table for the evaluation
     aeval.symtable = final_symtable
     return aeval.eval(expression)
 
 
 FORBIDDEN_KEYWORDS = {
     'while', 'for', 'import', 'open', 'eval', 'exec',
-    '__import__', 'def', 'class', 'lambda'
+    '__import__', 'def', 'class', 'lambda', 'yield'
 }
 
 
@@ -2163,6 +2141,9 @@ async def calc(ctx: commands.Context, *, expression: str):
     if not expression:
         await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
         return
+
+    if ctx.author.id in the_users:
+        ctx.command.reset_cooldown(ctx)
 
     lowered_expression = expression.lower()
     for keyword in FORBIDDEN_KEYWORDS:
@@ -2187,34 +2168,21 @@ async def calc(ctx: commands.Context, *, expression: str):
         result = await asyncio.wait_for(eval_task, timeout=3.0)
 
         # --- Formatting Output ---
-        result_str = ""
-        if isinstance(result, (int, float)):
-            if isinstance(result, float) and result.is_integer():
-                result_str = f"{int(result):,}"
-            else:
-                result_str = f"{result:,}"
-        else:
-            result_str = str(result)
+        result_str = f"{result:,}" if isinstance(result, (int, float)) else str(result)
 
         # --- Limit Output Length ---
-        max_len = 1800
-        if len(result_str) > max_len:
-            result_str = result_str[:max_len] + "...\n(Output truncated)"
+        if len(result_str) > 1800:
+            result_str = result_str[:1800] + "...\n(Output truncated)"
 
         await ctx.reply(f"```\n{expression.replace('**', '^')}\n= {result_str}\n```")
 
     except asyncio.TimeoutError:
         await ctx.reply("Error: Evaluation timed out (> 3 seconds) and was terminated.")
 
-    except Exception as e:
-        # --- Error Handling ---
-        # These are now errors from within the evaluation (e.g., syntax errors)
-        error_snippet = str(e).split('\n')[-1]
-        if len(error_snippet) > 300:
-            error_snippet = error_snippet[:300] + "..."
-        await ctx.reply(f"Error evaluating expression: ```\n{error_snippet}\n```")
 
-        # Log the full error for debugging
+    except Exception as e:
+        error_snippet = str(e).split('\n')[-1][:300]
+        await ctx.reply(f"Error evaluating expression: ```\n{error_snippet}\n```")
         print(f"Error in !calc: Expression='{safe_expression}', Error='{e}'")
 
 
@@ -2505,79 +2473,81 @@ async def send_custom_command(ctx, error, mode='normal'):
                 temp_response_after_choices = evaluated_choices_response
             current_response = temp_response_after_choices  # This now has choices resolved
 
-            aeval = Interpreter()
-            for p_math_sym in unique_placeholders:  # Use unique_placeholders to get all num definitions
-                if p_math_sym.type == "num":
-                    parsed_key = f"num_{p_math_sym.index}"
-                    if parsed_key in parsed_values:  # If user provided a value
-                        aeval.symtable[f"__NUM{p_math_sym.index}__"] = parsed_values[parsed_key]
-                    elif p_math_sym.default_value is not None:  # If there's a default
-                        # Only add default to symtable if this num placeholder is actually used in a math expression
-                        if re.search(r"\{[^{}]*" + re.escape(p_math_sym.full_match) + r"[^{}]*\}",
-                                     current_response):  # Check in choice-resolved string
-                            try:
-                                aeval.symtable[f"__NUM{p_math_sym.index}__"] = int(p_math_sym.default_value)
-                            except ValueError:
-                                print(
-                                    f"Warning: Default value for {p_math_sym.full_match} is not a valid integer for math.")
-
-            _random_pattern_in_math = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)"
-
-            def _replace_random_for_math_eval(match):
-                try:
-                    n1, n2 = int(match.group(1)), int(match.group(2))
-                    return str(random.randint(n1, n2) if n1 <= n2 else match.group(0))
-                except (ValueError, TypeError):
-                    return match.group(0)
-
-            # THIS IS THE MODIFIED FUNCTION
-            def replace_math_expression(match):
-                expression_with_wrapper = match.group(1).strip()
-                actual_numerical_expression = expression_with_wrapper
-                is_formatted_output = False
-
-                format_match = re.fullmatch(r"format\s*\(\s*(.+)\s*,\s*['\"](?P<sep>,?)['\"]\s*\)",
-                                            expression_with_wrapper, re.IGNORECASE)
-                if format_match:
-                    actual_numerical_expression = format_match.group(1).strip()
-                    separator = format_match.group('sep')
-                    if separator == ',':  # Only support comma formatting for now
-                        is_formatted_output = True
-                    else:  # If format() is used with something other than ',', treat as non-special
-                        actual_numerical_expression = expression_with_wrapper  # Revert, asteval might handle it or error
-                        is_formatted_output = False
-
-                processed_numerical_expression = re.sub(_random_pattern_in_math, _replace_random_for_math_eval,
-                                                        actual_numerical_expression)
-                for p_math_replace_inner in unique_placeholders_dict.values():  # Iterate all defined placeholders
-                    if p_math_replace_inner.type == "num":
-                        # When replacing inside math, always use the __NUMx__ internal form
-                        processed_numerical_expression = processed_numerical_expression.replace(
-                            p_math_replace_inner.full_match, f"__NUM{p_math_replace_inner.index}__")
-
-                try:
-                    numerical_result = aeval(processed_numerical_expression)
-                    if isinstance(numerical_result, (int, float)):
-                        if is_formatted_output:
-                            return f"{numerical_result:,}"
-                        else:
-                            return f"{int(numerical_result) if isinstance(numerical_result, float) and numerical_result.is_integer() else numerical_result}"
-                    else:
-                        if is_formatted_output:
-                            print(
-                                f"Math expression '{processed_numerical_expression}' did not yield a number for formatting. Result: {numerical_result}")
-                            return f"[FormatTargetError]"
-                        return str(numerical_result)
-                except Exception as e_math:
-                    # It's helpful to see what expression failed after all internal replacements
-                    print(
-                        f"Error evaluating math. Original: '{expression_with_wrapper}'. Processed for asteval: '{processed_numerical_expression}'. Error: {e_math}")
-                    return f"[MathEval Error]"
-
-            # END OF MODIFIED FUNCTION
-
             math_pattern = r"\{([^{}]+)\}"
-            response_after_math_and_choices = re.sub(math_pattern, replace_math_expression, current_response)
+            final_response = current_response  # Start with the response after choices/placeholders
+
+            try:
+                loop = asyncio.get_running_loop()
+                matches = list(re.finditer(math_pattern, final_response))
+
+                if matches:
+                    expressions_to_eval = []
+
+                    # This temporary interpreter is ONLY for parsing placeholders like <num1>
+                    # before sending the expression to the secure executor.
+                    aeval_for_parsing = Interpreter()
+                    for p_math_sym in unique_placeholders:
+                        if p_math_sym.type == "num":
+                            parsed_key = f"num_{p_math_sym.index}"
+                            if parsed_key in parsed_values:
+                                aeval_for_parsing.symtable[f"__NUM{p_math_sym.index}__"] = parsed_values[parsed_key]
+                            elif p_math_sym.default_value is not None:
+                                aeval_for_parsing.symtable[f"__NUM{p_math_sym.index}__"] = int(p_math_sym.default_value)
+
+                    _random_pattern_in_math = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)"
+
+                    def _replace_random_for_math_eval(match):
+                        try:
+                            n1, n2 = int(match.group(1)), int(match.group(2))
+                            return str(random.randint(n1, n2))
+                        except (ValueError, TypeError):
+                            return match.group(0)
+
+                    for match in matches:
+                        expression_str = match.group(1).strip()
+
+                        # 1. Security Check: Forbidden Keywords
+                        for keyword in FORBIDDEN_KEYWORDS:
+                            if keyword in expression_str.lower().replace('format', ''):
+                                raise ValueError(f"Forbidden keyword (`{keyword}`) in expression.")
+
+                        # 2. Pre-process expression (replace placeholders, randoms, etc.)
+                        processed_expr = re.sub(_random_pattern_in_math, _replace_random_for_math_eval, expression_str)
+                        for p in unique_placeholders:
+                            if p.type == "num":
+                                processed_expr = processed_expr.replace(p.full_match, f"__NUM{p.index}__")
+
+                        expressions_to_eval.append(processed_expr)
+
+                    # 3. Evaluate all expressions in parallel using the secure executor
+                    tasks = [
+                        loop.run_in_executor(executor, evaluate_expression_sync, expr)
+                        for expr in expressions_to_eval
+                    ]
+                    # A total timeout for all math in one custom command
+                    all_results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=5.0)
+
+                    # 4. Replace original expressions with results (iterating backwards is crucial)
+                    for match, result in zip(reversed(matches), reversed(all_results)):
+                        start, end = match.span()
+                        if isinstance(result, Exception):
+                            replacement = "[Math Error]"
+                            print(f"Custom command math error for '{match.group(0)}': {result}")
+                        else:
+                            replacement = f"{result:,}" if isinstance(result, (int, float)) else str(result)
+
+                        final_response = final_response[:start] + replacement + final_response[end:]
+
+            except asyncio.TimeoutError:
+                await ctx.send("Error: Math evaluation in custom command took too long and was terminated.")
+                return
+            except ValueError as ve:  # Catches the forbidden keyword error
+                await ctx.send(f"Error in custom command: {ve}")
+                return
+            except Exception as e:
+                print(f"Unexpected error during custom command math: {e}")
+                # Replace all math blocks with an error message as a fallback
+                final_response = re.sub(math_pattern, "[Math Error]", current_response)
 
             def replace_random_math_globally_formatted(match):
                 try:
@@ -2588,7 +2558,7 @@ async def send_custom_command(ctx, error, mode='normal'):
 
             random_pattern_global = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)"
             final_response = re.sub(random_pattern_global, replace_random_math_globally_formatted,
-                                    response_after_math_and_choices)
+                                    final_response)
 
             try:
                 if len(final_response) > 2000:
@@ -4657,6 +4627,9 @@ class Lore(commands.Cog):
         if lore_content.startswith('!tml') or lore_content.startswith('!toggle_message_lore'):
             ctx.command.reset_cooldown(ctx)
             return await ctx.reply(stare)
+
+        if ctx.author.id in the_users:
+            ctx.command.reset_cooldown(ctx)
 
         # Prioritize stickers, then attachments, then URLs
         if referenced_message.stickers:
