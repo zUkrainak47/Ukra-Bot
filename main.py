@@ -2559,7 +2559,7 @@ async def send_custom_command(ctx, error, mode='normal'):
             random_pattern_global = r"r\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)"
             final_response = re.sub(random_pattern_global, replace_random_math_globally_formatted,
                                     final_response)
-
+            final_response = re.sub(r'(@everyone|@here|<@&\d+>)', '[REDACTED]', final_response)
             try:
                 if len(final_response) > 2000:
                     return await ctx.send('The resulting message is too long (>2000 characters)\nTry modifying the custom command')
