@@ -782,6 +782,7 @@ async def on_ready():
     try:
         client.add_command(rng)
         client.add_command(avatar)
+        client.add_command(banner)
         client.add_command(sticker_to_image)
         # client.add_command(custom)
         # client.add_command(custom_remove)
@@ -2217,13 +2218,70 @@ async def avatar(ctx: commands.Context, user: typing.Optional[discord.User] = No
 
     embed = discord.Embed(
         title="Avatar",
+        description=f"**[Direct Link]({target_user.display_avatar.with_size(4096).url})**",
         color=embed_color
     )
 
     embed.set_author(name=target_user.display_name, icon_url=target_user.display_avatar.url)
-    embed.set_image(url=target_user.display_avatar.url)
+    embed.set_image(url=target_user.display_avatar.with_size(4096).url)
 
     await ctx.reply(embed=embed)
+
+
+async def get_user(id_: int, ctx=None, force_fetch=False):
+    if ctx is not None and ctx.guild and not force_fetch:
+        user = ctx.guild.get_member(id_)
+        if user:
+            return user
+    global fetched_users
+    if id_ in fetched_users:
+        return fetched_users.get(id_)
+    try:
+        user = await client.fetch_user(id_)
+        fetched_users[id_] = user
+        return user
+    except discord.errors.NotFound:
+        return None
+
+
+@commands.cooldown(1, 15, commands.BucketType.user)
+@commands.hybrid_command(name="banner", description="Displays a user's banner if they have one!")
+@app_commands.describe(user="The user whose banner you want to view.")
+async def banner(ctx: commands.Context, user: typing.Optional[discord.User] = None):
+    """
+    Displays a user's banner.
+    Shows the server-specific banner if they have one.
+    Has a 15-second cooldown
+    """
+    target_user = user or ctx.author
+    target_user_fetched = await get_user(target_user.id, force_fetch=True)
+
+    if target_user_fetched.banner is not None:
+        banner_url = target_user_fetched.banner.with_size(4096).url
+
+        embed_color = target_user.color if isinstance(target_user, discord.Member) else discord.Color.default()
+        if embed_color == discord.Color.default():
+            embed_color = 0xffd000
+
+        embed = discord.Embed(
+            title="Banner",
+            description=f"**[Direct Link]({banner_url})**",
+            color=embed_color
+        )
+
+        embed.set_author(name=target_user.display_name, icon_url=target_user.display_avatar.url)
+        embed.set_image(url=banner_url)
+
+        return await ctx.reply(embed=embed)
+        # return await ctx.reply(f"[{target_user.display_name}'s banner]({target_user_fetched.banner.url.split('?')[0] + '?size=4096'})")
+
+    return await ctx.reply(f"**{target_user.display_name}** has no banner!")
+
+
+@banner.error
+async def banner_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await print_reset_time(int(error.retry_after), ctx, f"You can use this command every 15 seconds!\n")
 
 
 @commands.command(name="sticker")
@@ -2273,9 +2331,11 @@ async def sticker_to_image(ctx: commands.Context):
     # elif sticker.format == discord.StickerFormatType.lottie:
     #     return await ctx.reply("Lottie stickers are not yet supported.")
 
-    else: # PNG
+    else:  # PNG
         embed.set_image(url=sticker.url)
+        embed.description = f"**[Direct Link]({sticker.url})**"
         await ctx.reply(embed=embed)
+
 
 @client.event
 async def on_command_error(ctx, error):
