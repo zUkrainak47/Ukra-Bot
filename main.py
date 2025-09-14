@@ -783,7 +783,7 @@ async def on_ready():
         client.add_command(rng)
         client.add_command(avatar)
         client.add_command(banner)
-        client.add_command(sticker_to_image)
+        client.add_command(sticker)
         # client.add_command(custom)
         # client.add_command(custom_remove)
         # client.add_command(custom_list)
@@ -870,8 +870,6 @@ async def on_ready():
                     except discord.HTTPException as e:
                         # Handle potential HTTP errors
                         await log_channel.send(f"❓ Failed to remove `@{role.name}` from {member.mention}: {e}")
-                # message = await log_channel.fetch_message(react_to.id)
-                # await message.add_reaction('✅')
         print("reached end of on_ready()")
     except Exception:
         print(traceback.format_exc())
@@ -2285,7 +2283,7 @@ async def banner_error(ctx, error):
 
 
 @commands.command(name="sticker")
-async def sticker_to_image(ctx: commands.Context):
+async def sticker(ctx: commands.Context):
     """
     Sends a sticker as a PNG or GIF
     Respond to a sticker with this command to initiate
@@ -4732,7 +4730,10 @@ class Lore(commands.Cog):
         lore_data[guild_id][subject_id].append(new_entry)
         save_lore()
 
-        await ctx.reply(f"✅ Added to **{lore_subject.display_name}**'s lore.")
+        if ctx.channel.permissions_for(ctx.guild.get_member(bot_id)).add_reactions:
+            await ctx.message.add_reaction("✅")
+        else:
+            await ctx.reply(f"✅ Added to **{lore_subject.display_name}**'s lore.")
 
     @add_lore.error
     async def add_lore_error(self, ctx, error):
