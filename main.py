@@ -401,8 +401,7 @@ async def is_manager(ctx):
         return True
 
     if ctx.guild:
-        if ctx.author.guild_permissions.manage_guild or ctx.author.guild_permissions.moderate_members:
-            return True
+        return ctx.author.guild_permissions.manage_guild or ctx.author.guild_permissions.moderate_members
 
     return False
 
@@ -412,11 +411,10 @@ async def custom_perms(ctx):
         return True
 
     if ctx.guild:
-        if (ctx.author.guild_permissions.manage_guild or
+        return (ctx.author.guild_permissions.manage_guild or
                 ctx.author.guild_permissions.moderate_members or
                 ctx.author.guild_permissions.manage_roles or
-                discord.utils.get(ctx.guild.roles, name="Custom Commands Manager") in ctx.author.roles):
-            return True
+                discord.utils.get(ctx.guild.roles, name="Custom Commands Manager") in ctx.author.roles)
 
     return False
 
@@ -4648,6 +4646,7 @@ class Lore(commands.Cog):
         """
         Adds a message to a user's server-specific lore by replying to it
         """
+
         if not ctx.guild:
             ctx.command.reset_cooldown(ctx)
             return await ctx.reply("Lore can only be added in a server.")
