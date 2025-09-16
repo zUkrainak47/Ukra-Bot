@@ -401,7 +401,7 @@ async def is_manager(ctx):
         return True
 
     if ctx.guild:
-        if ctx.author.guild_permissions.manage_guild:
+        if ctx.author.guild_permissions.manage_guild or ctx.author.guild_permissions.moderate_members:
             return True
 
     return False
@@ -412,7 +412,10 @@ async def custom_perms(ctx):
         return True
 
     if ctx.guild:
-        if ctx.author.guild_permissions.manage_guild or discord.utils.get(ctx.guild.roles, name="Custom Commands Manager") in ctx.author.roles:
+        if (ctx.author.guild_permissions.manage_guild or
+                ctx.author.guild_permissions.moderate_members or
+                ctx.author.guild_permissions.manage_roles or
+                discord.utils.get(ctx.guild.roles, name="Custom Commands Manager") in ctx.author.roles):
             return True
 
     return False
