@@ -626,6 +626,7 @@ def make_sure_server_settings_exist(guild_id: str, save=True):
     if guild_id:
         server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands)
         server_settings.get(guild_id).setdefault('members', [])
+        server_settings.get(guild_id).setdefault('command_cooldowns', {})
         if save:
             save_settings()
         return server_settings.get(guild_id).get('members')
@@ -790,6 +791,7 @@ async def on_ready():
         # client.add_command(custom_list)
         # client.add_command(custom_inspect)
         client.add_command(calc)
+        client.add_command(set_cooldown)
         client.add_command(dnd)
         client.add_command(choose)
         client.add_command(compliment)
@@ -1373,6 +1375,166 @@ async def settings(ctx):
                    '\n' +
                    f"Kys Protection:   {allow_dict[kys_allowed]}" +
                    '```')
+
+
+##########################################################
+# CHATGPT 5 HIGH, SECTION I DIDNT BOTHER CHECKING THIS!! #
+##########################################################
+
+COOLDOWN_FILE = Path("dev", "cooldowns.json")
+cooldown_state: typing.Dict[str, typing.Dict[str, typing.Dict[str, float]]] = {}  # guild -> command -> user -> next_allowed
+
+
+def load_cooldown_state():
+    global cooldown_state
+    if os.path.exists(COOLDOWN_FILE):
+        try:
+            with open(COOLDOWN_FILE, "r", encoding="utf-8") as f:
+                cooldown_state = json.load(f)
+        except Exception as e:
+            cooldown_state = {}
+    else:
+        cooldown_state = {}
+load_cooldown_state()
+
+
+def save_cooldown_state():
+    tmp = Path("dev", "cooldowns.json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cooldown_state, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, COOLDOWN_FILE)
+
+
+def clear_guild_command_cooldowns(guild_id: str, command_key: str):
+    # Clears all users’ entries for immediate effect (e.g., when reducing or disabling)
+    g = cooldown_state.setdefault(guild_id, {})
+    g.setdefault(command_key, {})
+    g[command_key].clear()
+    save_cooldown_state()
+
+
+def get_configured_seconds(ctx: commands.Context, default_seconds: int) -> int:
+    if not ctx.guild:
+        return default_seconds
+    guild_id = str(ctx.guild.id)
+    make_sure_server_settings_exist(guild_id, save=False)
+    store = server_settings[guild_id].setdefault('command_cooldowns', {})
+    return int(store.get(ctx.command.qualified_name, default_seconds))
+
+
+def custom_cooldown_check(default_seconds: int):
+    async def predicate(ctx: commands.Context):
+        # bypass in DMs (or handle however you prefer)
+        if ctx.guild is None:
+            return True
+
+        # if ctx.author.id in the_users:
+        #     return True
+
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        key = ctx.command.qualified_name
+        seconds = get_configured_seconds(ctx, default_seconds)
+
+        if seconds <= 0:
+            return True
+
+        now = time.time()
+        next_allowed = cooldown_state.get(guild_id, {}).get(key, {}).get(user_id, 0.0)
+
+        if now < next_allowed:
+            retry_after = next_allowed - now
+            # cd_obj = commands.Cooldown(1, seconds, commands.BucketType.member)
+            cd_obj = commands.Cooldown(1, seconds)
+            # await print_reset_time(int(retry_after), ctx, f"You're adding lore too quickly! ")
+
+            raise commands.CommandOnCooldown(cd_obj, retry_after, type=commands.BucketType.member)
+
+        return True
+
+    return commands.check(predicate)
+
+
+def apply_custom_cooldown(ctx: commands.Context, default_seconds: int):
+    # Call this at the end of a successful command execution
+    if ctx.guild is None:
+        return
+    seconds = get_configured_seconds(ctx, default_seconds)
+    if seconds <= 0:
+        return
+
+    guild_id = str(ctx.guild.id)
+    user_id = str(ctx.author.id)
+    key = ctx.command.qualified_name
+
+    g = cooldown_state.setdefault(guild_id, {})
+    c = g.setdefault(key, {})
+    c[user_id] = time.time() + seconds
+    save_cooldown_state()
+
+##############################################################
+# END OF CHATGPT 5 HIGH SECTION THAT I DIDNT BOTHER CHECKING #
+##############################################################
+
+
+# command: (lowest allowed cd, default cd)
+configurable_commands = {'addlore': (0, 300)}
+
+
+@commands.hybrid_command(name="setcd")
+@commands.check(is_manager)
+async def set_cooldown(ctx: commands.Context, command_name: str, cooldown_seconds: int):
+    """
+    Sets a custom cooldown for a command in this server.
+    Usage: !setcd <command> <seconds>
+    Example: !setcd addlore 60
+
+    Set cooldown_seconds to -1 to reset the cooldown of a command
+    Example: !setcd addlore -1
+    """
+    cmd = ctx.bot.get_command(command_name.lower())
+    if not cmd:
+        return await ctx.reply(f"I can't find a command named `{command_name}`.")
+
+    if cmd.qualified_name not in configurable_commands:
+        return await ctx.reply(f"`{cmd.qualified_name}` is not configurable. Available:\n```{', '.join(sorted(configurable_commands.keys()))}```")
+
+    if cooldown_seconds == -1:
+        cooldown_seconds = configurable_commands[cmd.qualified_name][1]
+
+    elif cooldown_seconds < 0:
+        return await ctx.reply("Cooldown must be 0 or a positive number of seconds.")
+
+    if cooldown_seconds < configurable_commands[cmd.qualified_name][0]:
+        return await ctx.reply(f"Lowest cooldown for `{cmd.qualified_name}` is **{configurable_commands[cmd.qualified_name][0]}s**.")
+
+    guild_id_str = str(ctx.guild.id)
+    make_sure_server_settings_exist(guild_id_str, save=False)
+
+    key = cmd.qualified_name
+    old = int(server_settings[guild_id_str]['command_cooldowns'].get(key, 0))
+    server_settings[guild_id_str]['command_cooldowns'][key] = int(cooldown_seconds)
+    save_settings()
+
+    # Immediate effect:
+    if cooldown_seconds == 0 or cooldown_seconds < old:
+        # Clear pending lockouts so users aren't stuck with the old longer timer
+        clear_guild_command_cooldowns(guild_id_str, key)
+
+    if cooldown_seconds == 0:
+        await ctx.reply(f"✅ Cooldown for `!{key}` is now disabled in this server.")
+    else:
+        await ctx.reply(f"✅ The cooldown for `!{key}` has been set to **{cooldown_seconds} seconds** in this server.")
+
+
+@set_cooldown.autocomplete("command_name")
+async def set_cooldown_autocomplete(ctx, current: str):
+    choices = [
+        app_commands.Choice(name=cmd_name, value=cmd_name)
+        for cmd_name in sorted(configurable_commands)
+        if current.lower() in cmd_name.lower()
+    ]
+    return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
 
 # ROLES
@@ -4641,24 +4803,21 @@ class Lore(commands.Cog):
         return await ctx.send(f"This message is now addable to lore")
 
     @commands.command(name="addlore")
-    @commands.cooldown(1, 300, commands.BucketType.user)  # 1 use per 5 minutes per user
+    @custom_cooldown_check(default_seconds=300)
     async def add_lore(self, ctx):
         """
         Adds a message to a user's server-specific lore by replying to it
         """
 
         if not ctx.guild:
-            ctx.command.reset_cooldown(ctx)
             return await ctx.reply("Lore can only be added in a server.")
 
         if not ctx.message.reference:
-            ctx.command.reset_cooldown(ctx)
             return await ctx.reply("You need to reply to the message you want to add to the lore.")
 
         try:
             referenced_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
         except discord.NotFound:
-            ctx.command.reset_cooldown(ctx)
             return await ctx.reply("I couldn't find the message you replied to.")
 
         msg_id = str(referenced_message.id)
@@ -4669,27 +4828,20 @@ class Lore(commands.Cog):
         subject_id = str(lore_subject.id)
 
         if lore_subject.id == adder.id:
-            ctx.command.reset_cooldown(ctx)
             return await ctx.reply("You can't add lore for yourself.")
 
         if subject_id in server_settings[guild_id].setdefault('not_lore_users', []):
-            ctx.command.reset_cooldown(ctx)
             return await ctx.reply("This user has lore disabled.\n-# (!help toggle_lore)")
 
-        make_sure_server_settings_exist(guild_id)
+        # make_sure_server_settings_exist(guild_id)  # redundant due to new cooldown function already calling this
         if msg_id in server_settings[guild_id].setdefault('not_lore_messages', []):
-            ctx.command.reset_cooldown(ctx)
             return await ctx.reply("You can't add this message to lore.\n-# (!help tml)")
 
         lore_content = referenced_message.content
         lore_image_url = None
 
         if lore_content.startswith('!tml') or lore_content.startswith('!toggle_message_lore'):
-            ctx.command.reset_cooldown(ctx)
             return await ctx.reply(stare)
-
-        if ctx.author.id in the_users:
-            ctx.command.reset_cooldown(ctx)
 
         # Prioritize stickers, then attachments, then URLs
         if referenced_message.stickers:
@@ -4709,7 +4861,6 @@ class Lore(commands.Cog):
             lore_content = lore_content.split('/')[-1].split('?ex=')[0]
 
         if not lore_content and not lore_image_url:
-            ctx.command.reset_cooldown(ctx)
             return await ctx.reply("You can't add a message with no usable content to lore.")
 
         # Ensure guild and user keys exist
@@ -4717,7 +4868,6 @@ class Lore(commands.Cog):
 
         # Check for duplicates
         if any(entry['message_id'] == msg_id for entry in lore_data[guild_id][subject_id]):
-            ctx.command.reset_cooldown(ctx)
             return await ctx.reply("This message is already part of their lore!")
 
         new_entry = {
@@ -4732,10 +4882,13 @@ class Lore(commands.Cog):
         lore_data[guild_id][subject_id].append(new_entry)
         save_lore()
 
-        if ctx.channel.permissions_for(ctx.guild.get_member(bot_id)).add_reactions:
+        me = ctx.me or ctx.guild.me
+        if ctx.channel.permissions_for(me).add_reactions:
             await ctx.message.add_reaction("✅")
         else:
             await ctx.reply(f"✅ Added to **{lore_subject.display_name}**'s lore.")
+
+        apply_custom_cooldown(ctx, default_seconds=300)
 
     @add_lore.error
     async def add_lore_error(self, ctx, error):
