@@ -61,6 +61,7 @@ user_last_used_w = {}
 allowed_users = [369809123925295104]
 dev_mode_users = [694664131000795307]
 the_users = allowed_users + dev_mode_users
+# the_users = []
 no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse'}
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
@@ -1063,7 +1064,7 @@ async def uptime(ctx):
 async def rng(ctx, n1: int, n2: int):
     """
     Returns a random number between n1 and n2
-    rng n1 n2
+    Usage: `!rng n1 n2`
     """
     if n1 >= n2:
         await ctx.reply("Usage: `rng n1 n2` where n1 and n2 are numbers, n1 < n2")
@@ -1122,8 +1123,8 @@ async def server(ctx):
 async def choose(ctx, *, options: str):
     """
     Chooses from provided options, separated by |
-    Example: choice option | option 2 | another option
-    choice <choice1> | <choice2> ...
+    Usage: `!choose option | option 2 | another option`
+    choose <choice1> | <choice2> ...
     """
     print(options)
     options = [s for s in options.split('|') if s != '']
@@ -1142,7 +1143,7 @@ async def dnd(ctx, *, dice: str = ''):
     """
     Rolls n1 DND dice of size n2 (roll <n1>d<n2>)
     Rolls 1d6 if no argument passed
-    Examples: !dnd 2d6, !dnd d20, !dnd 5, !dnd
+    Examples: `!dnd 2d6`, `!dnd d20`, `!dnd 5`, `!dnd`
     roll <n1>d<n2> where n1 and n2 are numbers, d is a separator, 0 < n1 <= 100, 0 < n2 <= 1000
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1250,7 +1251,7 @@ async def backup(ctx):
 async def compliment(ctx, *, user: discord.User = None):
     """
     Compliments user based on 3x100 most popular compliments lmfaoooooo
-    !compliment @user
+    `!compliment @user`
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
@@ -1272,7 +1273,8 @@ async def compliment(ctx, *, user: discord.User = None):
 async def enable(ctx):
     """
     Enables command of choice
-    Can only be used by administrators
+
+    **Can only be used by Administrators**
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     if not guild_id:
@@ -1301,7 +1303,8 @@ async def enable(ctx):
 async def disable(ctx):
     """
     Disables command of choice
-    Can only be used by administrators
+
+    **Can only be used by Administrators**
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     if not guild_id:
@@ -1478,7 +1481,12 @@ def apply_custom_cooldown(ctx: commands.Context, default_seconds: int):
 
 
 # command: (lowest allowed cd, default cd)
-configurable_commands = {'addlore': (0, 300)}
+configurable_commands = {'addlore': (0, 300),
+                         "lore": (0, 0),
+                         "lore_random": (0, 0),
+                         "server_lore": (0, 0),
+                         "lore_compact": (0, 0),
+                         }
 
 
 @commands.hybrid_command(name="setcd")
@@ -1486,11 +1494,12 @@ configurable_commands = {'addlore': (0, 300)}
 async def set_cooldown(ctx: commands.Context, command_name: str, cooldown_seconds: int):
     """
     Sets a custom cooldown for a command in this server.
-    Usage: !setcd <command> <seconds>
-    Example: !setcd addlore 60
+    Usage: `!setcd command seconds`
 
-    Set cooldown_seconds to -1 to reset the cooldown of a command
-    Example: !setcd addlore -1
+    Example: `!setcd addlore 60` to set cooldown to 60s
+    Example: `!setcd addlore -1` to reset cooldown to its default value
+
+    **Can only be used by Moderators**
     """
     cmd = ctx.bot.get_command(command_name.lower())
     if not cmd:
@@ -1530,11 +1539,17 @@ async def set_cooldown(ctx: commands.Context, command_name: str, cooldown_second
 @set_cooldown.autocomplete("command_name")
 async def set_cooldown_autocomplete(ctx, current: str):
     choices = [
-        app_commands.Choice(name=cmd_name, value=cmd_name)
+        app_commands.Choice(name=f"{cmd_name} (aka {cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name, value=cmd_name)
         for cmd_name in sorted(configurable_commands)
         if current.lower() in cmd_name.lower()
     ]
     return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+
+
+@set_cooldown.error
+async def set_cooldown_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.reply(f"Usage: `!setcd <command> <cooldown>`")
 
 
 # ROLES
@@ -1543,9 +1558,10 @@ async def set_cooldown_autocomplete(ctx, current: str):
 async def setrole(ctx):
     """
     Changes role that is distributed when executing !segs or !backshot
-    Can only be used by administrators
-    !setrole (segs/backshot/silence) <role id/mention>
-    example: !setrole segs @Segs Role
+    Usage: `!setrole (segs/backshot/silence) <role id/mention>`
+    Example: `!setrole segs @Segs Role`
+
+    **Can only be used by Administrators**
     """
     allowed_roles = ['segs', 'backshot', 'backshots', 'silence']
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1592,7 +1608,8 @@ async def tcc(ctx):
     If currency system is enabled in a server, starts ignoring the channel this command was sent in
     If channel is already ignored, will stop ignoring it
     If currency system is disabled, will have no effect
-    Can only be used by administrators
+
+    **Can only be used by Administrators**
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     if not guild_id:
@@ -1666,9 +1683,9 @@ async def segs(ctx):
     """
     Distributes Segs Role for 2 minutes with a small chance to backfire
     Cannot be used on users who have been shot or segsed
-    !segs @victim, gives victim the Segs Role
+    Usage: `!segs @victim`, gives victim the Segs Role
     Has a 2-minute cooldown
-    Disabled by default. Run !enable segs to enable
+    Disabled by default. Run `!enable segs` to enable
     """
     caller = ctx.author
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1756,9 +1773,9 @@ async def backshot(ctx):
     """
     Distributes Backshots Role for 90 seconds with a small chance to backfire
     Cannot be used on users who have been shot or backshot
-    !backshot @victim, gives victim the Backshot Role
+    Usage: `!backshot @victim`, gives victim the Backshot Role
     Has a 2-minute cooldown
-    Disabled by default. Run !enable backshot to enable
+    Disabled by default. Run `!enable backshot` to enable
     """
     caller = ctx.author
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1843,9 +1860,9 @@ async def backshot(ctx):
 async def silence(ctx):
     """
     Distributes Silenced Role for 15 seconds with a 30% chance to backfire and silence you for 30s instead
-    !silence @victim, gives victim the Silenced Role
+    Usage: `!silence @victim`, gives victim the Silenced Role
     Has a 2-minute cooldown
-    Disabled by default. Run !enable silence to enable
+    Disabled by default. Run `!enable silence` to enable
     """
     caller = ctx.author
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -2048,7 +2065,7 @@ class CustomCommands(commands.Cog):
     async def custom_remove(self, ctx, name: str):
         """
         Removes a custom command from this server
-        Usage: !rmc <command_name>
+        Usage: `!rmc <command_name>`
         """
         if not ctx.guild:
             await ctx.reply("Custom commands can only be handled in servers.")
@@ -2296,7 +2313,7 @@ async def calc(ctx: commands.Context, *, expression: str):
     Supports standard operators, functions (sqrt, sin, etc.), and variables like pi, e.
     Evaluation times out after 3 seconds.
 
-    Example: !calc (5 + sqrt(9)) * pi / 2
+    Example: `!calc (5 + sqrt(9)) * pi / 2`
 
     Has a 5-second cooldown
     """
@@ -3691,12 +3708,13 @@ only_prefix = {'backshot', 'disable', 'enable', 'segs', 'setrole', 'settings', '
                'coinflip', 'redeem',
                'addlore', '!'}
 
+cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
+               'balance': 'bal', 'coinflip': 'c', 'dice': '1d', 'twodice': '2d', 'giveaway_pool': 'pool',
+               'info': 'i', 'profile': 'p', 'inventory': 'inv', 'stock_prices': 'sp',
+               'lore_compact': 'lore2', 'lore_leaderboard': 'lorelb', 'lore_remove': 'rmlore', 'lore_random': 'lore*', 'server_lore': 'sl'}
+
 
 class HelpView(discord.ui.View):
-    cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
-                   'balance': 'bal', 'coinflip': 'c', 'dice': '1d', 'twodice': '2d', 'giveaway_pool': 'pool',
-                   'info': 'i', 'profile': 'p', 'inventory': 'inv', 'stock_prices': 'sp',
-                   'lore_compact': 'lore2', 'lore_leaderboard': 'lorelb', 'lore_remove': 'rmlore'}
 
     # Add filtered_mapping and categories to the parameters
     def __init__(self, help_command, filtered_mapping, categories, ctx, items_per_page=6, initial_category="No Category", timeout=120.0):
@@ -3818,14 +3836,14 @@ class HelpView(discord.ui.View):
                 if not command.short_doc and command.help:
                     desc = desc.split('\n', 1)[0]
                 if command.name in only_prefix:
-                    cmd_called = command.name if command.name not in self.cmd_aliases else f"{self.cmd_aliases[command.name]} ({command.name})"
+                    cmd_called = command.name if command.name not in cmd_aliases else f"{cmd_aliases[command.name]} ({command.name})"
                     signature_display = f"`!{cmd_called}`"
                 # elif isinstance(command, commands.HybridCommand):
                 #     signature_display = f"`{self.ctx.prefix}{command.name}`"
                 # elif isinstance(command, app_commands.Command):
                 #     signature_display = f"`/{command.name}`"
                 else:
-                    signature_display = f"`{self.ctx.prefix}{command.name if self.ctx.prefix == '/' else command.name if command.name not in self.cmd_aliases else f"{self.cmd_aliases[command.name]} ({command.name})"}`"
+                    signature_display = f"`{self.ctx.prefix}{command.name if self.ctx.prefix == '/' else command.name if command.name not in cmd_aliases else f"{cmd_aliases[command.name]} ({command.name})"}`"
 
                 # Use signature from get_command_signature for args formatting
                 # We replace the command name part to use our custom display above
@@ -4807,10 +4825,13 @@ class Lore(commands.Cog):
     async def add_lore(self, ctx):
         """
         Adds a message to a user's server-specific lore by replying to it
+        You can change this command's cooldown using `!setcd`
         """
-
         if not ctx.guild:
             return await ctx.reply("Lore can only be added in a server.")
+
+        # if ctx.channel.id != 1327070617480069151:
+        #     return await ctx.reply("🕓 `addlore` is under maintenance")
 
         if not ctx.message.reference:
             return await ctx.reply("You need to reply to the message you want to add to the lore.")
@@ -4897,35 +4918,47 @@ class Lore(commands.Cog):
 
     @commands.hybrid_command(name="lore", description="Displays the lore of a user in this server")
     @app_commands.describe(user="The user whose lore you're checking", page="Entry number")
+    @custom_cooldown_check(default_seconds=0)
     async def view_lore(self, ctx, user: typing.Optional[discord.User] = None, page: int = 1):
         """
         Displays the lore of a user in this server
-        Use !addlore to add lore
+        Use `!addlore` to add lore
+        You can change this command's cooldown using `!setcd`
         """
         await self.send_lore(ctx, user, page, 'normal')
+        apply_custom_cooldown(ctx, default_seconds=0)
 
     @commands.hybrid_command(name="lore_random", description="Displays a random lore entry of a user in this server", aliases=['lore*', 'lore_r', 'rl', 'lr'])
     @app_commands.describe(user="The user whose lore you're checking")
+    @custom_cooldown_check(default_seconds=0)
     async def lore_random(self, ctx, user: typing.Optional[discord.User] = None):
         """
         Displays a random lore entry of a specific user in this server
-        Use !addlore to add lore
+        Use `!addlore` to add lore
+        You can change this command's cooldown using `!setcd`
         """
         await self.send_lore(ctx, user, 1, 'random')
+        apply_custom_cooldown(ctx, default_seconds=0)
 
     @commands.hybrid_command(name="server_lore", description="Displays a random lore entry of a random user in this server", aliases=['lore**', 'rl*', 'lr*', 'sl'])
+    @custom_cooldown_check(default_seconds=0)
     async def server_lore(self, ctx):
         """
         Displays a random lore entry of a random user in this server
-        Use !addlore to add lore
+        Use `!addlore` to add lore
+        You can change this command's cooldown using `!setcd`
         """
         await self.send_lore(ctx, ctx.author, 1, 'server')
+        apply_custom_cooldown(ctx, default_seconds=0)
 
     @view_lore.error
     @lore_random.error
+    @server_lore.error
     async def lore_error(self, ctx, error):
         if isinstance(error, commands.HybridCommandError):
             await ctx.send("Lore can't be used in DMs!")
+        if isinstance(error, commands.CommandOnCooldown):
+            await print_reset_time(int(error.retry_after), ctx, f"You're viewing lore too quickly! ")
 
     async def send_lore(self, ctx, user, page, mode='normal'):
         if not ctx.guild:
@@ -5017,9 +5050,11 @@ class Lore(commands.Cog):
 
     @commands.hybrid_command(name="lore_compact", description="Displays a condensed version of a user's lore, aka lore2", aliases=['lore2'])
     @app_commands.describe(user="The user whose lore you're checking", page="The page number to start on")
+    @custom_cooldown_check(default_seconds=0)
     async def lore_compact(self, ctx, user: typing.Optional[discord.User] = None, page: int = 1):
         """
         Displays a condensed, multi-entry view of a user's lore.
+        You can change this command's cooldown using `!setcd`
         """
         if not ctx.guild:
             return await ctx.reply("Lore can only be viewed in a server.")
@@ -5106,6 +5141,12 @@ class Lore(commands.Cog):
             page_=min(page, len(embed_data))
         )
         await pagination_view.send_embed()
+        apply_custom_cooldown(ctx, default_seconds=0)
+
+    @lore_compact.error
+    async def lore2_error(self, ctx, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            await print_reset_time(int(error.retry_after), ctx, f"You're viewing lore too quickly! ")
 
     @commands.hybrid_command(name="lore_remove", description="Removes a lore entry by its message ID (or a link to the message)",
                              aliases=['rmlore'])
@@ -6931,7 +6972,7 @@ class Currency(commands.Cog):
     async def give(self, ctx, user: discord.User, number: str):
         """
         Give someone an amount of coins
-        !give @user <number>
+        Usage: `!give @user <number>`
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
@@ -7128,8 +7169,8 @@ class Currency(commands.Cog):
     async def coinflip(self, ctx):
         """
         Flips a coin, takes an optional bet
-        !coin heads/tails number
-        Example: !coin heads 50
+        Usage: `!coin heads/tails number`
+        Example: `!coin heads 50`
         """
         results = ['heads', 'tails']
         result = random.choice(results)
@@ -7484,8 +7525,8 @@ class Currency(commands.Cog):
         For example, if 3k/5k of a loan is paid back, finding diamonds transfers 2k to the loaner and the remaining
         5.5k to the loanee
 
-        Usage: loan @user number interest
-        Example: loan @user 10k 50%  -  this means @user will have to pay you back 15k
+        Usage: `loan @user number interest`
+        Example: `!loan @user 10k 50%`  -  this means @user will have to pay you back 15k
 
         To pay back a loan use !pb or !give
         """
