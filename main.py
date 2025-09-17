@@ -1431,8 +1431,8 @@ def custom_cooldown_check(default_seconds: int):
         if ctx.guild is None:
             return True
 
-        # if ctx.author.id in the_users:
-        #     return True
+        if ctx.author.id in the_users:
+            return True
 
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
@@ -1541,7 +1541,7 @@ async def set_cooldown_autocomplete(ctx, current: str):
     choices = [
         app_commands.Choice(name=f"{cmd_name} (aka {cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name, value=cmd_name)
         for cmd_name in sorted(configurable_commands)
-        if current.lower() in cmd_name.lower()
+        if current.lower() in cmd_name.lower() or current.lower() in cmd_aliases.get(cmd_name, '')
     ]
     return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
@@ -5191,7 +5191,7 @@ class Lore(commands.Cog):
         is_adder = str(ctx.author.id) == found_entry['adder_id']
         is_subject = str(ctx.author.id) == subject_id_of_found_entry
 
-        if not (is_admin_ or is_adder or is_subject):
+        if not (await is_manager(ctx) or is_adder or is_subject):
             return await ctx.reply("You do not have permission to remove this lore entry.")
 
         # Remove the entry
