@@ -1123,8 +1123,7 @@ async def server(ctx):
 async def choose(ctx, *, options: str):
     """
     Chooses from provided options, separated by |
-    Usage: `!choose option | option 2 | another option`
-    choose <choice1> | <choice2> ...
+    Example: `!choose option | option 2 | another option`
     """
     print(options)
     options = [s for s in options.split('|') if s != '']
@@ -1143,7 +1142,11 @@ async def dnd(ctx, *, dice: str = ''):
     """
     Rolls n1 DND dice of size n2 (roll <n1>d<n2>)
     Rolls 1d6 if no argument passed
-    Examples: `!dnd 2d6`, `!dnd d20`, `!dnd 5`, `!dnd`
+    Examples:
+    - `!dnd 2d6`
+    - `!dnd d20`
+    - `!dnd 5`
+    - `!dnd`
     roll <n1>d<n2> where n1 and n2 are numbers, d is a separator, 0 < n1 <= 100, 0 < n2 <= 1000
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1251,7 +1254,7 @@ async def backup(ctx):
 async def compliment(ctx, *, user: discord.User = None):
     """
     Compliments user based on 3x100 most popular compliments lmfaoooooo
-    `!compliment @user`
+    Usage: `!compliment @user`
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
@@ -2385,8 +2388,8 @@ async def calc_error(ctx, error):
 @app_commands.describe(user="The user whose avatar you want to view.")
 async def avatar(ctx: commands.Context, user: typing.Optional[discord.User] = None):
     """
-    Displays a user's avatar.
-    Shows the server-specific avatar if they have one, otherwise shows their global avatar.
+    Displays a user's avatar
+    Shows the server-specific avatar if they have one, otherwise shows their global avatar
     """
     target_user = user or ctx.author
 
@@ -2427,8 +2430,8 @@ async def get_user(id_: int, ctx=None, force_fetch=False):
 @app_commands.describe(user="The user whose banner you want to view.")
 async def banner(ctx: commands.Context, user: typing.Optional[discord.User] = None):
     """
-    Displays a user's banner.
-    Shows the server-specific banner if they have one.
+    Displays a user's banner
+    Shows the server-specific banner if they have one
     Has a 15-second cooldown
     """
     target_user = user or ctx.author
@@ -4786,7 +4789,7 @@ class Lore(commands.Cog):
         """
         Disallows (or allows) adding a message to lore by replying to it
         If you don't want a message to be added to your lore, you can run this command
-        Only usable for your own messages
+        Only usable on your own messages
         Moderators can use this on any message
         """
         if not ctx.guild:
@@ -5053,7 +5056,8 @@ class Lore(commands.Cog):
     @custom_cooldown_check(default_seconds=0)
     async def lore_compact(self, ctx, user: typing.Optional[discord.User] = None, page: int = 1):
         """
-        Displays a condensed, multi-entry view of a user's lore.
+        Displays a condensed, multi-entry view of a user's lore
+        Use `!addlore` to add lore
         You can change this command's cooldown using `!setcd`
         """
         if not ctx.guild:
@@ -5154,7 +5158,8 @@ class Lore(commands.Cog):
         """
         Removes a lore entry by its message ID, a link to the message, or by replying to it
         You can remove your own lore, as well as lore you've created
-        Server admins can remove any lore
+        Administrators can remove any lore
+        Usage: `!rmlore <Message ID>`
         """
         if not ctx.guild:
             return await ctx.reply("Lore can only be managed in a server.")
@@ -5216,7 +5221,7 @@ class Lore(commands.Cog):
         """
         Removes all lore entries for a user
         You can only clear your own lore
-        Server admins can clear anyone's lore
+        Administrators can clear anyone's lore
         """
         if not ctx.guild:
             return await ctx.reply("Lore can only be managed in a server.")
@@ -5258,6 +5263,7 @@ class Lore(commands.Cog):
     async def lore_leaderboard(self, ctx, page: int = 1):
         """
         Shows the server leaderboard of lore entries
+        Use `!addlore` to add lore
         """
         if not ctx.guild:
             return await ctx.reply("Lore can only be managed in a server.")
@@ -5610,8 +5616,8 @@ class Currency(commands.Cog):
     async def item(self, ctx, *, item: str):
         """
         Displays info on an item.
-        For slash commands, you might want to add an autocomplete or choice list.
-        For prefix commands, the item name is parsed from the message content.
+        Example: `!item twist`
+        For the list of all items, use `!items`
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -5686,6 +5692,7 @@ class Currency(commands.Cog):
         """
         Use item of choice
         Accepts amount as a parameter for some items where it makes sense, so you can use those in bulk
+        Only usable as a slash command
         """
         # Check if the command was invoked via prefix
         if ctx.interaction is None:
@@ -5795,6 +5802,7 @@ class Currency(commands.Cog):
         """
         Purchase item of choice
         Accepts a number as a parameter, so you can buy in bulk
+        Example: `!buy laund 10`
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -5895,6 +5903,7 @@ class Currency(commands.Cog):
         """
         Inspect, buy or sell stocks! If no valid action is passed, defaults to viewing today's chart of the given stock
         2 uses per 10 seconds are allowed
+        Use the slash command for tips
         """
         stock_dict = {'apple': 'AAPL',
                       'amazon': 'AMZN',
@@ -6815,7 +6824,7 @@ class Currency(commands.Cog):
         """
         Dig, mine, work and fish in one command.
         Unlocks after funding 250k worth of official giveaways.
-        (!fund)
+        (`!fund`)
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
@@ -7150,10 +7159,10 @@ class Currency(commands.Cog):
     async def funders_embed(self, ctx, *, page: int = 1):
         """
         View the giveaway funders globally (optionally accepts a page)
-        In order to get on this leaderboard use !fund
+        In order to get on this leaderboard use `!fund`
 
-        Reaching 250k given away unlocks the !e command
-        !help e for more info
+        Reaching 250k given away unlocks the `!e` command
+        `!help e` for more info
         """
         await self.send_leaderboard_embed(ctx, 'funders', page)
 
@@ -7170,7 +7179,7 @@ class Currency(commands.Cog):
         """
         Flips a coin, takes an optional bet
         Usage: `!coin heads/tails number`
-        Example: `!coin heads 50`
+        Example: `!c heads 50`
         """
         results = ['heads', 'tails']
         result = random.choice(results)
@@ -7241,7 +7250,10 @@ class Currency(commands.Cog):
     async def gamble(self, ctx, *, number: str = ''):
         """
         Takes a bet, 50% win rate
-        !gamble 2.5k
+        Examples:
+        - `!g 2.5k`
+        - `!g 20%`
+        - `!g all`
         Has a 1-second cooldown
         """
         results = [1, 0]
@@ -7280,7 +7292,7 @@ class Currency(commands.Cog):
     async def dice(self, ctx, *, number: str = ''):
         """
         Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet
-        !1d 500
+        Example: `!1d 500`
         Has a 1-second cooldown
         """
         try:
@@ -7327,7 +7339,7 @@ class Currency(commands.Cog):
     async def twodice(self, ctx, *, number: str = ''):
         """
         Takes a bet, rolls 2d6, if it rolled 12 you win 35x the bet
-        !2d 100
+        Example: `!2d 100`
         Has a 1-second cooldown
         """
         dice_roll_1 = random.choice(range(1, 7))
@@ -7370,7 +7382,7 @@ class Currency(commands.Cog):
     async def pvp(self, ctx, user: discord.Member, number: str = '0'):
         """
         Takes a user mention and a bet, one of the users wins
-        !pvp @user number
+        Usage: `!pvp @user number`
         """
         try:
             results = [1, -1]
@@ -7528,7 +7540,7 @@ class Currency(commands.Cog):
         Usage: `loan @user number interest`
         Example: `!loan @user 10k 50%`  -  this means @user will have to pay you back 15k
 
-        To pay back a loan use !pb or !give
+        To pay back a loan use `!pb` or `!give`
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -7708,7 +7720,7 @@ class Currency(commands.Cog):
     async def loans(self, ctx, *, user: discord.User=None):
         """
         Displays your or someone else's active loans
-        To pay back a loan use !pb or !give
+        To pay back a loan use `!pb` or `!give`
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -7774,6 +7786,7 @@ class Currency(commands.Cog):
     async def pb(self, ctx, *, user: discord.User):
         """
         Lets you pay back a loan
+        Usage: `!pb @user`
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -7841,7 +7854,7 @@ class Currency(commands.Cog):
     async def slots(self, ctx, *, number: str = ''):
         """
         Takes a bet, spins three wheels of 10 emojis, if all of them match you win 50x the bet, if they are <:sunfire2:1324080466223169609> you win 500x the bet
-        !slots number
+        Example: `!s 50`
         Has a 1-second cooldown
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -7949,6 +7962,7 @@ class Currency(commands.Cog):
         """
         Lottery!
         Feeds Ukra Bot an entrance fee, the rest is added to the pool which is paid out to the winner of the lottery
+        Example: `!lotto enter`
         """
         entrance_price = 2500
         ukra_bot_fee = 0
@@ -8083,8 +8097,8 @@ class Currency(commands.Cog):
     async def admin_giveaway(self, ctx, amount: str, duration: str):
         """
         Starts a giveaway using coins from the giveaway pool (!pool)
+        Usage: `!aga <amount> <time>`
         Only usable by bot developer
-        !giveaway <amount> <time>
         """
         await self.run_giveaway(ctx, amount, duration, admin=True)
 
@@ -8092,7 +8106,7 @@ class Currency(commands.Cog):
     async def giveaway_pool(self, ctx):
         """
         Shows how many coins there are for official giveaways to use.
-        Use !fund to add more coins to it
+        Use `!fund` to add more coins to it
         """
         await ctx.reply(f"{global_profiles[str(bot_id)]['num_2']:,} {coin} currently in the giveaway pool!\n`!fund` to add more to it :)")
 
@@ -8100,8 +8114,8 @@ class Currency(commands.Cog):
     async def bless(self, ctx):
         """
         Bless someone with an amount of coins out of thin air
+        Usage: `!bless @user <number>`
         Only usable by bot developoer
-        !bless @user <number>
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
@@ -8148,8 +8162,8 @@ class Currency(commands.Cog):
     async def curse(self, ctx):
         """
         Curse someone by magically removing a number of coins from their balance
+        Usage: `!curse @user <number>`
         Only usable by bot developoer
-        !curse @user <number>
         """
         # cmd = 'Funding' if 'fund' in ctx.message.content.split()[0] else 'Curse'
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -8326,7 +8340,7 @@ class Marriage(commands.Cog):
     async def marry(self, ctx, user: discord.User):
         """
         Propose marriage to another user
-        Usage: !marry @user
+        Usage: `!marry @user`
         Marriages are global. You can be married to one discord user at a time
         """
         try:
@@ -8443,7 +8457,7 @@ class Marriage(commands.Cog):
     async def divorce(self, ctx):
         """
         Divorce your current partner
-        Usage: !divorce
+        Usage: `!divorce`
         """
         try:
             author_id = str(ctx.author.id)
@@ -8514,7 +8528,7 @@ class Marriage(commands.Cog):
     async def marriage(self, ctx, user: discord.User = None):
         """
         Check your or someone else's marriage status
-        Usage: !marriage (@user)
+        Usage: `!marriage @user`
         Marriages are global. You can be married to one discord user at a time
         """
         try:
