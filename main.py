@@ -28,6 +28,7 @@ import time
 import atexit
 from pathlib import Path
 import math
+from math import ceil
 from rapidfuzz import process
 from stockdex import Ticker
 # import yfinance
@@ -36,7 +37,7 @@ from io import BytesIO
 from apnggif import apnggif
 from concurrent.futures import ProcessPoolExecutor
 import psutil
-
+from itertools import zip_longest
 start = time.perf_counter()
 
 # dict_1 - loans
@@ -3131,7 +3132,7 @@ class PaginationView(discord.ui.View):
         self.page_size = 1 if self.author.startswith('The Lore of') else \
                          10 if 'Leaderboard' in self.title else \
                          5 if (self.footer and self.footer_icon) else \
-                         15 if self.author == "Custom Commands" else \
+                         50 if self.author == "Custom Commands" else \
                          8
         self.current_page = page_
         self.is_loading = False
@@ -3263,6 +3264,23 @@ class PaginationView(discord.ui.View):
             embed.set_footer(text=self.footer, icon_url=self.footer_icon)
             return embed
 
+        if self.author == "Custom Commands":
+            if not data:
+                desc = "This server doesn't have any custom commands yet!\nYou can add some using `!custom`"
+                embed = discord.Embed(title="Custom Commands", color=self.color, description=desc)
+                return embed
+
+            num_items = len(data)
+            items_zipped = list(zip_longest(data[:ceil(num_items/2)], data[ceil(num_items/2):], fillvalue=''))
+            offset = len(max(items_zipped, key=lambda x: len(x[0]))[0]) + 3
+            desc = "```\n"
+            for item1, item2 in items_zipped:
+                desc += f"{('!'+item1):<{offset}}{('!'+item2) if item2 else ''}\n"
+            desc += '```'
+            embed = discord.Embed(title="Custom Commands", color=self.color, description=desc)
+            embed.set_footer(text=f"Page {self.current_page} / {self.total_pages()}")
+            return embed
+
         # --- EXISTING LOGIC BRANCH ---
         # Case 3: Description-based mode (for !inventory, !shop, etc.)
         else:
@@ -3276,8 +3294,6 @@ class PaginationView(discord.ui.View):
                     item_key, num = item_data
                     emoji, name = items[item_key].emoji, items[item_key].name
                     desc += f'{emoji} **{name}** ─ {num[0]:,} {coin if num[1] == "coin" else items[num[1]].emoji}\n'
-                elif self.author == "Custom Commands":
-                    desc += f'!{item_data}\n'
                 else:  # This is the !inventory case
                     item_key, info = item_data
                     if isinstance(info, dict):  # Stock logic
@@ -3297,14 +3313,16 @@ class PaginationView(discord.ui.View):
                         emoji, name = items[item_key].emoji, items[item_key].name
                         desc += f'{emoji} **{name}** ─ {info:,}\n'
             if not data:
-                if self.author == "Custom Commands":
-                    desc = "This server doesn't have any custom commands yet!"
-                else:
-                    desc = "You don't own any Items yet!"
+                desc = "You don't own any Items yet!"
 
-            embed = discord.Embed(title="Custom Commands" if self.author == "Custom Commands" else "Items" if (not data or not isinstance(data[-1], (list, tuple)) or data[-1][0] != 'stock') else 'Stock shares', color=self.color, description=desc+stock)
+            embed = discord.Embed(
+                title=
+                    "Items" if (not data or not isinstance(data[-1], (list, tuple)) or data[-1][0] != 'stock') else
+                    'Stock shares',
+                color=self.color,
+                description=desc+stock)
 
-            if self.author and self.author != "Custom Commands":
+            if self.author:
                 embed.set_author(name=self.author, icon_url=self.author_icon)
             if self.stickied_msg:
                 embed.add_field(name='', value='')
@@ -5153,7 +5171,7 @@ class Lore(commands.Cog):
             await print_reset_time(int(error.retry_after), ctx, f"You're viewing lore too quickly! ")
 
     @commands.hybrid_command(name="lore_remove", description="Removes a lore entry by its message ID (or a link to the message)",
-                             aliases=['rmlore'])
+                             aliases=['rmlore', 'removelore'])
     async def lore_remove(self, ctx, message_id_to_remove=None):
         """
         Removes a lore entry by its message ID, a link to the message, or by replying to it
