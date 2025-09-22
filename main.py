@@ -28,7 +28,6 @@ import time
 import atexit
 from pathlib import Path
 import math
-from math import ceil
 from rapidfuzz import process
 from stockdex import Ticker
 # import yfinance
@@ -2506,7 +2505,7 @@ async def sticker(ctx: commands.Context):
     embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
 
     async with aiohttp.ClientSession() as session:
-        async with session.get(sticker.url) as resp:
+        async with session.head(sticker.url) as resp:
             if resp.status != 200:
                 return await ctx.reply('Could not download the sticker.')
             sticker_data = await resp.read()
@@ -2533,7 +2532,7 @@ async def sticker(ctx: commands.Context):
 
 
 EMOJI_REGEX = r'<(?P<animated>a?):(?P<name>[a-zA-Z0-9_]{2,32}):(?P<id>[0-9]{18,22})>'
-EMOJI_REGEX_VENCORD = r'https?:\/\/cdn\.discordapp\.com\/emojis\/(?P<id>\d+)\.(?:gif|png)\?(?=.*name=(?P<name>[a-zA-Z0-9_]{2,32}))(?=.*animated=(?P<animated>true|false))'
+EMOJI_REGEX_VENCORD = r'https?:\/\/cdn\.discordapp\.com\/emojis\/(?P<id>[0-9]{18,22})\.(?P<extension>gif|png|webp)(?:\?(?:(?=.*name=(?P<name>[a-zA-Z0-9_]{2,32})))?(?:(?=.*animated=(?P<animated>true|false)))?.*)?'
 @commands.hybrid_command(name="emote", description="Sends an emote as an Image", aliases=["emoji"])
 @app_commands.describe(emoji="The emote you want to convert to an Image")
 async def emote(ctx: commands.Context, emoji=''):
@@ -2571,9 +2570,17 @@ async def emote(ctx: commands.Context, emoji=''):
         title=emoji.name,
         color=embed_color
     )
+
+    link = emoji.url
+    if emoji.url.endswith('.gif'):
+        async with aiohttp.ClientSession() as session:
+            async with session.head(link) as resp:
+                if resp.status != 200:
+                    link = emoji.url.split('.gif')[0] + '.webp?size=4096&animated=true'
+
     embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
-    embed.set_image(url=emoji.url)
-    embed.description = f"**[Direct Link]({emoji.url})**"
+    embed.set_image(url=link)
+    embed.description = f"**[Direct Link]({link})**"
     return await ctx.reply(embed=embed)
 
 
@@ -3329,7 +3336,7 @@ class PaginationView(discord.ui.View):
                 return embed
 
             num_items = len(data)
-            items_zipped = list(zip_longest(data[:ceil(num_items/2)], data[ceil(num_items/2):], fillvalue=''))
+            items_zipped = list(zip_longest(data[:math.ceil(num_items/2)], data[math.ceil(num_items/2):], fillvalue=''))
             offset = len(max(items_zipped, key=lambda x: len(x[0]))[0]) + 3
             desc = "```\n"
             for item1, item2 in items_zipped:
