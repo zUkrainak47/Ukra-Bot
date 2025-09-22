@@ -1105,7 +1105,7 @@ async def donate(ctx):
     await ctx.reply(f"## I accept donations! {sunfire2}\n"
                     f"**Current rate: $1 per 10k** {coin}\n"
                     "Jar: <https://send.monobank.ua/jar/kqXuAdT1G>\n"
-                    "Ko-fi: <https://ko-fi.com/zukrainak47>"
+                    "Ko-fi: <https://ko-fi.com/zukrainak47>" +
                     f"\nThe first donation yields twice as many coins as the usual rate {murmheart}" * (not global_profiles[str(ctx.author.id)]['num_5']))
 
 
@@ -1357,36 +1357,36 @@ async def settings(ctx):
     currency_allowed = 'currency_system' in allowed_commands
 
     if segs_role and ctx.guild.get_role(segs_role):
-        segs_role_name = f'@{ctx.guild.get_role(segs_role).name}'
+        segs_role_name = '@' + ctx.guild.get_role(segs_role).name
     else:
-        segs_role_name = f"N/A{", run `!setrole segs @role`" * segs_allowed}"
+        segs_role_name = "N/A" + ", run `!setrole segs @role`" * segs_allowed
 
     if backshots_role and ctx.guild.get_role(backshots_role):
-        backshots_role_name = f'@{ctx.guild.get_role(backshots_role).name}'
+        backshots_role_name = '@' + ctx.guild.get_role(backshots_role).name
     else:
-        backshots_role_name = f"N/A{", run `!setrole backshot @role`" * backshots_allowed}"
+        backshots_role_name = "N/A" + ", run `!setrole backshot @role`" * backshots_allowed
 
     if silence_role and ctx.guild.get_role(silence_role):
-        silence_role_name = f'@{ctx.guild.get_role(silence_role).name}'
+        silence_role_name = '@' + ctx.guild.get_role(silence_role).name
     else:
-        silence_role_name = f"N/A{", run `!setrole silence @role`" * silence_allowed}"
+        silence_role_name = "N/A" + ", run `!setrole silence @role`" * silence_allowed
 
-    await ctx.send(f"```Currency System:  {allow_dict[currency_allowed]}\n"
-                   '\n'
-                   f"Segs:             {allow_dict[segs_allowed]}\n"
-                   f"Segs Role:        {segs_role_name}\n"
-                   '\n'
-                   f"Backshots:        {allow_dict[backshots_allowed]}\n"
-                   f"Backshots Role:   {backshots_role_name}\n"
-                   '\n'
-                   f"Silence:          {allow_dict[silence_allowed]}\n"
-                   f"Silence Role:     {silence_role_name}\n"
-                   '\n'
-                   f"Compliments:      {allow_dict[compliments_allowed]}\n"
-                   '\n'
-                   f"DND:              {allow_dict[dnd_allowed]}\n"
-                   '\n'
-                   f"Kys Protection:   {allow_dict[kys_allowed]}"
+    await ctx.send(f"```Currency System:  {allow_dict[currency_allowed]}\n" +
+                   '\n' +
+                   f"Segs:             {allow_dict[segs_allowed]}\n" +
+                   f"Segs Role:        {segs_role_name}\n" +
+                   '\n' +
+                   f"Backshots:        {allow_dict[backshots_allowed]}\n" +
+                   f"Backshots Role:   {backshots_role_name}\n" +
+                   '\n' +
+                   f"Silence:          {allow_dict[silence_allowed]}\n" +
+                   f"Silence Role:     {silence_role_name}\n" +
+                   '\n' +
+                   f"Compliments:      {allow_dict[compliments_allowed]}\n" +
+                   '\n' +
+                   f"DND:              {allow_dict[dnd_allowed]}\n" +
+                   '\n' +
+                   f"Kys Protection:   {allow_dict[kys_allowed]}" +
                    '```')
 
 
@@ -1750,7 +1750,7 @@ async def segs(ctx):
                     distributed_segs.setdefault(str(ctx.guild.id), []).append(target.id)
                     save_distributed_segs()
                     await target.add_roles(role)
-                    await ctx.send(f'{caller.mention} has segsed {target.mention} {f'{HUH} ' * (caller.mention == target.mention)}{peeposcheme * (caller.mention != target.mention)}')
+                    await ctx.send(f'{caller.mention} has segsed {target.mention} ' + f'{HUH} ' * (caller.mention == target.mention) + peeposcheme * (caller.mention != target.mention))
                     await log_channel.send(f'✅ {caller.mention} has segsed {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
                     await asyncio.sleep(120)
                     await target.remove_roles(role)
@@ -1764,7 +1764,7 @@ async def segs(ctx):
                     if target.id == bot_id:
                         await ctx.send(f'You thought you could segs me? **NAHHHH** get segsed yourself')
                     else:
-                        await ctx.send(f'OOPS! Segs failed {teripoint} {HUH * (caller.mention == target.mention)}')
+                        await ctx.send(f'OOPS! Segs failed {teripoint}' + f' {HUH}' * (caller.mention == target.mention))
                     await log_channel.send(f'❌ {caller.mention} failed to segs {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
                     await asyncio.sleep(150)
                     await caller.remove_roles(role)
@@ -1840,7 +1840,7 @@ async def backshot(ctx):
                     distributed_backshots.setdefault(str(ctx.guild.id), []).append(target.id)
                     save_distributed_backshots()
                     await target.add_roles(role)
-                    await ctx.send(f'{caller.mention} has given {target.mention} devious backshots {f'{HUH} ' * (caller.mention == target.mention)}{peeposcheme * (caller.mention != target.mention)}')
+                    await ctx.send(f'{caller.mention} has given {target.mention} devious backshots ' + f'{HUH} ' * (caller.mention == target.mention) + peeposcheme * (caller.mention != target.mention))
                     await log_channel.send(f'✅ {caller.mention} has given {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
                     await asyncio.sleep(90)
                     await target.remove_roles(role)
@@ -1851,7 +1851,7 @@ async def backshot(ctx):
                     distributed_backshots.setdefault(str(ctx.guild.id), []).append(caller.id)
                     save_distributed_backshots()
                     await caller.add_roles(role)
-                    await ctx.send(f'OOPS! You missed the backshot {teripoint} {HUH * (caller.mention == target.mention)}')
+                    await ctx.send(f'OOPS! You missed the backshot {teripoint}' + f' {HUH}' * (caller.mention == target.mention))
                     await log_channel.send(f'❌ {caller.mention} failed to give {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
                     await asyncio.sleep(120)
                     await caller.remove_roles(role)
@@ -1913,7 +1913,7 @@ async def silence(ctx):
                     distributed_silence.setdefault(str(ctx.guild.id), []).append(target.id)
                     save_distributed_silence()
                     await target.add_roles(role)
-                    await ctx.send(f'{caller.mention} has silenced {target.mention} {f'{HUH} ' * (caller.mention == target.mention)}{peeposcheme * (caller.mention != target.mention)}')
+                    await ctx.send(f'{caller.mention} has silenced {target.mention} ' + f'{HUH} ' * (caller.mention == target.mention) + peeposcheme * (caller.mention != target.mention))
                     await asyncio.sleep(15)
                     await target.remove_roles(role)
                     distributed_silence[str(ctx.guild.id)].remove(target.id)
@@ -2367,7 +2367,7 @@ async def calc(ctx: commands.Context, *, expression: str):
 
         # --- Limit Output Length ---
         if len(result_str) > 1800:
-            result_str = f"{result_str[:1800]}...\n(Output truncated)"
+            result_str = result_str[:1800] + "...\n(Output truncated)"
 
         await ctx.reply(f"```\n{expression.replace('**', '^')}\n= {result_str}\n```")
 
@@ -2467,6 +2467,7 @@ async def banner(ctx: commands.Context, user: typing.Optional[discord.User] = No
         embed.set_image(url=banner_url)
 
         return await ctx.reply(embed=embed)
+        # return await ctx.reply(f"[{target_user.display_name}'s banner]({target_user_fetched.banner.url.split('?')[0] + '?size=4096'})")
 
     return await ctx.reply(f"**{target_user.display_name}** has no banner!")
 
@@ -2581,7 +2582,7 @@ async def emote(ctx: commands.Context, emoji=''):
         async with aiohttp.ClientSession() as session:
             async with session.head(link) as resp:
                 if resp.status != 200:
-                    link = f'{emoji.url.split('.gif')[0]}.webp?size=4096&animated=true'
+                    link = emoji.url.split('.gif')[0] + '.webp?size=4096&animated=true'
 
     embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
     embed.set_image(url=link)
@@ -3158,7 +3159,7 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
             make_sure_user_has_currency(guild_id, winner_id)
             add_coins_to_user(guild_id, winner_id, amount)  # save file
             win_msg = (f"# 🎉 Congratulations {winner.mention}, you won **{amount:,}** {coin}!\n"
-                       f"Balance: {get_user_balance(guild_id, winner_id):,} {coin}"
+                       f"Balance: {get_user_balance(guild_id, winner_id):,} {coin}" +
                        f"\nSorry for the delay btw the bot was down {sunfire2}" * too_late)
 
             if t != 'official':
@@ -4120,7 +4121,7 @@ class MyHelpCommand(commands.HelpCommand):
 
     # Optional: Override help for specific commands/cogs if needed
     async def send_command_help(self, command):
-        title_ = self.get_command_signature(command).replace('*', '\*') if command.name not in only_prefix else f'!{self.get_command_signature(command)[1:]}'
+        title_ = self.get_command_signature(command).replace('*', '\*') if command.name not in only_prefix else '!' + self.get_command_signature(command)[1:]
         embed = discord.Embed(title=title_,
                               description=command.help or "No description provided.",
                               color=0xffd000)
@@ -4971,7 +4972,7 @@ class Lore(commands.Cog):
                 lore_image_url = direct_url
                 lore_content = lore_content.split('/')[-1].split('?ex=')[0]
         elif ((lore_content.startswith('https') and lore_content.lower().endswith(('.gif', '.png', '.jpg', '.jpeg', '.webp')))
-           or (lore_content.startswith('https://cdn.discordapp.com/attachments/') and (' ' not in lore_content) and any(x in lore_content.lower() for x in [f'{x}?ex=' for x in ('.mp4', '.mov', '.webm', '.gif', '.png', '.jpg', '.jpeg', '.webp')]))):
+           or (lore_content.startswith('https://cdn.discordapp.com/attachments/') and (' ' not in lore_content) and any(x in lore_content.lower() for x in [x + '?ex=' for x in ('.mp4', '.mov', '.webm', '.gif', '.png', '.jpg', '.jpeg', '.webp')]))):
             lore_image_url = lore_content
             lore_content = lore_content.split('/')[-1].split('?ex=')[0]
 
@@ -5169,8 +5170,7 @@ class Lore(commands.Cog):
         character_limit = 4000
         count = 0
         for entry in reversed(user_lore):  # Iterate from newest to oldest
-            entry_content = entry['content']
-            entry_text = f'{entry_content[:150]}..' if (len(entry_content) > 150) else entry_content
+            entry_text = entry['content'][:150] + '..' * (len(entry['content']) > 150)
             message_url = f"https://discord.com/channels/{guild_id}/{entry['channel_id']}/{entry['message_id']}"
 
             if entry['image_url']:
@@ -5192,7 +5192,7 @@ class Lore(commands.Cog):
                 if entry_text:
                     entry_text += f" ([{media_type}]({message_url}))"
                 else:
-                    media_name = f'{media_name[:150]}..' if (len(media_name) > 150) else media_name
+                    media_name = media_name[:150] + '..' * (len(media_name) > 150)
                     if 'https://media.tenor.com/' in media_url:
                         entry_text = f"{media_name} ([GIF]({message_url}))"
                     else:
@@ -6032,6 +6032,7 @@ class Currency(commands.Cog):
                 make_sure_user_profile_exists(guild_id, author_id)
                 # price = Ticker(ticker=stock).yahoo_api_price()['close'].iloc[-1]
                 price = get_stock_price(stock)
+                print('"' + action + '"')
                 if action == 'Buy':
                     await buy_stock(ctx, ctx.author, stock=stock, stock_message=stock_message, amount=amount, price=price)
                 elif action == 'Sell':
@@ -6411,7 +6412,7 @@ class Currency(commands.Cog):
                     if code_ == 'rigged':
                         win, lose = global_profiles[author_id]['gamble_win_ratio']
                         if win > lose or win+lose < 500:
-                            answer = f"{suskaygebusiness} You can only use this code when your win rate is below 50%{" (with 500+ gambles)" * (win+lose < 500)}"
+                            answer = f"{suskaygebusiness} You can only use this code when your win rate is below 50%" + " (with 500+ gambles)" * (win+lose < 500)
                             await ctx.reply(answer)
                             return
                     num = add_coins_to_user(guild_id, author_id, int(code_info[0]))
@@ -6480,7 +6481,7 @@ class Currency(commands.Cog):
                 else:
                     cooldowns_status.append(f"`Weekly:` no cooldown!")
 
-                cooldowns_message = f"## Cooldowns:\n{"\n".join(cooldowns_status)}"
+                cooldowns_message = "## Cooldowns:\n" + "\n".join(cooldowns_status)
                 await ctx.reply(cooldowns_message)
             elif currency_allowed(ctx):
                 await ctx.reply(f'{reason}, currency commands are disabled')
@@ -6961,7 +6962,7 @@ class Currency(commands.Cog):
                                 f"{rare}"
                                 f"{item_message}"
                                 f"{loan_message}{'\n' if loan_message else ''}"
-                                f"\n"
+                                f"\n" +
                                 f"**{ctx.author.display_name}:** +{total_gained:,} {coin}\nBalance: {get_user_balance('', str(ctx.author.id)):,} {coin}" * found_one
                                 )
             else:
@@ -7142,10 +7143,10 @@ class Currency(commands.Cog):
 
                     save_currency()  # save file
                     highest_net_check(guild_id, target_id, make_sure=False)
-                    await ctx.reply(f"## Transaction successful!\n\n{answer}")
+                    await ctx.reply("## Transaction successful!\n\n" + answer)
                     if not has_access:
                         try:
-                            await user.send(f"## You have been given {number:,} {coin}\n\n{answer}")
+                            await user.send(f"## You have been given {number:,} {coin}\n\n" + answer)
                         except:
                             pass
                 else:
@@ -7163,9 +7164,9 @@ class Currency(commands.Cog):
         if currency_allowed(ctx):
             example = 'Example: `give @user 100` gives @user 100 coins'
             if isinstance(error, commands.MissingRequiredArgument):
-                await ctx.reply(f'This command is used to give coins to someone!\n{example}')
+                await ctx.reply('This command is used to give coins to someone!\n' + example)
             elif isinstance(error, commands.BadArgument):
-                await ctx.reply(f'Invalid input!\n{example}')
+                await ctx.reply('Invalid input!\n' + example)
             else:
                 print(f"Unexpected error: {error}")  # Log other errors for debugging
 
@@ -7318,7 +7319,7 @@ class Currency(commands.Cog):
                     num_ok = True
 
                 if i.lower() in results + ['head', 'tail'] and not gamble_choice_ok:
-                    gamble_choice = (f'{i.lower()}s') if ('s' not in i.lower()) else i.lower()
+                    gamble_choice = (i.lower() + 's') if ('s' not in i.lower()) else i.lower()
                     gamble_choice_ok = True
                 if num_ok and gamble_choice_ok:
                     break
@@ -7378,7 +7379,7 @@ class Currency(commands.Cog):
                     adjust_gamble_winrate(guild_id, author_id, result == 1, False, False)
                     command_count_increment(guild_id, author_id, 'gamble', True, False)
                     messages_dict = {1: f"You win! {yay}", 0: f"You lose! {o7}"}
-                    await ctx.reply(f"## {messages_dict[result]}{f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0)}")
+                    await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
                 else:
                     await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
@@ -7419,7 +7420,7 @@ class Currency(commands.Cog):
                         adjust_dice_winrate(guild_id, author_id, result, False, False)
                         command_count_increment(guild_id, author_id, 'dice', True, False)
                         messages_dict = {1: f"You win! The dice rolled `{dice_roll}` {yay}", 0: f"You lose! The dice rolled `{dice_roll}` {o7}"}
-                        await ctx.reply(f"## {messages_dict[result]}{f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0)}")
+                        await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
                     else:
                         await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
                 except:
@@ -7465,7 +7466,7 @@ class Currency(commands.Cog):
                     profile_update_after_any_gamble(guild_id, author_id, delta, save=False)
                     command_count_increment(guild_id, author_id, 'twodice', True, False)
                     messages_dict = {1: f"You win! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {yay}", 0: f"You lose! The dice rolled `{dice_roll_1}` `{dice_roll_2}` {o7}"}
-                    await ctx.reply(f"## {messages_dict[result]}{f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0)}")
+                    await ctx.reply(f"## {messages_dict[result]}" + f"\n**{ctx.author.display_name}:** {'+'*(delta > 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number > 0))
                 else:
                     await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
@@ -7550,8 +7551,8 @@ class Currency(commands.Cog):
                             await view.wait()
                             return view.value, message, view.cancel_pressed_by
 
-                        message1 = (f'## {user.display_name if (not_slash and ctx.message.mentions) else user.mention}, do you accept the PVP for {number:,} {coin}?\n'
-                                    f"**{user.display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n"
+                        message1 = (f'## {user.display_name if (not_slash and ctx.message.mentions) else user.mention}, do you accept the PVP for {number:,} {coin}?\n' +
+                                    f"**{user.display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
                                     f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
 
                         decision, msg, canceled_by = await confirm_pvp(user, message1, ctx.author)
@@ -7581,9 +7582,9 @@ class Currency(commands.Cog):
                         profile_update_after_any_gamble(guild_id, str(loser.id), -number)
                         command_count_increment(guild_id, author_id, 'pvp', True, False)
                         await ctx.reply(
-                            f"## PVP winner is **{winner.display_name}**!\n"
-                            f"{f" ** {winner.display_name}: ** +{number:,} {coin}, balance: {num1:, } {coin}\n" * (number > 0)}"
-                            f"{f" ** {loser.display_name}: ** -{number:,} {coin}, balance: {num2:, } {coin}" * (number > 0)}"
+                            f"## PVP winner is **{winner.display_name}**!\n" +
+                            f"**{winner.display_name}:** +{number:,} {coin}, balance: {num1:,} {coin}\n" * (number > 0) +
+                            f"**{loser.display_name}:** -{number:,} {coin}, balance: {num2:,} {coin}" * (number > 0)
                         )
                         active_pvp_requests.get(guild_id).discard(user.id)
                         active_pvp_requests.get(guild_id).discard(ctx.author.id)
@@ -7741,7 +7742,7 @@ class Currency(commands.Cog):
                                     f"- {ctx.author.display_name} gives you **{number:,}** {coin} now\n"
                                     f"- You will need to pay them back **{number + interest:,}** {coin} in the future\n"
                                     f"- Until your loan is paid out, __every rare drop you get__ ({gold_emoji}, ✨, 💎, {treasure_chest}, {The_Catch}) as well as __your `!daily` bonus__ will go towards paying back this loan. (`!help loan` for more info on this)\n\n"
-                                    f"**{user.display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n"
+                                    f"**{user.display_name}**'s balance: {get_user_balance(guild_id, target_id):,} {coin}\n" +
                                     f"**{ctx.author.display_name}**'s balance: {get_user_balance(guild_id, author_id):,} {coin}\n")
                         decision2, msg2, canceled_by2 = await confirm_loan(user, message2, ctx.author, to_reply=msg1)
 
@@ -7779,8 +7780,8 @@ class Currency(commands.Cog):
 
                             save_active_loans()
 
-                            await msg2.reply(f"## Loan successful!\n"
-                                             f"**{user.display_name}:** +{number:,} {coin}, balance: {target_bal:,} {coin}\n"
+                            await msg2.reply(f"## Loan successful!\n" +
+                                             f"**{user.display_name}:** +{number:,} {coin}, balance: {target_bal:,} {coin}\n" +
                                              f"**{ctx.author.display_name}:** -{number:,} {coin}, balance: {author_bal:,} {coin}\n\n"
                                              f"{ps}")
                             active_loan_requests.discard(user.id)
@@ -7979,7 +7980,7 @@ class Currency(commands.Cog):
                     profile_update_after_any_gamble(guild_id, author_id, delta, save=False)
                     command_count_increment(guild_id, author_id, 'slots', True, False)
                     messages_dict = {True: f"# {' | '.join(results)}\n## You win{' **BIG**' * (results[0] == sunfire2)}!", False: f"# {' | '.join(results)}\n## You lose!"}
-                    await ctx.reply(f"{messages_dict[result]}\n{f"**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number != 0)}")
+                    await ctx.reply(f"{messages_dict[result]}\n" + f"**{ctx.author.display_name}:** {'+'*(delta >= 0)}{delta:,} {coin}\nBalance: {num:,} {coin}" * (number != 0))
                     if result and number:
                         if ctx.guild:
                             link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
@@ -8004,7 +8005,7 @@ class Currency(commands.Cog):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         announce_msg = '' if (ctx.guild and ctx.guild.id == official_server_id) \
             else "\nJoin the official Ukra Bot Server for the results! (`!server`)"
-        await ctx.send(f"Thanks for triggering the lottery payout {puppy}{announce_msg}")
+        await ctx.send(f"Thanks for triggering the lottery payout {puppy}" + announce_msg)
         last_lottery_date = next(iter(active_lottery))
         lottery_participants = active_lottery[last_lottery_date]
         active_lottery = {today_date: []}
@@ -8050,11 +8051,11 @@ class Currency(commands.Cog):
                 active_lottery[today_date].append(ctx.author.id)
                 save_active_lottery()
                 add_coins_to_user(guild_id, str(bot_id), ukra_bot_fee)
-                await ctx.reply(f"**Successfully entered lottery** {yay}\nYour balance: {get_user_balance(guild_id, author_id):,} {coin}{join_server_msg}")
+                await ctx.reply(f"**Successfully entered lottery** {yay}\nYour balance: {get_user_balance(guild_id, author_id):,} {coin}" + join_server_msg)
                 perform_backup(f'{ctx.author.name} entered lotto')
                 return True
             else:
-                await ctx.reply(f"You've already joined today's lottery {peepositbusiness}{join_server_msg}")
+                await ctx.reply(f"You've already joined today's lottery {peepositbusiness}" + join_server_msg)
                 return True
 
         except Exception:
@@ -8093,7 +8094,8 @@ class Currency(commands.Cog):
                     f'- **{len(active_lottery[today_date])}** participant{'s' if len(active_lottery[today_date]) != 1 else ''}\n'
                     f'- **{len(active_lottery[today_date]) * payout:,}** {coin} in pool\n'
                     f'- Participation price: {entrance_price} {coin}\n'
-                    f'- Ends <t:{get_daily_reset_timestamp()}:R>\n'
+                    f'- Ends <t:{get_daily_reset_timestamp()}:R>\n' +
+                    # f'**If you want to participate, run** `!lottery enter`' * not_joined +
                     f"You've joined today's lottery {yay} {join_server_msg}" * (not not_joined), view=view)
                 view.message = message
 
@@ -8817,7 +8819,7 @@ def log_shutdown():
     with open(Path('dev', 'shutdowns.txt'), 'r') as f:
         save = f.read()
     with open(Path('dev', 'shutdowns.txt'), 'w') as f:
-        f.write(f'{msg}\n{save}')
+        f.write(msg + '\n' + save)
         f.close()
 
 
