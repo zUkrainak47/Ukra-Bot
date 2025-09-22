@@ -611,7 +611,10 @@ async def loan_payment(id_: str, payment: int, pay_loaner=True):
 
             if loaner and loanee and loaner.id != bot_id:
                 # await loaner.send(f'## Loan `#{id_}` of {amount:,} {coin} from {loanee.name} (<@{loanee_id}>) has been repaid!\nBalance: {get_user_balance('', str(loaner_id)):,} {coin}')
-                await loaner.send(f'## Loan of {amount:,} {coin} from {loanee.name} (<@{loanee_id}>) has been repaid!\nBalance: {get_user_balance('', str(loaner_id)):,} {coin}')
+                try:
+                    await loaner.send(f'## Loan of {amount:,} {coin} from {loanee.name} (<@{loanee_id}>) has been repaid!\nBalance: {get_user_balance('', str(loaner_id)):,} {coin}')
+                except discord.errors.Forbidden:
+                    pass
 
             return True, loaner_id, amount, left_over, paid
 
@@ -1114,8 +1117,11 @@ async def server(ctx):
     DM's the sender an invite link to Ukra Bot Server
     """
     if ctx.guild:
-        await ctx.reply(f"Check your DMs {sunfire2stonks}")
-        await ctx.author.send("discord.gg/n24Bbdjg43")
+        try:
+            await ctx.reply(f"Check your DMs {sunfire2stonks}")
+            await ctx.author.send("discord.gg/n24Bbdjg43")
+        except:
+            await ctx.reply("You have DMs disabled")
     else:
         await ctx.reply(f"discord.gg/n24Bbdjg43")
 
@@ -1659,12 +1665,18 @@ async def tuc(ctx, *, target: discord.User):
         ignored_users.remove(target_id)
         save_ignored_users()
         await ctx.send(f"{bot_name} will no longer ignore {target.display_name}")
-        await target.send("You have been unbanned from using Ukra Bot's currency system")
+        try:
+            await target.send("You have been unbanned from using Ukra Bot's currency system")
+        except:
+            pass
     elif target is not None and target_id not in ignored_users:
         ignored_users.append(target_id)
         save_ignored_users()
         await ctx.send(f"{bot_name} will now ignore {target.display_name}")
-        await target.send("You have been banned from using Ukra Bot's currency system")
+        try:
+            await target.send("You have been banned from using Ukra Bot's currency system")
+        except:
+            pass
     else:
         await ctx.send(f"Couldn't find a user with ID `{target_id}`")
 
@@ -2064,7 +2076,7 @@ class CustomCommands(commands.Cog):
             print(f"Error in custom: {error}")  # Log other errors
             await ctx.reply("An unexpected error occurred.")
 
-    @commands.hybrid_command(name='custom_remove', description='Removes a custom command from this server',  aliases=['rmc'])
+    @commands.hybrid_command(name='custom_remove', description='Removes a custom command from this server',  aliases=['rmc', 'crm'])
     @app_commands.describe(name='Custom command name')
     @commands.check(custom_perms)
     async def custom_remove(self, ctx, name: str):
@@ -4220,8 +4232,11 @@ async def evil_potion_func(message, castor, amount, additional_context=[]):
             f"**{castor.display_name}**: -{num:,} {coin}, balance: {bal1:,} {coin}\n"
             f"**{target.display_name}**: -{num:,} {coin}, balance: {bal2:,} {coin}"
         )
-        await target.send(f"**{castor.name}** used an **{items['evil_potion']}** on you https://discord.com/channels/{to_link.guild.id}/{to_link.channel.id}/{to_link.id}\n"
-                          f"**{target.name}**: -{num:,} {coin}, balance: {bal2:,} {coin}")
+        try:
+            await target.send(f"**{castor.name}** used an **{items['evil_potion']}** on you https://discord.com/channels/{to_link.guild.id}/{to_link.channel.id}/{to_link.id}\n"
+                              f"**{target.name}**: -{num:,} {coin}, balance: {bal2:,} {coin}")
+        except:
+            pass
         save_profiles()
     except Exception:
         print(traceback.format_exc())
@@ -5614,8 +5629,11 @@ class Currency(commands.Cog):
                       "```\n\n"
                       "`dict_1` - loans, `dict_2` - family, `list_1` - used codes, `list_2` - dice win rate, `num_1` - total funded giveaways, `num_5` - total donated")
         if guild_id:
-            await ctx.reply('Check your DMs', ephemeral=True)
-            await ctx.author.send(known_data)
+            try:
+                await ctx.author.send(known_data)
+                await ctx.reply('Check your DMs', ephemeral=True)
+            except:
+                await ctx.reply("You have DMs disabled!", ephemeral=True)
         else:
             await ctx.reply(known_data)
 
@@ -6295,7 +6313,10 @@ class Currency(commands.Cog):
             if user_has_access_to_channel(ctx, user):
                 await ctx.send(f"**{user.display_name if ctx.message.mentions else user.mention}**, you've unlocked the *{passed_title}* Title!\nRun `!title` to change it!")
             else:
-                await user.send(f"**{user.display_name}**, you've unlocked the *{passed_title}* Title!\nRun `!title` to change it!")
+                try:
+                    await user.send(f"**{user.display_name}**, you've unlocked the *{passed_title}* Title!\nRun `!title` to change it!")
+                except:
+                    pass
                 await ctx.send("Done!", ephemeral=True)
         # except Exception:
         #     print(traceback.format_exc())
@@ -7109,7 +7130,10 @@ class Currency(commands.Cog):
                     highest_net_check(guild_id, target_id, make_sure=False)
                     await ctx.reply("## Transaction successful!\n\n" + answer)
                     if not has_access:
-                        await user.send(f"## You have been given {number:,} {coin}\n\n" + answer)
+                        try:
+                            await user.send(f"## You have been given {number:,} {coin}\n\n" + answer)
+                        except:
+                            pass
                 else:
                     await ctx.reply(f"Transaction failed! You don't own {number:,} {coin} {sadgebusiness}")
 
@@ -7979,7 +8003,10 @@ class Currency(commands.Cog):
         global_profiles[str(winner.id)]['lotteries_won'] += 1
         if 'Lottery Winner' not in global_profiles[str(winner.id)]['items'].setdefault('titles', []):
             global_profiles[str(winner.id)]['items']['titles'].append('Lottery Winner')
-            await winner.send("You've unlocked the *Lottery Winner* Title!\nRun `!title` to change it!")
+            try:
+                await winner.send("You've unlocked the *Lottery Winner* Title!\nRun `!title` to change it!")
+            except:
+                pass
         save_profiles()
         lottery_message = (f'# {peepositbusiness} Lottery for {last_lottery_date} <@&1327071268763074570>\n'
                            f'## {winner.mention} {winner.name} walked away with {winnings:,} {coin}!\n'
