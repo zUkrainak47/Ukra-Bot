@@ -1088,7 +1088,7 @@ async def rng_error(ctx: commands.Context, error):
         print(f"Unexpected error: {error}")  # Log other errors for debugging
 
 
-@commands.hybrid_command(name="source", description="Sends the GitHub link to this bot's repo")
+@commands.hybrid_command(name="source", description="Sends the GitHub link to this bot's repo", aliases=['github'])
 async def source(ctx):
     """
     Sends the GitHub link to this bot's repo
@@ -1118,8 +1118,8 @@ async def server(ctx):
     """
     if ctx.guild:
         try:
-            await ctx.reply(f"Check your DMs {sunfire2stonks}")
             await ctx.author.send("discord.gg/n24Bbdjg43")
+            await ctx.reply(f"Check your DMs {sunfire2stonks}")
         except:
             await ctx.reply("You have DMs disabled")
     else:
@@ -2533,11 +2533,13 @@ async def sticker(ctx: commands.Context):
 
 
 EMOJI_REGEX = r'<(?P<animated>a?):(?P<name>[a-zA-Z0-9_]{2,32}):(?P<id>[0-9]{18,22})>'
+EMOJI_REGEX_VENCORD = r'https?:\/\/cdn\.discordapp\.com\/emojis\/(?P<id>\d+)\.(?:gif|png)\?(?=.*name=(?P<name>[a-zA-Z0-9_]{2,32}))(?=.*animated=(?P<animated>true|false))'
 @commands.hybrid_command(name="emote", description="Sends an emote as an Image", aliases=["emoji"])
 @app_commands.describe(emoji="The emote you want to convert to an Image")
 async def emote(ctx: commands.Context, emoji=''):
     """
     Sends an emote as a PNG or GIF
+    Works with Vencord FakeNitroEmojis as well
     You can either provide the emote inside the command call or respond to a message containing the emote, i.e.:
     Examples:
     - `!emote :sunfire2:`
@@ -2551,13 +2553,13 @@ async def emote(ctx: commands.Context, emoji=''):
         return await ctx.reply("You need to either provide an emote or reply to a message containing one!", ephemeral=True)
 
     if emoji:
-        custom_emoji_data = re.search(EMOJI_REGEX, emoji)
+        custom_emoji_data = re.search(EMOJI_REGEX, emoji) or re.search(EMOJI_REGEX_VENCORD, emoji)
         if not custom_emoji_data:
             return await ctx.reply("What you provided doesn't seem to be an emote", ephemeral=True)
 
     else:
         referenced_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-        custom_emoji_data = re.search(EMOJI_REGEX, referenced_message.content)
+        custom_emoji_data = re.search(EMOJI_REGEX, referenced_message.content) or re.search(EMOJI_REGEX_VENCORD, referenced_message.content)
         if not custom_emoji_data:
             return await ctx.reply("No emote found in the message you replied to", ephemeral=True)
 
