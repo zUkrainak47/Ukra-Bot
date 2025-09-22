@@ -2503,8 +2503,14 @@ async def sticker(ctx: commands.Context):
     )
     embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
 
+    link = sticker.url
+    if link.endswith('.gif'):
+        link += "?size=4096"
+    elif '?size=' in link:
+        link = f"{link.split('?size=')[0]}?size=4096"
+
     async with aiohttp.ClientSession() as session:
-        async with session.head(sticker.url) as resp:
+        async with session.head(link) as resp:
             if resp.status != 200:
                 return await ctx.reply('Could not download the sticker.')
             sticker_data = await resp.read()
@@ -2525,8 +2531,8 @@ async def sticker(ctx: commands.Context):
     #     return await ctx.reply("Lottie stickers are not yet supported.")
 
     else:  # PNG
-        embed.set_image(url=sticker.url)
-        embed.description = f"**[Direct Link]({sticker.url})**"
+        embed.set_image(url=link)
+        embed.description = f"**[Direct Link]({link})**"
         await ctx.reply(embed=embed)
 
 
