@@ -788,6 +788,7 @@ async def on_ready():
         client.add_command(avatar)
         client.add_command(banner)
         client.add_command(sticker)
+        client.add_command(emote)
         # client.add_command(custom)
         # client.add_command(custom_remove)
         # client.add_command(custom_list)
@@ -2517,6 +2518,49 @@ async def sticker(ctx: commands.Context):
         embed.set_image(url=sticker.url)
         embed.description = f"**[Direct Link]({sticker.url})**"
         await ctx.reply(embed=embed)
+
+
+EMOJI_REGEX = r'<(?P<animated>a?):(?P<name>[a-zA-Z0-9_]{2,32}):(?P<id>[0-9]{18,22})>'
+@commands.hybrid_command(name="emote", description="Sends an emote as an Image", aliases=["emoji"])
+@app_commands.describe(emoji="The emote you want to convert to an Image")
+async def emote(ctx: commands.Context, emoji=''):
+    """
+    Sends an emote as a PNG or GIF
+    You can either provide the emote inside the command call or respond to a message containing the emote, i.e.:
+    Examples:
+    - `!emote :sunfire2:`
+    - `!emote` (replying to a message)
+    """
+    embed_color = ctx.author.color if hasattr(ctx.author, 'color') else discord.Color.default()
+    if embed_color == discord.Color.default():
+        embed_color = 0xffd000
+
+    if not ctx.message.reference and not emoji:
+        return await ctx.reply("You need to either provide an emote or reply to a message containing one!", ephemeral=True)
+
+    if emoji:
+        custom_emoji_data = re.search(EMOJI_REGEX, emoji)
+        if not custom_emoji_data:
+            return await ctx.reply("What you provided doesn't seem to be an emote", ephemeral=True)
+
+    else:
+        referenced_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+        custom_emoji_data = re.search(EMOJI_REGEX, referenced_message.content)
+        if not custom_emoji_data:
+            return await ctx.reply("No emote found in the message you replied to", ephemeral=True)
+
+    emoji = discord.PartialEmoji(name=custom_emoji_data.group('name'),
+                                 id=int(custom_emoji_data.group('id')),
+                                 animated=bool(custom_emoji_data.group('animated')))
+
+    embed = discord.Embed(
+        title=emoji.name,
+        color=embed_color
+    )
+    embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
+    embed.set_image(url=emoji.url)
+    embed.description = f"**[Direct Link]({emoji.url})**"
+    return await ctx.reply(embed=embed)
 
 
 @client.event
