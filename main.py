@@ -66,7 +66,7 @@ no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 MAX_INITIAL_RESPONSE_LENGTH = 1950
-MAX_TOTAL_RESPONSE_LENGTH = 15000
+MAX_TOTAL_RESPONSE_LENGTH = 10000
 fetched_users = {}
 stock_cache = {}
 market_closed_message = ""
@@ -1958,8 +1958,12 @@ async def add_custom_command(ctx, name: str, response: str, mode):
     custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
 
     # --- Check for Conflicts ---
-    if mode == 'add' and client.get_command(command_name):
-        return await ctx.reply(f"`{command_name}` conflicts with a built-in bot command!")
+    if mode == 'add':
+        if client.get_command(command_name):
+            return await ctx.reply(f"`{command_name}` conflicts with a built-in bot command!")
+        if len(custom_commands) >= 1000 and command_name not in custom_commands:
+            return await ctx.reply("You've reached the limit! 1000 custom commands per server should be enough :p\n"
+                                   "Delete some with `!crm` and try again")
 
     if mode == 'append':
         if command_name not in custom_commands:
@@ -1967,7 +1971,7 @@ async def add_custom_command(ctx, name: str, response: str, mode):
 
         response = custom_commands[command_name] + response
         if len(response) > MAX_TOTAL_RESPONSE_LENGTH:
-            return await ctx.reply("No more than 15k symbols even if you know what you're doing, sorry")
+            return await ctx.reply("No more than 10k symbols even if you know what you're doing, sorry")
 
     # --- Add/Update the command ---
     action = "Updated" if command_name in custom_commands else "Added"
