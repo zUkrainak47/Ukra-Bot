@@ -2127,11 +2127,15 @@ class CustomCommands(commands.Cog):
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
-    @commands.hybrid_command(name='custom_list', description='Lists all custom commands for the server',  aliases=['custom_commands', 'cl'])
-    async def custom_list(self, ctx):
+    @commands.hybrid_command(name='custom_list', description='cl - Lists all custom commands for the server',  aliases=['custom_commands', 'cl'])
+    @app_commands.describe(sort_alphabetically="Sorted alphabetically (True) / by time added (False)")
+    async def custom_list(self, ctx, sort_alphabetically=True):
         """
         Lists all custom commands for the server
         """
+        await self.cl(ctx, sort_alphabetically)
+
+    async def cl(self, ctx, sort_alphabetically):
         if not ctx.guild:
             await ctx.reply("Custom commands can only be handled in servers.")
             return
@@ -2140,17 +2144,29 @@ class CustomCommands(commands.Cog):
 
         # Ensure the structure exists
         make_sure_server_settings_exist(guild_id)
-        custom_commands = sorted(server_settings[guild_id].setdefault('custom_commands', {}).keys())
+        custom_commands = list(server_settings[guild_id].setdefault('custom_commands', {}).keys())
+        if sort_alphabetically:
+            custom_commands = sorted(custom_commands)
+
         embed_color = 0xffd000
         pagination_view = PaginationView(custom_commands, title_=f"", author_=f"Custom Commands", color_=embed_color, ctx_=ctx)
         await pagination_view.send_embed()
 
+    @custom_list.error
+    async def custom_list_error(self, ctx, error):
+        if isinstance(error, discord.ext.commands.errors.BadBoolArgument):
+            await self.cl(ctx, sort_alphabetically=True)
+
     @commands.cooldown(1, 120, commands.BucketType.user)
     @commands.hybrid_command(name='custom_list_dm', description='cldm - Sends you a message containing all custom command of this server', aliases=['cldm'])
-    async def custom_list_dm(self, ctx):
+    @app_commands.describe(sort_alphabetically="Sorted alphabetically (True) / by time added (False)")
+    async def custom_list_dm(self, ctx, sort_alphabetically=True):
         """
         Sends you a message containing all custom command of this server
         """
+        await self.cldm(ctx, sort_alphabetically)
+
+    async def cldm(self, ctx, sort_alphabetically):
         if not ctx.guild:
             await ctx.reply("Custom commands can only be handled in servers.")
             return
@@ -2161,8 +2177,11 @@ class CustomCommands(commands.Cog):
         make_sure_server_settings_exist(guild_id)
         custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
         if not custom_commands:
-            await ctx.reply("This server doesn't have any custom commands configured yet.")
+            await ctx.reply("This server doesn't have any custom commands configured yet.\nUse `!custom` to add some")
             return
+
+        if sort_alphabetically:
+            custom_commands = {key: value for key, value in sorted(custom_commands.items())}
 
         if ctx.author.id in the_users:
             ctx.command.reset_cooldown(ctx)
@@ -2201,6 +2220,8 @@ class CustomCommands(commands.Cog):
             # await ctx.reply(f". Try again in {error.retry_after:.1f} seconds.")
             await print_reset_time(int(error.retry_after), ctx, f"You can use this command once every 2 minutes\n")
             pass
+        if isinstance(error, discord.ext.commands.errors.BadBoolArgument):
+            await self.cldm(ctx, sort_alphabetically=True)
 
     @commands.hybrid_command(name='custom_inspect', description='Inspect a custom command on this server',  aliases=['custom_command', 'ci'])
     @app_commands.describe(name='Custom command name')
