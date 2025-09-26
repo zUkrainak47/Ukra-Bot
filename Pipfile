@@ -9,11 +9,12 @@ matplotlib = "*"
 yfinance = "*"
 asteval = "*"
 stockdex = "*"
-discord = "*"
 dotenv = "*"
 mplfinance = "*"
 apnggif = "*"
 psutil = "*"
+discord = "*"
+finnhub-python = "*"
 
 [dev-packages]
 

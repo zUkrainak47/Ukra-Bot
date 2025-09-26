@@ -1,42 +1,42 @@
 # from typing import Final
-import shutil
-import traceback
 import asyncio
+import atexit
 import datetime
+import json
+import math
+import os
+import random
 import re
+import shutil
+import sys
+import time
+import traceback
 import typing
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timedelta, UTC
 from datetime import time as datetime_time
-import os
-import sys
-import random
-from asteval import Interpreter
+from itertools import zip_longest
+from pathlib import Path
+
 import aiohttp
+import discord
 import finnhub
-# import numpy as np
-import pytz
 import matplotlib.pyplot as plt
 # import matplotlib.dates as mdates
 import mplfinance as mpf  # For candlestick charts
 import pandas as pd
-from dotenv import load_dotenv
-import discord
-from discord import Intents, Client, Message, app_commands
+import psutil
+# import numpy as np
+import pytz
+# import yfinance
+from apnggif import apnggif
+from asteval import Interpreter
+from discord import Intents, app_commands
 from discord.ext import commands, tasks
-import json
-import time
-import atexit
-from pathlib import Path
-import math
+from dotenv import load_dotenv
 from rapidfuzz import process
 from stockdex import Ticker
-# import yfinance
-from PIL import Image
-from io import BytesIO
-from apnggif import apnggif
-from concurrent.futures import ProcessPoolExecutor
-import psutil
-from itertools import zip_longest
+
 start = time.perf_counter()
 
 # dict_1 - loans
