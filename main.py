@@ -62,7 +62,7 @@ allowed_users = [369809123925295104]
 dev_mode_users = [694664131000795307]
 the_users = allowed_users + dev_mode_users
 # the_users = []
-no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse'}
+no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse', 'getsegs', 'getbackshot'}
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 MAX_INITIAL_RESPONSE_LENGTH = 1950
@@ -214,28 +214,30 @@ else:
     user_last_used_w = {}
 
 
-DISTRIBUTED_SEGS = Path("dev", "distributed_segs.json")
-if os.path.exists(DISTRIBUTED_SEGS):
-    with open(DISTRIBUTED_SEGS, "r") as file:
-        distributed_segs = json.load(file)
+DISTRIBUTED_CUSTOM_ROLES = Path("dev", "distributed_custom_roles.json")
+if os.path.exists(DISTRIBUTED_CUSTOM_ROLES):
+    with open(DISTRIBUTED_CUSTOM_ROLES, "r") as file:
+        distributed_custom_roles = json.load(file)
 else:
-    distributed_segs = {i: [] for i in server_settings}
+    distributed_custom_roles = {}  # {guild_id: {command_name: [member_ids]}}
+custom_role_cooldowns = {}  # {f"{guild_id}_{command_name}_{user_id}": timestamp}
 
 
-DISTRIBUTED_BACKSHOTS = Path("dev", "distributed_backshots.json")
-if os.path.exists(DISTRIBUTED_BACKSHOTS):
-    with open(DISTRIBUTED_BACKSHOTS, "r") as file:
-        distributed_backshots = json.load(file)
-else:
-    distributed_backshots = {i: [] for i in server_settings}
+def check_custom_role_cooldown(guild_id, command_name, user_id, cooldown_seconds):
+    """Returns retry_after in seconds if on cooldown, else 0"""
+    if cooldown_seconds <= 0:
+        return 0
 
+    now = time.time()
+    key = f"{guild_id}_{command_name}_{user_id}"
 
-DISTRIBUTED_SILENCE = Path("dev", "distributed_silence.json")
-if os.path.exists(DISTRIBUTED_SILENCE):
-    with open(DISTRIBUTED_SILENCE, "r") as file:
-        distributed_silence = json.load(file)
-else:
-    distributed_silence = {i: [] for i in server_settings}
+    if key in custom_role_cooldowns:
+        elapsed = now - custom_role_cooldowns[key]
+        if elapsed < cooldown_seconds:
+            return cooldown_seconds - elapsed
+
+    custom_role_cooldowns[key] = now
+    return 0
 
 
 ACTIVE_GIVEAWAYS = Path("dev", "active_giveaways.json")
@@ -324,19 +326,9 @@ def save_last_used_w():
         json.dump(serializable_data, file, indent=4)
 
 
-def save_distributed_segs():
-    with open(DISTRIBUTED_SEGS, "w") as file:
-        json.dump(distributed_segs, file, indent=4)
-
-
-def save_distributed_backshots():
-    with open(DISTRIBUTED_BACKSHOTS, "w") as file:
-        json.dump(distributed_backshots, file, indent=4)
-
-
-def save_distributed_silence():
-    with open(DISTRIBUTED_SILENCE, "w") as file:
-        json.dump(distributed_silence, file, indent=4)
+def save_distributed_custom_roles():
+    with open(DISTRIBUTED_CUSTOM_ROLES, 'w') as file:
+        json.dump(distributed_custom_roles, file, indent=4)
 
 
 def save_active_giveaways():
@@ -376,8 +368,7 @@ def save_everything():
     save_daily()
     save_last_used()
     save_last_used_w()
-    save_distributed_segs()
-    save_distributed_backshots()
+    save_distributed_custom_roles()
     save_active_giveaways()
     save_ignored_channels()
     save_ignored_users()
@@ -789,12 +780,7 @@ async def on_ready():
         client.add_command(rng)
         client.add_command(avatar)
         client.add_command(banner)
-        client.add_command(sticker)
         client.add_command(emote)
-        # client.add_command(custom)
-        # client.add_command(custom_remove)
-        # client.add_command(custom_list)
-        # client.add_command(custom_inspect)
         client.add_command(calc)
         client.add_command(set_cooldown)
         client.add_command(dnd)
@@ -826,58 +812,61 @@ async def on_ready():
             make_sure_server_settings_exist(str(guild.id))
 
         print('Bot is up!')
-        global bot_down, reason
+        global bot_down, reason, distributed_custom_roles
         bot_down = False
         reason = f'{bot_name} is in Development Mode'
-        # print(get_global_net_lb()[:25])
-        role_dict = {'backshots_role': distributed_backshots,
-                     'segs_role': distributed_segs,
-                     'silence_role': distributed_silence}
-        save_dict = {'backshots_role': save_distributed_backshots,
-                     'segs_role': save_distributed_segs,
-                     'silence_role': save_distributed_silence}
 
-        async def remove_all_roles(role_name):
-            print('handling', role_name)
-            for guild_id in role_dict[role_name]:
+        async def remove_custom_role_command_roles(guild_id, command_name):
+            """Remove all roles for a specific custom role command"""
+            print(f'Handling custom role command: {command_name} in guild {guild_id}')
+            try:
+                guild = await client.fetch_guild(int(guild_id))
+            except discord.NotFound:
+                # Guild not found, clean up
+                if guild_id in distributed_custom_roles and command_name in distributed_custom_roles[guild_id]:
+                    distributed_custom_roles[guild_id][command_name].clear()
+                return
+
+            # Get command config
+            command_config = server_settings.get(guild_id, {}).get('custom_role_commands', {}).get(command_name)
+            if not command_config:
+                # Command no longer exists, clear distributed list
+                if guild_id in distributed_custom_roles and command_name in distributed_custom_roles[guild_id]:
+                    distributed_custom_roles[guild_id][command_name].clear()
+                return
+
+            # Get the role
+            role = guild.get_role(command_config['role_id'])
+            if not role:
+                # Role doesn't exist anymore
+                await log_channel.send(f"✅❓ Guild {guild.name} - command `{command_name}` role no longer exists")
+                if guild_id in distributed_custom_roles and command_name in distributed_custom_roles[guild_id]:
+                    distributed_custom_roles[guild_id][command_name].clear()
+                return
+
+            # Remove role from all tracked members
+            member_ids = list(distributed_custom_roles.get(guild_id, {}).get(command_name, []))
+            for member_id in member_ids:
                 try:
-                    guild = await client.fetch_guild(int(guild_id))
-                except discord.NotFound:
-                    continue
-                if not guild:
-                    continue
-                # react_to = await log_channel.send(f"`===== {guild.name} - {guild_id} - {role_name} =====`")
-                role = guild.get_role(server_settings.get(guild_id, {}).get(role_name))
-                if not role:
-                    role_dict[role_name][guild_id].clear()
-                    # await log_channel.send(f"✅❓ {guild.name} doesn't have a {role_name}")
-                    if role_name in server_settings[guild_id]:
-                        server_settings[guild_id].pop(role_name)
-                    save_settings()
-                    continue
-
-                for member_id in list(role_dict[role_name][guild_id]):
                     member = await guild.fetch_member(member_id)
-                    print(guild, guild.id, type(guild), member_id, type(member_id), member, type(member))
-                    try:
-                        if role in member.roles:
-                            await member.remove_roles(role)
-                            await log_channel.send(f"✅ Removed `@{role.name}` from {member.mention}")
-                            role_dict[role_name][guild_id].remove(member_id)
-                        else:
-                            await log_channel.send(f"👍 `@{role.name}` was removed manually from {member.mention}")
-                            role_dict[role_name][guild_id].remove(member_id)
-                    except discord.Forbidden:
-                        # In case the bot doesn't have permission to remove the role
-                        await log_channel.send(f"❌ Failed to remove `@{role.name}` from {member.mention} (permission error)")
-                        role_dict[role_name][guild_id].remove(member_id)
-                    except discord.NotFound:
-                        # Handle case where the member is not found in the guild
-                        await log_channel.send(f"❌ Member {member.mention} not found in {guild.name}")
-                        role_dict[role_name][guild_id].remove(member_id)
-                    except discord.HTTPException as e:
-                        # Handle potential HTTP errors
-                        await log_channel.send(f"❓ Failed to remove `@{role.name}` from {member.mention}: {e}")
+                    if role in member.roles:
+                        await member.remove_roles(role)
+                        await log_channel.send(f"✅ Removed `@{role.name}` from {member.mention} ({command_name})")
+                    else:
+                        await log_channel.send(
+                            f"👍 `@{role.name}` already removed from {member.mention} ({command_name})")
+
+                    distributed_custom_roles[guild_id][command_name].remove(member_id)
+                except discord.Forbidden:
+                    await log_channel.send(
+                        f"❌ Failed to remove `@{role.name}` from member {member_id} - permission error")
+                    distributed_custom_roles[guild_id][command_name].remove(member_id)
+                except discord.NotFound:
+                    await log_channel.send(f"❌ Member {member_id} not found in {guild.name}")
+                    distributed_custom_roles[guild_id][command_name].remove(member_id)
+                except Exception as e:
+                    await log_channel.send(f"❓ Error removing role from {member_id}: {e}")
+
         print("reached end of on_ready()")
     except Exception:
         print(traceback.format_exc())
@@ -936,9 +925,12 @@ async def on_ready():
             tasks.append(asyncio.create_task(resume_giveaway(message_id)))
         await asyncio.gather(*tasks)
     try:
-        for role_ in role_dict:
-            await remove_all_roles(role_)
-            save_dict[role_]()
+        for guild_id in list(distributed_custom_roles.keys()):
+            for command_name in list(distributed_custom_roles.get(guild_id, {}).keys()):
+                await remove_custom_role_command_roles(guild_id, command_name)
+        distributed_custom_roles = {}
+        save_distributed_custom_roles()
+
         await resume_giveaways()
     except Exception as e:
         traceback.print_exc()
@@ -962,12 +954,6 @@ async def on_message(message: discord.Message):
                 print(f"Error kys protecting reply: {e}")
 
     await client.process_commands(message)
-
-
-# @client.command(aliases=['pp', 'shoot'])
-# async def ignore(ctx):
-#     """Ignored command"""
-#     return
 
 
 @client.hybrid_command(name="delete_bot_message", aliases=['delbotmsg'])
@@ -1047,6 +1033,16 @@ async def delete_bot_message_error(ctx, error):
 async def ping(ctx):
     """pong"""
     await ctx.send(f"Pong! {round(client.latency * 1000)}ms")
+
+
+@client.command(name="getsegs")
+async def getsegs(ctx):
+    await ctx.send("## Legacy command: `segs`\n```/custom_role name:segs role: duration:120 cooldown:120 backfire_rate:5 backfire_duration:150 success_msg:<author> has segsed <user>! <:peeposcheme:1322225542027804722> fail_msg:OOPS! Segs failed <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322717837730517083/segsed.webp?ex=6771e47b&is=677092fb&hm=8a7252a7bc87bbc129d4e7cc23f62acc770952cde229642cf3bfd77bd40f2769&```")
+
+
+@client.command(name="getbackshot")
+async def getbackshot(ctx):
+    await ctx.send("## Legacy command: `backshot`\n```/custom_role name:backshot role: duration:90 cooldown:120 backfire_rate:5 backfire_duration:120 success_msg:<author> has given <user> devious backshots! <:peeposcheme:1322225542027804722> fail_msg:OOPS! You missed the backshot <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322220705131008011/backshotted.webp?ex=6770157d&is=676ec3fd&hm=1197f229994962781ed6415a6a5cf1641c4c2d7ca56c9c3d559d44469988d15e&```")
 
 
 @commands.hybrid_command(name="uptime", description="Check how long the bot has been running for")
@@ -1284,7 +1280,7 @@ async def enable(ctx):
     """
     Enables command of choice
 
-    **Can only be used by Administrators**
+    **Only usable by Administrators**
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     if not guild_id:
@@ -1296,9 +1292,6 @@ async def enable(ctx):
         server_settings.get(guild_id).get('allowed_commands').append(cmd)
         await log_channel.send(f'{wicked} {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
         success = f"{cmd} has been enabled"
-        success += '. **Please run** `!setrole segs @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('segs_role')))) * cmd == 'segs')
-        success += '. **Please run** `!setrole backshot @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('backshots_role')))) * cmd == 'backshot')
-        success += '. **Please run** `!setrole silence @role`' * ((1-bool(ctx.guild.get_role(server_settings.get(guild_id).get('silence_role')))) * cmd == 'silence')
         await ctx.send(success)
         save_settings()
     elif cmd in toggleable_commands:
@@ -1314,7 +1307,7 @@ async def disable(ctx):
     """
     Disables command of choice
 
-    **Can only be used by Administrators**
+    **Only usable by Administrators**
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     if not guild_id:
@@ -1339,48 +1332,15 @@ async def disable(ctx):
 async def settings(ctx):
     """Shows current server settings"""
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    # if not guild_id:
-    #     await ctx.reply("No settings to configure in DMs!")
-    #     return
     make_sure_server_settings_exist(guild_id)
     guild_settings = server_settings.get(guild_id)
     allowed_commands = guild_settings.get('allowed_commands')
-    segs_allowed = 'segs' in allowed_commands
-    segs_role = guild_settings.get("segs_role", False)
-    backshots_allowed = 'backshot' in allowed_commands
-    backshots_role = guild_settings.get("backshots_role", False)
-    silence_allowed = 'silence' in allowed_commands
-    silence_role = guild_settings.get("silence_role", False)
     compliments_allowed = 'compliment' in allowed_commands
     dnd_allowed = 'dnd' in allowed_commands
     kys_allowed = 'kys_protect' in allowed_commands
     currency_allowed = 'currency_system' in allowed_commands
 
-    if segs_role and ctx.guild.get_role(segs_role):
-        segs_role_name = '@' + ctx.guild.get_role(segs_role).name
-    else:
-        segs_role_name = "N/A" + ", run `!setrole segs @role`" * segs_allowed
-
-    if backshots_role and ctx.guild.get_role(backshots_role):
-        backshots_role_name = '@' + ctx.guild.get_role(backshots_role).name
-    else:
-        backshots_role_name = "N/A" + ", run `!setrole backshot @role`" * backshots_allowed
-
-    if silence_role and ctx.guild.get_role(silence_role):
-        silence_role_name = '@' + ctx.guild.get_role(silence_role).name
-    else:
-        silence_role_name = "N/A" + ", run `!setrole silence @role`" * silence_allowed
-
     await ctx.send(f"```Currency System:  {allow_dict[currency_allowed]}\n" +
-                   '\n' +
-                   f"Segs:             {allow_dict[segs_allowed]}\n" +
-                   f"Segs Role:        {segs_role_name}\n" +
-                   '\n' +
-                   f"Backshots:        {allow_dict[backshots_allowed]}\n" +
-                   f"Backshots Role:   {backshots_role_name}\n" +
-                   '\n' +
-                   f"Silence:          {allow_dict[silence_allowed]}\n" +
-                   f"Silence Role:     {silence_role_name}\n" +
                    '\n' +
                    f"Compliments:      {allow_dict[compliments_allowed]}\n" +
                    '\n' +
@@ -1509,7 +1469,7 @@ async def set_cooldown(ctx: commands.Context, command_name: str, cooldown_second
     Example: `!setcd addlore 60` to set cooldown to 60s
     Example: `!setcd addlore -1` to reset cooldown to its default value
 
-    **Can only be used by Moderators**
+    **Only usable by Moderators**
     """
     cmd = ctx.bot.get_command(command_name.lower())
     if not cmd:
@@ -1562,52 +1522,8 @@ async def set_cooldown_error(ctx, error):
         await ctx.reply(f"Usage: `!setcd <command> <cooldown>`")
 
 
-# ROLES
-@client.command()
-@commands.check(is_admin)
-async def setrole(ctx):
-    """
-    Changes role that is distributed when executing !segs or !backshot
-    Usage: `!setrole (segs/backshot/silence) <role id/mention>`
-    Example: `!setrole segs @Segs Role`
-
-    **Can only be used by Administrators**
-    """
-    allowed_roles = ['segs', 'backshot', 'backshots', 'silence']
-    guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    if not guild_id:
-        await ctx.reply("Can't use this in DMs!")
-        return
-    make_sure_server_settings_exist(guild_id)
-    guild = ctx.guild
-    split_msg = ctx.message.content.split()
-    if len(split_msg) == 3:
-        role_type = split_msg[1]
-        if role_type not in allowed_roles:
-            await ctx.send(f"Example usage: `!setrole segs @Segs Role`")
-            return
-        if role_type == 'backshot':
-            role_type = 'backshots'
-        role_id = split_msg[2]
-        if "<" in role_id:
-            role_id = role_id[3:-1]
-        if not role_id.isdecimal():
-            await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
-            return
-        if role := discord.utils.get(guild.roles, id=int(role_id)):
-            server_settings.get(guild_id)[f'{role_type}_role'] = role.id
-            save_settings()
-            await log_channel.send(f'{ctx.guild.name} - {ctx.guild.id} changed the {role_type} role to `@{role.name} - {role.id}`')
-            await ctx.send(f"{role_type.capitalize()} role has been changed to `@{role.name}`")
-        else:
-            await ctx.send(f"Invalid role, please provide a valid role ID or mention the role")
-    else:
-        print(split_msg)
-        await ctx.send(f"Command usage: `!setrole (segs/backshot/silence) <role id/mention>`")
-
-
 # ENABLING/DISABLING
-toggleable_commands = ['segs', 'backshot', 'silence', 'compliment', 'dnd', 'currency_system', 'kys_protect']
+toggleable_commands = ['compliment', 'dnd', 'currency_system', 'kys_protect']
 default_allowed_commands = ['compliment', 'dnd', 'currency_system']
 
 
@@ -1619,7 +1535,7 @@ async def tcc(ctx):
     If channel is already ignored, will stop ignoring it
     If currency system is disabled, will have no effect
 
-    **Can only be used by Administrators**
+    **Only usable by Administrators**
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     if not guild_id:
@@ -1680,264 +1596,6 @@ async def tuc(ctx, *, target: discord.User):
         await ctx.send(f"Couldn't find a user with ID `{target_id}`")
 
 
-# Create a cooldown
-cooldown = commands.CooldownMapping.from_cooldown(1, 120, commands.BucketType.member)
-silence_cooldown = commands.CooldownMapping.from_cooldown(1, 900, commands.BucketType.member)
-
-
-def check_cooldown(ctx, cd=cooldown):
-    # Retrieve the cooldown bucket for the current user
-    bucket = cd.get_bucket(ctx.message)
-    if bucket is None:
-        return None  # No cooldown bucket found
-    return bucket.update_rate_limit()  # Returns the remaining cooldown time
-
-
-# SEGS
-@client.command()
-async def segs(ctx):
-    """
-    Distributes Segs Role for 2 minutes with a small chance to backfire
-    Cannot be used on users who have been shot or segsed
-    Usage: `!segs @victim`, gives victim the Segs Role
-    Has a 2-minute cooldown
-    Disabled by default. Run `!enable segs` to enable
-    """
-    caller = ctx.author
-    guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    make_sure_server_settings_exist(guild_id)
-    if 'segs' in server_settings.get(guild_id).get('allowed_commands') and server_settings.get(guild_id).get('segs_role'):
-        mentions = ctx.message.mentions
-        role = ctx.guild.get_role(server_settings.get(guild_id).get('segs_role'))
-        if not role:
-            await ctx.send(f"*Segs role does not exist!*\nRun `!setrole segs @role` to use segs")
-            await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id}) ')
-            return
-
-        role_name = role.name
-        shadow_realm = discord.utils.get(ctx.guild.roles, name="Shadow Realm")
-        # condition = role not in caller.roles
-
-        if not mentions:
-            await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
-            await log_channel.send(f"❓ {caller.mention} tried to segs in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
-
-        # elif not condition:
-        #     await ctx.send(f"Segsed people can't segs, dummy {pepela}")
-        #     await log_channel.send(f'❌ {caller.mention} tried to segs in {ctx.channel.mention} but they were segsed themselves ({ctx.guild.name} - {ctx.guild.id})')
-
-        else:
-            target = mentions[0]
-            if role in target.roles:
-                await ctx.send(f"https://cdn.discordapp.com/attachments/696842659989291130/1322717837730517083/segsed.webp?ex=6771e47b&is=677092fb&hm=8a7252a7bc87bbc129d4e7cc23f62acc770952cde229642cf3bfd77bd40f2769&")
-                await log_channel.send(f'❌ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but they were already segsed ({ctx.guild.name} - {ctx.guild.id})')
-                return
-
-            if shadow_realm in target.roles:
-                await ctx.send(f"I will not allow this")
-                await log_channel.send(f'💀 {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but they were dead ({ctx.guild.name} - {ctx.guild.id})')
-                return
-
-            retry_after = check_cooldown(ctx)
-            if retry_after:
-                await print_reset_time(retry_after, ctx, 'YOURE ON COOLDOWN FOR THESE ACTIVITIES\n')
-                await log_channel.send(
-                    f'🕐 {caller.mention} tried to segs in {ctx.channel.mention} but they were on cooldown ({ctx.guild.name} - {ctx.guild.id})')
-                return
-
-            try:
-                if random.random() > 0.05 and (target.id != bot_id or target.id == bot_id and caller.id in allowed_users):
-                    distributed_segs.setdefault(str(ctx.guild.id), []).append(target.id)
-                    save_distributed_segs()
-                    await target.add_roles(role)
-                    await ctx.send(f'{caller.mention} has segsed {target.mention} ' + f'{HUH} ' * (caller.mention == target.mention) + peeposcheme * (caller.mention != target.mention))
-                    await log_channel.send(f'✅ {caller.mention} has segsed {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
-                    await asyncio.sleep(120)
-                    await target.remove_roles(role)
-                    distributed_segs[str(ctx.guild.id)].remove(target.id)
-                    save_distributed_segs()
-
-                else:
-                    distributed_segs.setdefault(str(ctx.guild.id), []).append(caller.id)
-                    save_distributed_segs()
-                    await caller.add_roles(role)
-                    if target.id == bot_id:
-                        await ctx.send(f'You thought you could segs me? **NAHHHH** get segsed yourself')
-                    else:
-                        await ctx.send(f'OOPS! Segs failed {teripoint}' + f' {HUH}' * (caller.mention == target.mention))
-                    await log_channel.send(f'❌ {caller.mention} failed to segs {target.mention} in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
-                    await asyncio.sleep(150)
-                    await caller.remove_roles(role)
-                    distributed_segs[str(ctx.guild.id)].remove(caller.id)
-                    save_distributed_segs()
-
-            except discord.errors.Forbidden:
-                await ctx.send(f"*Insufficient permissions to execute segs*\n*Make sure I have a role that is higher than* `@{role_name}` {madgeclap}")
-                await log_channel.send(f"❓ {caller.mention} tried to segs {target.mention} in {ctx.channel.mention} but I don't have the necessary permissions to execute segs ({ctx.guild.name} - {ctx.guild.id})")
-
-    elif 'segs' in server_settings.get(guild_id).get('allowed_commands'):
-        await ctx.send(f"*Segs role does not exist!*\nRun `!setrole segs @role` to use segs")
-        await log_channel.send(f'❓ {caller.mention} tried to segs in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
-
-    else:
-        await log_channel.send(f"🫡 {caller.mention} tried to segs in {ctx.channel.mention} but segs isn't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
-
-
-# BACKSHOTS
-@client.command(aliases=['backshoot'])
-async def backshot(ctx):
-    """
-    Distributes Backshots Role for 90 seconds with a small chance to backfire
-    Cannot be used on users who have been shot or backshot
-    Usage: `!backshot @victim`, gives victim the Backshot Role
-    Has a 2-minute cooldown
-    Disabled by default. Run `!enable backshot` to enable
-    """
-    caller = ctx.author
-    guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    make_sure_server_settings_exist(guild_id)
-    if 'backshot' in server_settings.get(guild_id).get('allowed_commands') and server_settings.get(guild_id).get('backshots_role'):
-        mentions = ctx.message.mentions
-        role = ctx.guild.get_role(server_settings.get(guild_id).get('backshots_role'))
-        if not role:
-            await ctx.send(f"*Backshots role does not exist!*\nRun `!setrole backshot @role` to use backshots")
-            await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
-            return
-
-        role_name = role.name
-        shadow_realm = discord.utils.get(ctx.guild.roles, name="Shadow Realm")
-        # condition = role not in caller.roles
-
-        if not mentions:
-            await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
-            await log_channel.send(f"❓ {caller.mention} tried to to give devious backshots in {ctx.channel.mention} but they didn't mention the victim ({ctx.guild.name} - {ctx.guild.id})")
-
-        # elif not condition:
-        #     await ctx.send(f"Backshotted people can't backshoot, dummy {pepela}")
-        #     await log_channel.send(f'❌ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but they were backshotted themselves ({ctx.guild.name} - {ctx.guild.id})')
-
-        else:
-            target = mentions[0]
-            if role in target.roles:
-                await ctx.send(f"https://cdn.discordapp.com/attachments/696842659989291130/1322220705131008011/backshotted.webp?ex=6770157d&is=676ec3fd&hm=1197f229994962781ed6415a6a5cf1641c4c2d7ca56c9c3d559d44469988d15e&")
-                await log_channel.send(f'❌ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but they were already backshotted ({ctx.guild.name} - {ctx.guild.id})')
-                return
-
-            if shadow_realm in target.roles:
-                await ctx.send(f"I will not allow this")
-                await log_channel.send(f'💀 {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but they were dead ({ctx.guild.name} - {ctx.guild.id})')
-                return
-
-            retry_after = check_cooldown(ctx)
-            if retry_after:
-                await print_reset_time(retry_after, ctx, 'YOURE ON COOLDOWN FOR THESE ACTIVITIES\n')
-                await log_channel.send(
-                    f'🕐 {caller.mention} tried to give devious backshots in {ctx.channel.mention} but they were on cooldown ({ctx.guild.name} - {ctx.guild.id})')
-                return
-
-            try:
-                if random.random() > 0.05 and (target.id != bot_id or target.id == bot_id and caller.id in allowed_users):
-                    distributed_backshots.setdefault(str(ctx.guild.id), []).append(target.id)
-                    save_distributed_backshots()
-                    await target.add_roles(role)
-                    await ctx.send(f'{caller.mention} has given {target.mention} devious backshots ' + f'{HUH} ' * (caller.mention == target.mention) + peeposcheme * (caller.mention != target.mention))
-                    await log_channel.send(f'✅ {caller.mention} has given {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
-                    await asyncio.sleep(90)
-                    await target.remove_roles(role)
-                    distributed_backshots[str(ctx.guild.id)].remove(target.id)
-                    save_distributed_backshots()
-
-                else:
-                    distributed_backshots.setdefault(str(ctx.guild.id), []).append(caller.id)
-                    save_distributed_backshots()
-                    await caller.add_roles(role)
-                    await ctx.send(f'OOPS! You missed the backshot {teripoint}' + f' {HUH}' * (caller.mention == target.mention))
-                    await log_channel.send(f'❌ {caller.mention} failed to give {target.mention} devious backshots in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
-                    await asyncio.sleep(120)
-                    await caller.remove_roles(role)
-                    distributed_backshots[str(ctx.guild.id)].remove(caller.id)
-                    save_distributed_backshots()
-
-            except discord.errors.Forbidden:
-                await ctx.send(f"*Insufficient permissions to execute backshot*\n*Make sure I have a role that is higher than* `@{role_name}` {madgeclap}")
-                await log_channel.send(f"❓ {caller.mention} tried to give {target.mention} devious backshots in {ctx.channel.mention} but I don't have the necessary permissions to execute backshots ({ctx.guild.name} - {ctx.guild.id})")
-
-    elif 'backshot' in server_settings.get(guild_id).get('allowed_commands'):
-        await ctx.send(f"*Backshots role does not exist!*\nRun `!setrole backshot @role` to use backshots")
-        await log_channel.send(f'❓ {caller.mention} tried to give devious backshots in {ctx.channel.mention} but the role does not exist ({ctx.guild.name} - {ctx.guild.id})')
-
-    else:
-        await log_channel.send(f"🫡 {caller.mention} tried to give devious backshots in {ctx.channel.mention} but backshots aren't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
-        return
-
-
-# SILENCE
-@client.command()
-async def silence(ctx):
-    """
-    Distributes Silenced Role for 15 seconds with a 30% chance to backfire and silence you for 30s instead
-    Usage: `!silence @victim`, gives victim the Silenced Role
-    Has a 2-minute cooldown
-    Disabled by default. Run `!enable silence` to enable
-    """
-    caller = ctx.author
-    guild_id = '' if not ctx.guild else str(ctx.guild.id)
-    make_sure_server_settings_exist(guild_id)
-    if 'silence' in server_settings.get(guild_id).get('allowed_commands') and server_settings.get(guild_id).get('silence_role'):
-        mentions = ctx.message.mentions
-        role = ctx.guild.get_role(server_settings.get(guild_id).get('silence_role'))
-        if not role:
-            await ctx.send(f"*Silenced role does not exist!*\nRun `!setrole silence @role` to use silence")
-            return
-
-        role_name = role.name
-
-        if not mentions:
-            await ctx.send(f'Something went wrong, please make sure that the command has a user mention')
-
-        else:
-            target = mentions[0]
-            if role in target.roles:
-                await ctx.send("They're already silenced bro please (btw ur still getting the 2 minute cooldown ripbozo)")
-                return
-
-            retry_after = check_cooldown(ctx, silence_cooldown)
-            if retry_after:
-                await print_reset_time(retry_after, ctx, "You can't just silence people left and right bruh\n")
-                return
-
-            try:
-                if target.bot:
-                    await ctx.send(f"Sorry, can't silence bots {o7}")
-                elif ((random.random() > 0.3 or role in caller.roles) and (target.id != bot_id)) or target.id == caller.id:
-                    distributed_silence.setdefault(str(ctx.guild.id), []).append(target.id)
-                    save_distributed_silence()
-                    await target.add_roles(role)
-                    await ctx.send(f'{caller.mention} has silenced {target.mention} ' + f'{HUH} ' * (caller.mention == target.mention) + peeposcheme * (caller.mention != target.mention))
-                    await asyncio.sleep(15)
-                    await target.remove_roles(role)
-                    distributed_silence[str(ctx.guild.id)].remove(target.id)
-                    save_distributed_silence()
-                else:
-                    distributed_silence.setdefault(str(ctx.guild.id), []).append(caller.id)
-                    save_distributed_silence()
-                    await caller.add_roles(role)
-                    if target.id == bot_id:
-                        await ctx.send(f'You really thought you could silence me lol')
-                    else:
-                        await ctx.send(f'OOPS! Silencing failed {teripoint}')
-                    await asyncio.sleep(30)
-                    await caller.remove_roles(role)
-                    distributed_silence[str(ctx.guild.id)].remove(caller.id)
-                    save_distributed_silence()
-
-            except discord.errors.Forbidden:
-                await ctx.send(f"*Insufficient permissions to execute silencing*\n*Make sure I have a role that is higher than* `@{role_name}` {madgeclap}")
-
-    elif 'silence' in server_settings.get(guild_id).get('allowed_commands'):
-        await ctx.send(f"*Silence role does not exist!*\nRun `!setrole silence @role` to use silence")
-
-
 async def add_custom_command(ctx, name: str, response: str, mode):
     if not ctx.guild:
         await ctx.reply("Custom commands can only be added in servers.")
@@ -1955,6 +1613,10 @@ async def add_custom_command(ctx, name: str, response: str, mode):
 
     # Ensure the structure exists
     make_sure_server_settings_exist(guild_id)
+    custom_role_commands = server_settings[guild_id].setdefault('custom_role_commands', {})
+    if command_name in custom_role_commands:
+        return await ctx.reply(f"There's already a custom role command called `{name}`")
+
     custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
 
     # --- Check for Conflicts ---
@@ -1992,7 +1654,7 @@ class CustomCommands(commands.Cog):
     async def custom(self, ctx, name: str, *, response: str):
         """
         Adds or updates a custom command for this server
-        Usage: !custom <command_name> <response_text>
+        Usage: `!custom <command_name> <response_text>`
 
         !!! Keep in mind that bots can send messages up to 2000 characters in length !!!
 
@@ -2018,7 +1680,7 @@ class CustomCommands(commands.Cog):
         - !custom numbers {<num1> + <num2> * <num3>}
         - !custom random_multiply {[10|53] * [15|25|35] * r(3, 7)}
 
-        Only usable by Moderators as well as users with a role called "Custom Commands Manager"
+        **Only usable by Moderators as well as users with a role called "Custom Commands Manager"**
         """
         await add_custom_command(ctx, name, response, 'add')
 
@@ -2040,11 +1702,11 @@ class CustomCommands(commands.Cog):
     async def custom_append(self, ctx, name: str, *, appended_response: str):
         """
         Extends an existing custom command by adding something to the end of the existing response
-        Usage: !custom_append <command_name> <appended_response>
+        Usage: `!custom_append <command_name> <appended_response>`
 
         - This command is created mostly to allow a lot of randomized items to be passed (in [opt1|opt2|opt3|...|opt500]) i.e. https://cdn.discordapp.com/attachments/696842659989291130/1409176988853473410/image.png?ex=68ac6dd7&is=68ab1c57&hm=881bc3bc7021ffa61e2a8a423e0d7977aa26be36822077648c8c8bafccb841e3&
         - You can start and end the appended response with quotation marks " (useful to append starting with a space or newline)
-        - There is a maximum length of 15000 characters per custom command (counting [ and | too)
+        - There is a maximum length of 10000 characters per custom command (counting [ and | too)
 
         !!! Keep in mind that bots can send messages up to 2000 characters in length !!!
 
@@ -2063,7 +1725,7 @@ class CustomCommands(commands.Cog):
         - `r(n1, n2)    ` to choose a random number between n1 and n2
         - `{r(2,5) + 5 * <num1=2>}`  --  mathematical expressions are supported in {}
 
-        Only usable by Moderators as well as users with a role called "Custom Commands Manager"
+        **Only usable by Moderators as well as users with a role called "Custom Commands Manager"**
         """
         await add_custom_command(ctx, name, appended_response, 'append')
 
@@ -2085,7 +1747,7 @@ class CustomCommands(commands.Cog):
     async def custom_remove(self, ctx, name: str):
         """
         Removes a custom command from this server
-        Usage: `!rmc <command_name>`
+        Usage: `!crm <command_name>`
         """
         if not ctx.guild:
             await ctx.reply("Custom commands can only be handled in servers.")
@@ -2131,7 +1793,7 @@ class CustomCommands(commands.Cog):
     @app_commands.describe(sort_alphabetically="Sorted alphabetically (True) / by time added (False)")
     async def custom_list(self, ctx, sort_alphabetically=True):
         """
-        Lists all custom commands for the server
+        Lists all custom commands for this server
         """
         await self.cl(ctx, sort_alphabetically)
 
@@ -2144,7 +1806,7 @@ class CustomCommands(commands.Cog):
 
         # Ensure the structure exists
         make_sure_server_settings_exist(guild_id)
-        custom_commands = list(server_settings[guild_id].setdefault('custom_commands', {}).keys())
+        custom_commands = list(server_settings[guild_id].setdefault('custom_commands', {}).keys())[::-1]
         if sort_alphabetically:
             custom_commands = sorted(custom_commands)
 
@@ -2228,7 +1890,7 @@ class CustomCommands(commands.Cog):
     async def custom_inspect(self, ctx, name: str):
         """
         Inspect a custom command on this server
-        Usage: !custom_inspect <command_name>
+        Usage: `!ci <command_name>`
         """
         if not ctx.guild:
             await ctx.reply("Custom commands can only be handled in servers.")
@@ -2276,6 +1938,240 @@ class CustomCommands(commands.Cog):
         Sends a random custom command from the server!
         """
         await send_custom_command(ctx, None, 'random')
+
+    @commands.hybrid_command(name='custom_role', description='Create a custom role distribution command')
+    @app_commands.describe(
+        name='Command name',
+        role='Role to distribute (mention or ID)',
+        duration='Duration in seconds',
+        cooldown='Cooldown in seconds (default: 0)',
+        backfire_rate='Chance to backfire 0-100 (default: 0, integer)',
+        backfire_duration='Backfire duration in seconds (default: 2x duration)',
+        success_msg='Message on success (default: <author> used {command} on <user>)',
+        fail_msg='Message on backfire (default: {command} backfired!)',
+        already_msg='Message if victim already has role (default: They already have this role!)'
+    )
+    @commands.check(is_admin)
+    async def custom_role(self, ctx, name: str, role: discord.Role, duration: int,
+                          cooldown: int = 0, backfire_rate: int = 0, backfire_duration: int = None,
+                          success_msg: str = '',
+                          fail_msg: str = '',
+                          already_msg: str = ''):
+        """
+        Creates or updates a custom role distribution command for this server
+
+        Usage: `/custom_role name role duration cooldown backfire_rate backfire_duration sucess_msg fail_msg already_msg`
+
+        Parameters for success/fail/already messages:
+        - `<user>` / `<user_name>` - mentioned user
+        - `<author>` / `<author_name>` - command caller
+
+        Examples:
+        - Shoot: ```/custom_role name:shoot role:@Shadow Realm duration:120 cooldown:300 backfire_rate:20 backfire_duration:120 success_msg:<user> got shot!```
+        - Silence: ```/custom_role name:silence role:@Silenced duration:15 cooldown:900 backfire_rate:30 backfire_duration:30 success_msg:<author> has silenced <user>! <:peeposcheme:1322225542027804722> fail_msg:OOPS! Silencing failed <:teripoint:1322718769679827024> already_msg:They're already silenced bro please```
+        Legacy:
+        - Segs: `!getsegs`
+        - Backshot: `!getbackshot`
+
+        **Only usable by Administrators**
+        """
+        success_msg = success_msg or f"<author> used {name} on <user>"
+        fail_msg = fail_msg or f"{name} backfired!"
+        already_msg = already_msg or 'They already have this role!'
+        if not ctx.guild:
+            await ctx.reply("Custom role commands can only be added in servers.")
+            return
+
+        guild_id = str(ctx.guild.id)
+        command_name = name.lower().lstrip('!')
+        make_sure_server_settings_exist(guild_id)
+        custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
+        if command_name in custom_commands:
+            return await ctx.reply(f"There's already a custom command called `{command_name}`")
+
+        # Validate inputs
+        if duration <= 0 or duration > 86400:  # Max 24 hours
+            await ctx.reply("Duration must be between 1 and 86400 seconds (24 hours)")
+            return
+
+        if cooldown < 0 or cooldown > 604800:  # Max 1 week
+            await ctx.reply("Cooldown must be between 0 and 604800 seconds (1 week)")
+            return
+
+        if backfire_rate < 0 or backfire_rate > 100:
+            await ctx.reply("Backfire rate must be between 0 and 100")
+            return
+
+        if backfire_duration is None:
+            backfire_duration = duration * 2
+        elif backfire_duration <= 0 or backfire_duration > 86400:
+            await ctx.reply("Backfire duration must be between 1 and 86400 seconds (24 hours)")
+            return
+
+        # Check for conflicts
+        if client.get_command(command_name):
+            await ctx.reply(f"`{command_name}` conflicts with a built-in bot command!")
+            return
+
+        # Ensure structure exists
+        custom_role_commands = server_settings[guild_id].setdefault('custom_role_commands', {})
+        if len(custom_role_commands) >= 25:
+            return await ctx.reply("You've reached the limit! 25 custom role commands per server should be enough :p\n"
+                                   "Delete some with `!crr` and try again")
+
+        action = "Updated" if command_name in custom_role_commands else "Added"
+
+        # Save configuration
+        custom_role_commands[command_name] = {
+            'role_id': role.id,
+            'duration': duration,
+            'cooldown': cooldown,
+            'backfire_rate': backfire_rate/100,
+            'backfire_duration': backfire_duration,
+            'success_msg': success_msg,
+            'fail_msg': fail_msg,
+            'on_already': already_msg
+        }
+
+        save_settings()
+        await ctx.reply(f"{action} custom role command `!{command_name}` successfully.\n"
+                        f"Role: {role.mention} | Duration: {duration}s | Cooldown: {cooldown}s | Backfire: {int(backfire_rate * 100)}%")
+
+    @custom_role.error
+    async def custom_role_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply(f"Run `!help custom_role`")
+        elif isinstance(error, commands.RoleNotFound):
+            await ctx.reply("Could not find that role. Try mentioning it or using the role ID.")
+        elif isinstance(error, discord.ext.commands.errors.CheckFailure):
+            pass
+        else:
+            print(f"Error in custom_role: {error}")
+            await ctx.reply("An unexpected error occurred.")
+
+    @commands.hybrid_command(name='custom_role_remove', description='Remove a custom role command', aliases=['crr'])
+    @app_commands.describe(name='Custom role command name')
+    @commands.check(is_admin)
+    async def custom_role_remove(self, ctx, name: str):
+        """
+        Removes a custom role distribution command from this server
+        Usage: `!crr <command_name>`
+        """
+        if not ctx.guild:
+            await ctx.reply("Custom role commands can only be handled in servers.")
+            return
+
+        guild_id = str(ctx.guild.id)
+        command_name = name.lower().lstrip('!')
+
+        make_sure_server_settings_exist(guild_id)
+        custom_role_commands = server_settings[guild_id].setdefault('custom_role_commands', {})
+
+        if command_name in custom_role_commands:
+            del custom_role_commands[command_name]
+            save_settings()
+            await ctx.reply(f"Removed custom role command `!{command_name}` successfully.")
+            return
+
+        await ctx.reply(f"Custom role command `!{command_name}` doesn't exist.")
+
+    @custom_role_remove.autocomplete("name")
+    async def custom_role_remove_autocomplete(self, ctx, current: str):
+        guild_id = str(ctx.guild.id)
+        commands_dict = server_settings.get(guild_id, {}).get('custom_role_commands', {})
+        choices = [
+            app_commands.Choice(name=cmd_name, value=cmd_name)
+            for cmd_name in sorted(commands_dict.keys())
+            if current.lower() in cmd_name.lower()
+        ]
+        return choices[:25]
+
+    @commands.hybrid_command(name='custom_role_list', description='List all custom role commands', aliases=['crl'])
+    async def custom_role_list(self, ctx):
+        """
+        List all custom role commands for this server
+        """
+        if not ctx.guild:
+            await ctx.reply("Custom role commands can only be handled in servers.")
+            return
+
+        guild_id = str(ctx.guild.id)
+        make_sure_server_settings_exist(guild_id)
+        custom_role_commands = server_settings[guild_id].setdefault('custom_role_commands', {})
+
+        if not custom_role_commands:
+            await ctx.reply("This server has no custom role commands configured.")
+            return
+
+        embed = discord.Embed(title="Custom Role Commands", color=0xffd000)
+
+        for cmd_name, config in sorted(custom_role_commands.items()):
+            role = ctx.guild.get_role(config['role_id'])
+            role_display = f"@{role.name}" if role else f"[Deleted Role: {config['role_id']}]"
+
+            value = (f"**Role:** {role_display}\n"
+                     f"**Duration:** {config['duration']}s\n"
+                     f"**Cooldown:** {config['cooldown']}s\n"
+                     f"**Backfire:** {int(config['backfire_rate'] * 100)}%")
+
+            embed.add_field(name=f"!{cmd_name}", value=value, inline=True)
+
+        await ctx.send(embed=embed)
+
+    @commands.hybrid_command(name='custom_role_inspect', description='Inspect a custom role command', aliases=['cri'])
+    @app_commands.describe(name='Custom role command name')
+    async def custom_role_inspect(self, ctx, name: str):
+        """
+        Inspect a custom role command on this server
+        Usage: `!cri <command_name>`
+        """
+        if not ctx.guild:
+            await ctx.reply("Custom role commands can only be handled in servers.")
+            return
+
+        guild_id = str(ctx.guild.id)
+        command_name = name.lower().lstrip('!')
+
+        make_sure_server_settings_exist(guild_id)
+        custom_role_commands = server_settings[guild_id].setdefault('custom_role_commands', {})
+
+        if command_name not in custom_role_commands:
+            await ctx.reply(f"Custom role command `!{command_name}` doesn't exist.")
+            return
+
+        config = custom_role_commands[command_name]
+        role = ctx.guild.get_role(config['role_id'])
+        role_display = f"{role.mention}" if role else f"[Deleted Role: {config['role_id']}]"
+
+        copypaste = (f"/custom_role name:{command_name} role:{role_display} duration:{config['duration']} "
+                     f"cooldown:{config['cooldown']} backfire_rate:{int(config['backfire_rate'] * 100)} "
+                     f"backfire_duration:{config['backfire_duration']} success_msg:{config['success_msg']} "
+                     f"fail_msg:{config['fail_msg']} already_msg:{config['on_already']}")
+
+        embed = discord.Embed(title=f"!{command_name}", color=0xffd000)
+        embed.add_field(name="Role", value=role_display, inline=False)
+        embed.add_field(name="Duration", value=f"{config['duration']} seconds", inline=True)
+        embed.add_field(name="Cooldown", value=f"{config['cooldown']} seconds", inline=True)
+        embed.add_field(name="Backfire Rate", value=f"{int(config['backfire_rate'] * 100)}%", inline=True)
+        embed.add_field(name="Backfire Duration", value=f"{config['backfire_duration']} seconds", inline=True)
+        embed.add_field(name="Success Message", value=f"```{config['success_msg']}```", inline=False)
+        embed.add_field(name="Fail Message", value=f"```{config['fail_msg']}```", inline=False)
+        embed.add_field(name="Already Has Role", value=f"```{config['on_already']}```", inline=False)
+        embed.add_field(name="Copy Paste for easy editing", value=f"```{copypaste}```", inline=False)
+
+        await ctx.send(embed=embed)
+
+    @custom_role_inspect.autocomplete("name")
+    async def custom_role_inspect_autocomplete(self, ctx, current: str):
+        guild_id = str(ctx.guild.id)
+        commands_dict = server_settings.get(guild_id, {}).get('custom_role_commands', {})
+        choices = [
+            app_commands.Choice(name=cmd_name, value=cmd_name)
+            for cmd_name in sorted(commands_dict.keys())
+            if current.lower() in cmd_name.lower()
+        ]
+        return choices[:25]
+
 
 # Helper data structure for placeholders
 class Placeholder:
@@ -2503,7 +2399,7 @@ async def banner_error(ctx, error):
         await print_reset_time(int(error.retry_after), ctx, f"You can use this command every 15 seconds!\n")
 
 
-@commands.command(name="sticker")
+@client.command(name="sticker")
 async def sticker(ctx: commands.Context):
     """
     Sends a sticker as a PNG or GIF
@@ -2624,8 +2520,112 @@ async def on_command_error(ctx, error):
 templates = ['<word', '<text>', '<user', '<num']
 
 
+async def execute_custom_role_command(ctx, command_name, command_config):
+    """Execute a custom role distribution command"""
+    caller = ctx.author
+    guild_id = str(ctx.guild.id)
+
+    # Get the role
+    role = ctx.guild.get_role(command_config['role_id'])
+    if not role:
+        await ctx.send(f"⚠️ Role for `{command_name}` no longer exists! Contact an admin.")
+        return
+
+    # Check for user mention
+    mentions = ctx.message.mentions
+    if not mentions:
+        await ctx.send(f'Please mention a user: `!{command_name} @user`')
+        return
+
+    target = mentions[0]
+
+    # Check if target is a bot
+    if target.bot:
+        await ctx.send(f"Can't use this command on bots!")
+        return
+
+    # Check if already has role
+    if role in target.roles:
+        msg = command_config.get('on_already', "They already have this role!")
+        msg = msg.replace('<user>', target.mention).replace('<author>', caller.mention)
+        msg = msg.replace('<user_name>', target.display_name).replace('<author_name>', caller.display_name)
+        await ctx.send(msg)
+        return
+
+    # Check cooldown
+    cooldown = command_config.get('cooldown', 0)
+    retry_after = check_custom_role_cooldown(guild_id, command_name, caller.id, cooldown)
+    if retry_after:
+        await print_reset_time(int(retry_after), ctx, f"`!{command_name}` has a cooldown!\n")
+        return
+
+    # Roll for backfire
+    backfire_rate = command_config.get('backfire_rate', 0.0)
+    backfired = random.random() < backfire_rate and target.id != caller.id
+
+    actual_target = caller if backfired else target
+    duration = command_config.get('backfire_duration', command_config['duration'] * 2) if backfired else command_config['duration']
+
+    try:
+        # Add role and track it
+        distributed_custom_roles.setdefault(guild_id, {}).setdefault(command_name, []).append(actual_target.id)
+        save_distributed_custom_roles()
+        await actual_target.add_roles(role)
+
+        # Send appropriate message
+        if backfired:
+            msg = command_config.get('fail_msg', 'Command backfired!')
+        else:
+            msg = command_config.get('success_msg', '<author> used the command on <user>')
+
+        msg = msg.replace('<user>', target.mention).replace('<author>', caller.mention)
+        msg = msg.replace('<user_name>', target.display_name).replace('<author_name>', caller.display_name)
+        await ctx.send(msg)
+
+        # Wait duration then remove role
+        await asyncio.sleep(duration)
+
+        # Remove role if still present
+        try:
+            await actual_target.remove_roles(role)
+        except:
+            pass  # Member might have left or role was manually removed
+
+        # Clean up tracking
+        if guild_id in distributed_custom_roles and command_name in distributed_custom_roles[guild_id]:
+            if actual_target.id in distributed_custom_roles[guild_id][command_name]:
+                distributed_custom_roles[guild_id][command_name].remove(actual_target.id)
+                save_distributed_custom_roles()
+
+    except discord.errors.Forbidden:
+        await ctx.send(f"❌ Insufficient permissions! Make sure my role is higher than `@{role.name}`")
+        # Clean up tracking if we failed
+        if guild_id in distributed_custom_roles and command_name in distributed_custom_roles[guild_id]:
+            if actual_target.id in distributed_custom_roles[guild_id][command_name]:
+                distributed_custom_roles[guild_id][command_name].remove(actual_target.id)
+                save_distributed_custom_roles()
+    except Exception as e:
+        print(f"Error in custom role command '{command_name}': {e}")
+        traceback.print_exc()
+
+
 async def send_custom_command(ctx, error, mode='normal'):
     # --- Custom Command Handling ---
+    if isinstance(error, commands.CommandNotFound):
+        if not ctx.guild:
+            return
+
+        guild_id = str(ctx.guild.id)
+        potential_command_name = ctx.invoked_with.lower()
+
+        guild_settings = server_settings.setdefault(guild_id, {})
+        custom_role_commands = guild_settings.setdefault('custom_role_commands', {})
+
+        # Check if it's a custom role command
+        if potential_command_name in custom_role_commands:
+            await execute_custom_role_command(ctx, potential_command_name, custom_role_commands[potential_command_name])
+            return
+
     if isinstance(error, commands.CommandNotFound) or mode == 'random':
         if not ctx.guild:  # Custom commands are guild-specific
             return
@@ -3823,14 +3823,17 @@ class LottoView(discord.ui.View):
                 print("Failed to update the message on timeout:", e)
 
 
-only_prefix = {'backshot', 'disable', 'enable', 'segs', 'setrole', 'settings', 'silence',
-               'coinflip', 'redeem',
+only_prefix = {'disable', 'enable', 'settings', 'getsegs', 'getbackshot'
+               'coinflip', 'redeem', 'tml', 'bless', 'curse', 'sticker'
                'addlore', '!'}
 
 cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
                'balance': 'bal', 'coinflip': 'c', 'dice': '1d', 'twodice': '2d', 'giveaway_pool': 'pool',
                'info': 'i', 'profile': 'p', 'inventory': 'inv', 'stock_prices': 'sp',
-               'lore_compact': 'lore2', 'lore_leaderboard': 'lorelb', 'lore_remove': 'rmlore', 'lore_random': 'lore*', 'server_lore': 'sl'}
+               'lore_compact': 'lore2', 'lore_leaderboard': 'lorelb', 'lore_remove': 'rmlore', 'lore_random': 'lore*', 'server_lore': 'sl',
+               'custom_inspect': 'ci', 'custom_list': 'cl', 'custom_list_dm': 'cldm', 'custom_remove': 'crm',
+               'custom_role_inspect': 'cri', 'custom_role_list': 'crl', 'custom_role_remove': 'crr'
+               }
 
 
 class HelpView(discord.ui.View):
@@ -5351,7 +5354,7 @@ class Lore(commands.Cog):
         # Permission Check
         if user != ctx.author and not await is_admin(ctx):
             return await ctx.reply("You do not have permission to clear lore of other users.\n"
-                                   "Only server Administrators can do that.")
+                                   "Only Server Administrators can do that.")
 
         try:
             # Create confirmation view
@@ -8213,7 +8216,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
-    # @commands.command(aliases=['ga'])
+    # @client.command(aliases=['ga'])
     # async def giveaway(self, ctx):
     #     """
     #     Starts a giveaway for some coins of some duration
