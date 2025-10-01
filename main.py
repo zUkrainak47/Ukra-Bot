@@ -62,7 +62,7 @@ allowed_users = [369809123925295104]
 dev_mode_users = [694664131000795307]
 the_users = allowed_users + dev_mode_users
 # the_users = []
-no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse', 'getsegs', 'getbackshot'}
+no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse', 'getlegacy'}
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 MAX_INITIAL_RESPONSE_LENGTH = 1950
@@ -1035,14 +1035,14 @@ async def ping(ctx):
     await ctx.send(f"Pong! {round(client.latency * 1000)}ms")
 
 
-@client.command(name="getsegs")
-async def getsegs(ctx):
-    await ctx.send("## Legacy command: `segs`\n```/custom_role name:segs role: duration:120 cooldown:120 backfire_rate:5 backfire_duration:150 success_msg:<author> has segsed <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Segs failed <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322717837730517083/segsed.webp?ex=6771e47b&is=677092fb&hm=8a7252a7bc87bbc129d4e7cc23f62acc770952cde229642cf3bfd77bd40f2769&```")
-
-
-@client.command(name="getbackshot")
-async def getbackshot(ctx):
-    await ctx.send("## Legacy command: `backshot`\n```/custom_role name:backshot role: duration:90 cooldown:120 backfire_rate:5 backfire_duration:120 success_msg:<author> has given <user> devious backshots <:peeposcheme:1322225542027804722> fail_msg:OOPS! You missed the backshot <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322220705131008011/backshotted.webp?ex=6770157d&is=676ec3fd&hm=1197f229994962781ed6415a6a5cf1641c4c2d7ca56c9c3d559d44469988d15e&```")
+@client.command(name="getlegacy")
+async def getlegacy(ctx):
+    await ctx.send("## Legacy command: `silence`\n"
+                   "```/custom_role name:silence role: duration:15 cooldown:900 backfire_rate:30 backfire_duration:30 success_msg:<author> has silenced <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Silencing failed <:teripoint:1322718769679827024> already_msg:They're already silenced bro please```\n\n"
+                   "## Legacy command: `segs`\n"
+                   "```/custom_role name:segs role: duration:120 cooldown:120 backfire_rate:5 backfire_duration:150 success_msg:<author> has segsed <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Segs failed <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322717837730517083/segsed.webp?ex=6771e47b&is=677092fb&hm=8a7252a7bc87bbc129d4e7cc23f62acc770952cde229642cf3bfd77bd40f2769&```\n\n"
+                   "## Legacy command: `backshot`\n"
+                   "```/custom_role name:backshot role: duration:90 cooldown:120 backfire_rate:5 backfire_duration:120 success_msg:<author> has given <user> devious backshots <:peeposcheme:1322225542027804722> fail_msg:OOPS! You missed the backshot <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322220705131008011/backshotted.webp?ex=6770157d&is=676ec3fd&hm=1197f229994962781ed6415a6a5cf1641c4c2d7ca56c9c3d559d44469988d15e&```")
 
 
 @commands.hybrid_command(name="uptime", description="Check how long the bot has been running for")
@@ -1969,9 +1969,8 @@ class CustomCommands(commands.Cog):
         **Examples:**
         - Shoot ```/custom_role name:shoot role:@Shadow Realm duration:120 cooldown:300 backfire_rate:20 backfire_duration:120 success_msg:<user> got shot!```
         - Silence ```/custom_role name:silence role:@Silenced duration:15 cooldown:900 backfire_rate:30 backfire_duration:30 success_msg:<author> has silenced <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Silencing failed <:teripoint:1322718769679827024> already_msg:They're already silenced bro please```
-        Legacy:
-        - Segs: `!getsegs`
-        - Backshot: `!getbackshot`
+        Legacy (silence/segs/backshot):
+        - `!getlegacy`
 
         **Only usable by Administrators**
         """
@@ -2035,7 +2034,7 @@ class CustomCommands(commands.Cog):
 
         save_settings()
         await ctx.reply(f"{action} custom role command `!{command_name}` successfully.\n"
-                        f"Role: {role.mention} | Duration: {duration}s | Cooldown: {cooldown}s | Backfire: {int(backfire_rate * 100)}%")
+                        f"Role: {role.mention} | Duration: {duration}s | Cooldown: {cooldown}s | Backfire: {backfire_rate}%")
 
     @custom_role.error
     async def custom_role_error(self, ctx, error):
@@ -3823,7 +3822,7 @@ class LottoView(discord.ui.View):
                 print("Failed to update the message on timeout:", e)
 
 
-only_prefix = {'disable', 'enable', 'settings', 'getsegs', 'getbackshot'
+only_prefix = {'disable', 'enable', 'settings', 'getlegacy'
                'coinflip', 'redeem', 'tml', 'bless', 'curse', 'sticker'
                'addlore', '!'}
 
