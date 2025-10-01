@@ -936,7 +936,7 @@ async def on_ready():
         traceback.print_exc()
     # await refund_giveaways()
 
-kms = ["kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing myself']
+kms = {"kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing myself', 'killing yourself'}
 
 
 @client.event
@@ -1037,12 +1037,12 @@ async def ping(ctx):
 
 @client.command(name="getsegs")
 async def getsegs(ctx):
-    await ctx.send("## Legacy command: `segs`\n```/custom_role name:segs role: duration:120 cooldown:120 backfire_rate:5 backfire_duration:150 success_msg:<author> has segsed <user>! <:peeposcheme:1322225542027804722> fail_msg:OOPS! Segs failed <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322717837730517083/segsed.webp?ex=6771e47b&is=677092fb&hm=8a7252a7bc87bbc129d4e7cc23f62acc770952cde229642cf3bfd77bd40f2769&```")
+    await ctx.send("## Legacy command: `segs`\n```/custom_role name:segs role: duration:120 cooldown:120 backfire_rate:5 backfire_duration:150 success_msg:<author> has segsed <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Segs failed <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322717837730517083/segsed.webp?ex=6771e47b&is=677092fb&hm=8a7252a7bc87bbc129d4e7cc23f62acc770952cde229642cf3bfd77bd40f2769&```")
 
 
 @client.command(name="getbackshot")
 async def getbackshot(ctx):
-    await ctx.send("## Legacy command: `backshot`\n```/custom_role name:backshot role: duration:90 cooldown:120 backfire_rate:5 backfire_duration:120 success_msg:<author> has given <user> devious backshots! <:peeposcheme:1322225542027804722> fail_msg:OOPS! You missed the backshot <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322220705131008011/backshotted.webp?ex=6770157d&is=676ec3fd&hm=1197f229994962781ed6415a6a5cf1641c4c2d7ca56c9c3d559d44469988d15e&```")
+    await ctx.send("## Legacy command: `backshot`\n```/custom_role name:backshot role: duration:90 cooldown:120 backfire_rate:5 backfire_duration:120 success_msg:<author> has given <user> devious backshots <:peeposcheme:1322225542027804722> fail_msg:OOPS! You missed the backshot <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322220705131008011/backshotted.webp?ex=6770157d&is=676ec3fd&hm=1197f229994962781ed6415a6a5cf1641c4c2d7ca56c9c3d559d44469988d15e&```")
 
 
 @commands.hybrid_command(name="uptime", description="Check how long the bot has been running for")
@@ -1958,17 +1958,17 @@ class CustomCommands(commands.Cog):
                           fail_msg: str = '',
                           already_msg: str = ''):
         """
-        Creates or updates a custom role distribution command for this server
+        Creates (or updates) commands that give out roles for a certain amount of time. Mostly used for silly commands like `!silence`, read examples below
 
-        Usage: `/custom_role name role duration cooldown backfire_rate backfire_duration sucess_msg fail_msg already_msg`
+        Usage: `/custom_role name: role: duration: cooldown: backfire_rate: backfire_duration: success_msg: fail_msg: already_msg:`
 
         Parameters for success/fail/already messages:
         - `<user>` / `<user_name>` - mentioned user
         - `<author>` / `<author_name>` - command caller
 
-        Examples:
-        - Shoot: ```/custom_role name:shoot role:@Shadow Realm duration:120 cooldown:300 backfire_rate:20 backfire_duration:120 success_msg:<user> got shot!```
-        - Silence: ```/custom_role name:silence role:@Silenced duration:15 cooldown:900 backfire_rate:30 backfire_duration:30 success_msg:<author> has silenced <user>! <:peeposcheme:1322225542027804722> fail_msg:OOPS! Silencing failed <:teripoint:1322718769679827024> already_msg:They're already silenced bro please```
+        **Examples:**
+        - Shoot ```/custom_role name:shoot role:@Shadow Realm duration:120 cooldown:300 backfire_rate:20 backfire_duration:120 success_msg:<user> got shot!```
+        - Silence ```/custom_role name:silence role:@Silenced duration:15 cooldown:900 backfire_rate:30 backfire_duration:30 success_msg:<author> has silenced <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Silencing failed <:teripoint:1322718769679827024> already_msg:They're already silenced bro please```
         Legacy:
         - Segs: `!getsegs`
         - Backshot: `!getbackshot`
