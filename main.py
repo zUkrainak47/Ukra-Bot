@@ -851,7 +851,7 @@ async def on_ready():
                     member = await guild.fetch_member(member_id)
                     if role in member.roles:
                         await member.remove_roles(role)
-                        await log_channel.send(f"✅ Removed `@{role.name}` from {member.mention} ({command_name})")
+                        await log_channel.send(f"✅ Removed `@{role.name}` from {member.mention} ({command_name} in {guild.name})")
                     else:
                         await log_channel.send(
                             f"👍 `@{role.name}` already removed from {member.mention} ({command_name})")
@@ -1038,11 +1038,11 @@ async def ping(ctx):
 @client.command(name="getlegacy")
 async def getlegacy(ctx):
     await ctx.send("## Legacy command: `silence`\n"
-                   "```/custom_role name:silence role: duration:15 cooldown:900 backfire_rate:30 backfire_duration:30 success_msg:<author> has silenced <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Silencing failed <:teripoint:1322718769679827024> already_msg:They're already silenced bro please```\n\n"
+                   "```/custom_role name:silence role: duration:15 cooldown:900 backfire_rate:30 backfire_duration:30 victims_can_use:True success_msg:<author> has silenced <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Silencing failed <:teripoint:1322718769679827024> already_msg:They're already silenced bro please```\n\n"
                    "## Legacy command: `segs`\n"
-                   "```/custom_role name:segs role: duration:120 cooldown:120 backfire_rate:5 backfire_duration:150 success_msg:<author> has segsed <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Segs failed <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322717837730517083/segsed.webp?ex=6771e47b&is=677092fb&hm=8a7252a7bc87bbc129d4e7cc23f62acc770952cde229642cf3bfd77bd40f2769&```\n\n"
+                   "```/custom_role name:segs role: duration:120 cooldown:120 backfire_rate:5 backfire_duration:150 victims_can_use:True success_msg:<author> has segsed <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Segs failed <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322717837730517083/segsed.webp?ex=6771e47b&is=677092fb&hm=8a7252a7bc87bbc129d4e7cc23f62acc770952cde229642cf3bfd77bd40f2769&```\n\n"
                    "## Legacy command: `backshot`\n"
-                   "```/custom_role name:backshot role: duration:90 cooldown:120 backfire_rate:5 backfire_duration:120 success_msg:<author> has given <user> devious backshots <:peeposcheme:1322225542027804722> fail_msg:OOPS! You missed the backshot <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322220705131008011/backshotted.webp?ex=6770157d&is=676ec3fd&hm=1197f229994962781ed6415a6a5cf1641c4c2d7ca56c9c3d559d44469988d15e&```")
+                   "```/custom_role name:backshot role: duration:90 cooldown:120 backfire_rate:5 backfire_duration:120 victims_can_use:True success_msg:<author> has given <user> devious backshots <:peeposcheme:1322225542027804722> fail_msg:OOPS! You missed the backshot <:teripoint:1322718769679827024> already_msg:https://cdn.discordapp.com/attachments/696842659989291130/1322220705131008011/backshotted.webp?ex=6770157d&is=676ec3fd&hm=1197f229994962781ed6415a6a5cf1641c4c2d7ca56c9c3d559d44469988d15e&```")
 
 
 @commands.hybrid_command(name="uptime", description="Check how long the bot has been running for")
@@ -1947,6 +1947,7 @@ class CustomCommands(commands.Cog):
         cooldown='Cooldown in seconds (default: 0)',
         backfire_rate='Chance to backfire 0-100 (default: 0, integer)',
         backfire_duration='Backfire duration in seconds (default: 2x duration)',
+        victims_can_use='Whether to allow users with this role to use the command on others (default: True)',
         success_msg='Message on success (default: <author> used {command} on <user>)',
         fail_msg='Message on backfire (default: {command} backfired!)',
         already_msg='Message if victim already has role (default: They already have this role!)'
@@ -1954,21 +1955,22 @@ class CustomCommands(commands.Cog):
     @commands.check(is_admin)
     async def custom_role(self, ctx, name: str, role: discord.Role, duration: int,
                           cooldown: int = 0, backfire_rate: int = 0, backfire_duration: int = None,
+                          victims_can_use: bool = True,
                           success_msg: str = '',
                           fail_msg: str = '',
                           already_msg: str = ''):
         """
         Creates (or updates) commands that give out roles for a certain amount of time. Mostly used for silly commands like `!silence`, read examples below
 
-        Usage: `/custom_role name: role: duration: cooldown: backfire_rate: backfire_duration: success_msg: fail_msg: already_msg:`
+        Usage: `/custom_role name: role: duration: cooldown: backfire_rate: backfire_duration: victims_can_use: success_msg: fail_msg: already_msg:`
 
         Parameters for success/fail/already messages:
         - `<user>` / `<user_name>` - mentioned user
         - `<author>` / `<author_name>` - command caller
 
         **Examples:**
-        - Shoot ```/custom_role name:shoot role:@Shadow Realm duration:120 cooldown:300 backfire_rate:20 backfire_duration:120 success_msg:<user> got shot!```
-        - Silence ```/custom_role name:silence role:@Silenced duration:15 cooldown:900 backfire_rate:30 backfire_duration:30 success_msg:<author> has silenced <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Silencing failed <:teripoint:1322718769679827024> already_msg:They're already silenced bro please```
+        - Shoot ```/custom_role name:shoot role:@Shadow Realm duration:240 cooldown:0 backfire_rate:20 backfire_duration:480 victims_can_use:False success_msg:<user> got shot! fail_msg:OOPS! You missed :3c already_msg:https://giphy.com/gifs/the-simpsons-stop-hes-already-dead-JCAZQKoMefkoX6TyTb```
+        - Silence ```/custom_role name:silence role:@Silenced duration:15 cooldown:900 backfire_rate:30 backfire_duration:30 victims_can_use:True success_msg:<author> has silenced <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Silencing failed <:teripoint:1322718769679827024> already_msg:They're already silenced bro please```
         Legacy (silence/segs/backshot):
         - `!getlegacy`
 
@@ -2027,6 +2029,7 @@ class CustomCommands(commands.Cog):
             'cooldown': cooldown,
             'backfire_rate': backfire_rate/100,
             'backfire_duration': backfire_duration,
+            'victims_can_use': victims_can_use,
             'success_msg': success_msg,
             'fail_msg': fail_msg,
             'on_already': already_msg
@@ -2144,7 +2147,7 @@ class CustomCommands(commands.Cog):
 
         copypaste = (f"/custom_role name:{command_name} role:{role_display} duration:{config['duration']} "
                      f"cooldown:{config['cooldown']} backfire_rate:{int(config['backfire_rate'] * 100)} "
-                     f"backfire_duration:{config['backfire_duration']} success_msg:{config['success_msg']} "
+                     f"backfire_duration:{config['backfire_duration']} victims_can_use:{config.get('victims_can_use', True)} success_msg:{config['success_msg']} "
                      f"fail_msg:{config['fail_msg']} already_msg:{config['on_already']}")
 
         embed = discord.Embed(title=f"!{command_name}", color=0xffd000)
@@ -2153,6 +2156,7 @@ class CustomCommands(commands.Cog):
         embed.add_field(name="Cooldown", value=f"{config['cooldown']} seconds", inline=True)
         embed.add_field(name="Backfire Rate", value=f"{int(config['backfire_rate'] * 100)}%", inline=True)
         embed.add_field(name="Backfire Duration", value=f"{config['backfire_duration']} seconds", inline=True)
+        embed.add_field(name="Victims can use", value=f"{config.get('victims_can_use', True)}", inline=True)
         embed.add_field(name="Success Message", value=f"```{config['success_msg']}```", inline=False)
         embed.add_field(name="Fail Message", value=f"```{config['fail_msg']}```", inline=False)
         embed.add_field(name="Already Has Role", value=f"```{config['on_already']}```", inline=False)
@@ -2530,6 +2534,9 @@ async def execute_custom_role_command(ctx, command_name, command_config):
         await ctx.send(f"⚠️ Role for `{command_name}` no longer exists! Contact an admin.")
         return
 
+    if not command_config.get('victims_can_use', True) and role in ctx.author.roles:
+        return await ctx.send(f"`{role.name}` people can't {command_name} :3")
+
     # Check for user mention
     mentions = ctx.message.mentions
     if not mentions:
@@ -2587,6 +2594,7 @@ async def execute_custom_role_command(ctx, command_name, command_config):
         # Remove role if still present
         try:
             await actual_target.remove_roles(role)
+            await log_channel.send(f"✅ Removed `@{role.name}` from {actual_target.mention} ({command_name} in {ctx.guild.name})")
         except:
             pass  # Member might have left or role was manually removed
 
@@ -3213,7 +3221,7 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
 
 # taken from https://youtu.be/PRC4Ev5TJwc + chatgpt refined
 class PaginationView(discord.ui.View):
-    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', ctx_=None, timeout: float = 120, page_: int = 1, cog_ = None):
+    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', ctx_=None, timeout: float = 120, page_: int = 1, cog_ = None, total_number_: int = 0):
         super().__init__(timeout=timeout)
         self.data = data_
         self.title = title_
@@ -3226,6 +3234,7 @@ class PaginationView(discord.ui.View):
         self.ctx = ctx_
         self.message = None
         self.cog = cog_
+        self.total_number = total_number_
         self.page_size = 1 if self.author.startswith('The Lore of') else \
                          10 if 'Leaderboard' in self.title else \
                          5 if (self.footer and self.footer_icon) else \
@@ -3292,6 +3301,7 @@ class PaginationView(discord.ui.View):
             embed.set_footer(text=self.footer, icon_url=self.footer_icon)
             return embed
 
+        # Coins leaderboards
         elif self.title in ('Global Leaderboard', 'Global Leaderboard (Real)', 'Leaderboard', 'Giveaway Funding Leaderboard'):
             embed = discord.Embed(title=f"{self.title} - Page {self.current_page} / {self.total_pages()}", color=self.color)
             guild_id = '' if not self.ctx.guild else str(self.ctx.guild.id)
@@ -3321,11 +3331,14 @@ class PaginationView(discord.ui.View):
                 embed.set_footer(text=self.footer, icon_url=self.footer_icon)
             return embed
 
+        # Other leaderboards like lore etc
         elif 'Leaderboard' in self.title:
             embed = discord.Embed(title=f"{self.title} - Page {self.current_page} / {self.total_pages()}",
                                   color=self.color)
             for item in data:
                 embed.add_field(name='', value=f"{item['label']}: {item['item']}", inline=False)
+            if self.title == 'Lore Leaderboard':
+                embed.add_field(name='', value=f"*Total lore entries: {self.total_number}*")
             if self.footer and self.footer_icon:
                 embed.set_footer(text=self.footer, icon_url=self.footer_icon)
             return embed
@@ -5378,7 +5391,7 @@ class Lore(commands.Cog):
         except Exception as e:
             print(traceback.format_exc())
 
-    @commands.hybrid_command(name="lore_leaderboard", description="Removes a lore entry by its message ID", aliases=['lorelb'])
+    @commands.hybrid_command(name="lore_leaderboard", description="Server Lore Leaderboard", aliases=['lorelb'])
     async def lore_leaderboard(self, ctx, page: int = 1):
         """
         Shows the server leaderboard of lore entries
@@ -5393,6 +5406,7 @@ class Lore(commands.Cog):
 
         embed_data = []
         entry_counts = {user_id: len(entries) for user_id, entries in guild_lore.items()}
+        total_entries = sum(entry_counts.values())
         sorted_entries = sorted(entry_counts.items(), key=lambda item: item[1], reverse=True)
         rank = 1
         footer = ['', '']
@@ -5412,7 +5426,8 @@ class Lore(commands.Cog):
             color_=0xffd000,
             ctx_=ctx,
             page_=min(page, len(embed_data)),
-            footer_=footer
+            footer_=footer,
+            total_number_=total_entries
         )
         await pagination_view.send_embed()
 
