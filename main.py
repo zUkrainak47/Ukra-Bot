@@ -802,7 +802,7 @@ async def on_ready():
         #     if s:
         #         print(s, client.get_guild(int(s)).name)
         global log_channel, up_channel, rare_channel, lottery_channel
-        log_channel = client.get_guild(692070633177350235).get_channel(1322704172998590588)
+        log_channel = client.get_guild(696311992973131796).get_channel(1423717046927097911)
         up_channel = client.get_guild(696311992973131796).get_channel(1339183561135357972)
         rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
         lottery_channel = client.get_guild(696311992973131796).get_channel(1326949510336872458)
@@ -851,21 +851,19 @@ async def on_ready():
                     member = await guild.fetch_member(member_id)
                     if role in member.roles:
                         await member.remove_roles(role)
-                        await log_channel.send(f"✅ Removed `@{role.name}` from {member.mention} ({command_name} in {guild.name})")
+                        await log_channel.send(f"✅ Removed `@{role.name}` from {member.mention} (`{command_name}` in {guild.name})")
                     else:
-                        await log_channel.send(
-                            f"👍 `@{role.name}` already removed from {member.mention} ({command_name})")
+                        await log_channel.send(f"👍 `@{role.name}` already removed from {member.mention} ({command_name} in {guild.name})")
 
                     distributed_custom_roles[guild_id][command_name].remove(member_id)
                 except discord.Forbidden:
-                    await log_channel.send(
-                        f"❌ Failed to remove `@{role.name}` from member {member_id} - permission error")
+                    await log_channel.send(f"❌ Failed to remove `@{role.name}` from member <@{member_id}> in {guild.name}) - permission error")
                     distributed_custom_roles[guild_id][command_name].remove(member_id)
                 except discord.NotFound:
-                    await log_channel.send(f"❌ Member {member_id} not found in {guild.name}")
+                    await log_channel.send(f"❌ Member <@{member_id}> not found in {guild.name}")
                     distributed_custom_roles[guild_id][command_name].remove(member_id)
                 except Exception as e:
-                    await log_channel.send(f"❓ Error removing role from {member_id}: {e}")
+                    await log_channel.send(f"❓ Error removing role from <@{member_id}> in {guild.name}): {e}")
 
         print("reached end of on_ready()")
     except Exception:
@@ -2570,6 +2568,7 @@ async def execute_custom_role_command(ctx, command_name, command_config):
     backfired = random.random() < backfire_rate and target.id != caller.id
 
     actual_target = caller if backfired else target
+    actual_target_id = actual_target.id
     duration = command_config.get('backfire_duration', command_config['duration'] * 2) if backfired else command_config['duration']
 
     try:
@@ -2593,23 +2592,32 @@ async def execute_custom_role_command(ctx, command_name, command_config):
 
         # Remove role if still present
         try:
-            await actual_target.remove_roles(role)
-            await log_channel.send(f"✅ Removed `@{role.name}` from {actual_target.mention} ({command_name} in {ctx.guild.name})")
-        except:
-            pass  # Member might have left or role was manually removed
+            if role in actual_target.roles:
+                await actual_target.remove_roles(role)
+                await log_channel.send(f"✅ Removed `@{role.name}` from {actual_target.mention} (`{command_name}` in {ctx.guild.name})")
+            else:
+                await log_channel.send(f"👍 `@{role.name}` already removed from {actual_target.mention} ({command_name} in {ctx.guild.name})")
+        except discord.Forbidden:
+            await log_channel.send(f"❌ Failed to remove `@{role.name}` from member <@{actual_target_id}> in {ctx.guild.name} - permission error")
+            distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
+        except discord.NotFound:
+            await log_channel.send(f"❌ Member <@{actual_target_id}> not found in {ctx.guild.name}")
+            distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
+        except Exception as e:
+            await log_channel.send(f"❓ Error removing role from <@{actual_target_id}>: {e}")
 
         # Clean up tracking
         if guild_id in distributed_custom_roles and command_name in distributed_custom_roles[guild_id]:
-            if actual_target.id in distributed_custom_roles[guild_id][command_name]:
-                distributed_custom_roles[guild_id][command_name].remove(actual_target.id)
+            if actual_target_id in distributed_custom_roles[guild_id][command_name]:
+                distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
                 save_distributed_custom_roles()
 
     except discord.errors.Forbidden:
         await ctx.send(f"❌ Insufficient permissions! Make sure my role is higher than `@{role.name}`")
         # Clean up tracking if we failed
         if guild_id in distributed_custom_roles and command_name in distributed_custom_roles[guild_id]:
-            if actual_target.id in distributed_custom_roles[guild_id][command_name]:
-                distributed_custom_roles[guild_id][command_name].remove(actual_target.id)
+            if actual_target_id in distributed_custom_roles[guild_id][command_name]:
+                distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
                 save_distributed_custom_roles()
     except Exception as e:
         print(f"Error in custom role command '{command_name}': {e}")
