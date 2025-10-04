@@ -5062,9 +5062,10 @@ class Lore(commands.Cog):
     @commands.hybrid_command(name="lore", description="Displays the lore of a user in this server")
     @app_commands.describe(user="The user whose lore you're checking", page="Entry number")
     @custom_cooldown_check(default_seconds=0)
-    async def view_lore(self, ctx, user: typing.Optional[discord.User] = None, page: int = 1):
+    async def view_lore(self, ctx, user: typing.Optional[discord.User] = None, page: typing.Optional[int] = 1):
         """
         Displays the lore of a user in this server
+
         Use `!addlore` to add lore
         You can change this command's cooldown using `!setcd`
         """
@@ -5077,6 +5078,7 @@ class Lore(commands.Cog):
     async def lore_random(self, ctx, user: typing.Optional[discord.User] = None):
         """
         Displays a random lore entry of a specific user in this server
+
         Use `!addlore` to add lore
         You can change this command's cooldown using `!setcd`
         """
@@ -5088,6 +5090,7 @@ class Lore(commands.Cog):
     async def server_lore(self, ctx):
         """
         Displays a random lore entry of a random user in this server
+
         Use `!addlore` to add lore
         You can change this command's cooldown using `!setcd`
         """
@@ -5142,7 +5145,7 @@ class Lore(commands.Cog):
                         page_num = int(args[0])
                     else:
                         # The first argument was neither a user nor a number
-                        await ctx.reply("Invalid argument. Please provide a valid user or page number.")
+                        await ctx.reply(f"Invalid argument. Please provide a valid user{" or page number" * (mode == 'normal')}.")
                         return
         else:
             # Logic for slash commands
@@ -5197,6 +5200,7 @@ class Lore(commands.Cog):
     async def lore_compact(self, ctx, user: typing.Optional[discord.User] = None, page: int = 1):
         """
         Displays a condensed, multi-entry view of a user's lore
+
         Use `!addlore` to add lore
         You can change this command's cooldown using `!setcd`
         """
@@ -5293,7 +5297,7 @@ class Lore(commands.Cog):
             await print_reset_time(int(error.retry_after), ctx, f"You're viewing lore too quickly! ")
 
     @commands.hybrid_command(name="lore_remove", description="Removes a lore entry by its message ID (or a link to the message)",
-                             aliases=['rmlore', 'removelore'])
+                             aliases=['rmlore', 'removelore', 'dellore', 'deletelore'])
     async def lore_remove(self, ctx, message_id_to_remove=None):
         """
         Removes a lore entry by its message ID, a link to the message, or by replying to it
@@ -5403,6 +5407,7 @@ class Lore(commands.Cog):
     async def lore_leaderboard(self, ctx, page: int = 1):
         """
         Shows the server leaderboard of lore entries
+
         Use `!addlore` to add lore
         """
         if not ctx.guild:
