@@ -7162,7 +7162,7 @@ class Currency(commands.Cog):
             if not number:
                 await ctx.reply("You gotta send something at least")
                 return
-            if sum(global_profiles[target_id]['commands'].values()) == 0 and user.id != bot_id:
+            if (not global_profiles[target_id]['commands']) and user.id != bot_id:
                 await ctx.reply(f"{user.display_name} is not an {bot_name} user\nTransaction failed")
                 return
             has_access = user_has_access_to_channel(ctx, user)
