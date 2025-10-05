@@ -614,17 +614,11 @@ async def loan_payment(id_: str, payment: int, pay_loaner=True):
         print(traceback.format_exc())
 
 
-def make_sure_server_settings_exist(guild_id: str, save=True):
-    """
-    Makes sure the server settings exist, saves them to file by default, returns list of users in server
-    """
-    if guild_id:
-        server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands)
-        server_settings.get(guild_id).setdefault('members', [])
-        server_settings.get(guild_id).setdefault('command_cooldowns', {})
-        if save:
-            save_settings()
-        return server_settings.get(guild_id).get('members')
+def make_sure_user_profile_exists(guild_: str, user_: str):
+    bal = make_sure_user_has_currency(guild_, user_)
+    if global_profiles.setdefault(user_, get_default_profile(bal)) == get_default_profile(bal):
+        save_profiles()
+    return bal
 
 
 def make_sure_user_has_currency(guild_: str, user_: str):
@@ -649,6 +643,19 @@ def make_sure_user_has_currency(guild_: str, user_: str):
     return global_currency.get(user_)
 
 
+def make_sure_server_settings_exist(guild_id: str, save=True):
+    """
+    Makes sure the server settings exist, saves them to file by default, returns list of users in server
+    """
+    if guild_id:
+        server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands)
+        server_settings.get(guild_id).setdefault('members', [])
+        server_settings.get(guild_id).setdefault('command_cooldowns', {})
+        if save:
+            save_settings()
+        return server_settings.get(guild_id).get('members')
+
+
 def get_default_profile(user_balance: int) -> dict:
     return {'highest_balance': max(750, user_balance), 'highest_single_win': 0, 'highest_single_loss': 0,
             'highest_global_rank': -1, 'gamble_win_ratio': [0, 0], "total_won": 0, "total_lost": 0, "lotteries_won": 0,
@@ -659,13 +666,6 @@ def get_default_profile(user_balance: int) -> dict:
             'list_1': [], 'list_2': [0, 0], 'list_3': [], 'list_4': [], 'list_5': [],
             'num_1': 0, 'num_2': 0, 'num_3': 0, 'num_4': 0, 'num_5': 0,
             'str_1': '', 'str_2': '', 'str_3': '', 'str_4': '', 'str_5': ''}
-
-
-def make_sure_user_profile_exists(guild_: str, user_: str):
-    bal = make_sure_user_has_currency(guild_, user_)
-    if global_profiles.setdefault(user_, get_default_profile(bal)) == get_default_profile(bal):
-        save_profiles()
-    return bal
 
 
 def get_daily_reset_timestamp():
@@ -3004,11 +3004,14 @@ def get_user_loan_net(guild_: str, user_: str):
 
 
 def get_net_leaderboard(members=[], real=False):
+    non_lb_users = ignored_users + dev_mode_users
     net_worth_list = []
     for user_id, balance in global_currency.items():
         if members and user_id not in members:
             continue
-        if int(user_id) in ignored_users + dev_mode_users:
+        if int(user_id) in non_lb_users:
+            continue
+        if not global_profiles[user_id]['commands']:  # only count those who ran at least one command
             continue
         # Start with the user's balance
         total_worth = balance
