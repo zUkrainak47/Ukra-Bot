@@ -3011,7 +3011,7 @@ def get_net_leaderboard(members=[], real=False):
             continue
         if int(user_id) in non_lb_users:
             continue
-        if not global_profiles[user_id]['commands']:  # only count those who ran at least one command
+        if not global_profiles[user_id]['commands'] and int(user_id) != bot_id:  # only count those who ran at least one command
             continue
         # Start with the user's balance
         total_worth = balance
@@ -4527,12 +4527,21 @@ async def use_item(author: discord.User, item: Item, item_message, reply_func, a
             await reply_func("`/use math number` to use this item")
             return
         decision, returned_obj = await confirm_item(reply_func, author, item, amount, additional_context, f"\n> {item.description.split('\n\n')[0].replace('\n', '\n> ')}", interaction=item_message)
-        if returned_obj is not None:
-            msg = await item_message.original_response()
-            reply_func = msg.reply
-        else:
-            reply_func = item_message.followup.send
-            msg = await item_message.original_response()
+        # print(decision, returned_obj)
+        # if returned_obj is not None:
+        #     msg = await item_message.original_response()
+        #     reply_func = msg.reply
+        # else:
+        #     reply_func = item_message.followup.send
+        #     msg = await item_message.original_response()
+        # if isinstance(returned_obj, discord.InteractionCallbackResponse):
+        #     msg = await item_message.original_response()
+        # else:
+
+        msg = returned_obj if isinstance(returned_obj, discord.Message) else await item_message.original_response()
+        # print(msg)
+
+        reply_func = msg.reply
         if decision is None:
             pass
         elif decision:
@@ -5887,7 +5896,7 @@ class Currency(commands.Cog):
                         await interaction.response.send_message(f"{target.display_name} is banned from {bot_name}", ephemeral=True)
                         return
                     if target.id in (interaction.user.id, bot_id):
-                        await interaction.response.send_message(f"Pick someone else please {icant}", ephemeral=True)
+                        await interaction.response.send_message(f"Pick someone else {icant}", ephemeral=True)
                         return
                     num, _, _ = convert_msg_to_number([parameter], '', author_id, ignored_sources=['%', 'all', 'half'])
                     if num < 1:
