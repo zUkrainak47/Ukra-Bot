@@ -121,6 +121,7 @@ gladge = '<:gladge:1340021932707549204>'
 icant = '<:ICANT:1337236086941941762>'
 clueless = '<:clueless:1335599640279515167>'
 feelsstrongman = '<:FeelsStrongMan:1406639193722982481>'
+LO = '<:LO:1425226419734188153>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
 pupperrun = '<a:pupperrun:1336403935291773029>'
 
@@ -1945,18 +1946,26 @@ class CustomCommands(commands.Cog):
         cooldown='Cooldown in seconds (default: 0)',
         backfire_rate='Chance to backfire 0-100 (default: 0, integer)',
         backfire_duration='Backfire duration in seconds (default: 2x duration)',
+        backfire_role='Role to be given on backfire (default: same as victim role)',
         victims_can_use='Whether to allow users with this role to use the command on others (default: True)',
         success_msg='Message on success (default: <author> used {command} on <user>)',
         fail_msg='Message on backfire (default: {command} backfired!)',
-        already_msg='Message if victim already has role (default: They already have this role!)'
+        already_msg='Message if victim already has role (default: They already have this role!)',
+        required_victim_role='Requires the victim to have a specific role (default: None)',
+        required_castor_role='Requires the command user to have a specific role (default: None)',
+        prohibited_victim_role='Prohibits the victim from having a specific role (default: None)',
+        prohibited_castor_role='Prohibits the command user from having a specific role (default: None)',
+        remove_required_victim_role='Whether to remove the required_victim_role from the victim (default: False)'
     )
     @commands.check(is_admin)
-    async def custom_role(self, ctx, name: str, role: discord.Role, duration: int,
-                          cooldown: int = 0, backfire_rate: int = 0, backfire_duration: int = None,
+    async def custom_role(self, ctx, name: str, role: discord.Role, duration: int, cooldown: int = 0,
+                          backfire_rate: int = 0, backfire_duration: int = None, backfire_role: discord.Role = None,
                           victims_can_use: bool = True,
-                          success_msg: str = '',
-                          fail_msg: str = '',
-                          already_msg: str = ''):
+                          success_msg: str = '', fail_msg: str = '', already_msg: str = '',
+                          required_victim_role: discord.Role = None, required_castor_role: discord.Role = None,
+                          prohibited_victim_role: discord.Role = None, prohibited_castor_role: discord.Role = None,
+                          remove_required_victim_role: bool = False
+                          ):
         """
         Creates (or updates) commands that give out roles for a certain amount of time. Mostly used for silly commands like `!silence`, read examples below
 
@@ -1989,8 +1998,8 @@ class CustomCommands(commands.Cog):
             return await ctx.reply(f"There's already a custom command called `{command_name}`")
 
         # Validate inputs
-        if duration <= 0 or duration > 86400:  # Max 24 hours
-            await ctx.reply("Duration must be between 1 and 86400 seconds (24 hours)")
+        if duration < 0 or duration > 86400:  # Max 24 hours
+            await ctx.reply("Duration must be between 0 and 86400 seconds (24 hours)")
             return
 
         if cooldown < 0 or cooldown > 604800:  # Max 1 week
@@ -2006,6 +2015,9 @@ class CustomCommands(commands.Cog):
         elif backfire_duration <= 0 or backfire_duration > 86400:
             await ctx.reply("Backfire duration must be between 1 and 86400 seconds (24 hours)")
             return
+
+        if remove_required_victim_role and required_victim_role is None:
+            return await ctx.reply(f"So you set `remove_required_victim_role` to True and didn't set a `required_victim_role`. Well done. Now try again {LO}")
 
         # Check for conflicts
         if client.get_command(command_name):
@@ -2027,10 +2039,16 @@ class CustomCommands(commands.Cog):
             'cooldown': cooldown,
             'backfire_rate': backfire_rate/100,
             'backfire_duration': backfire_duration,
+            'backfire_role_id': backfire_role.id if backfire_role else None,
             'victims_can_use': victims_can_use,
             'success_msg': success_msg,
             'fail_msg': fail_msg,
-            'on_already': already_msg
+            'on_already': already_msg,
+            "required_victim_role": required_victim_role.id if required_victim_role else None,
+            "required_castor_role": required_castor_role.id if required_castor_role else None,
+            "prohibited_victim_role": prohibited_victim_role.id if prohibited_victim_role else None,
+            "prohibited_castor_role": prohibited_castor_role.id if prohibited_castor_role else None,
+            "remove_required_victim_role": remove_required_victim_role
         }
 
         save_settings()
@@ -2044,7 +2062,7 @@ class CustomCommands(commands.Cog):
         elif isinstance(error, commands.RoleNotFound):
             await ctx.reply("Could not find that role. Try mentioning it or using the role ID.")
         elif isinstance(error, discord.ext.commands.errors.CheckFailure):
-            pass
+            await ctx.reply("You don't have the necessary permissions to use this command.", ephemeral=True)
         else:
             print(f"Error in custom_role: {error}")
             await ctx.reply("An unexpected error occurred.")
@@ -2141,12 +2159,37 @@ class CustomCommands(commands.Cog):
 
         config = custom_role_commands[command_name]
         role = ctx.guild.get_role(config['role_id'])
+        backfire_role = ctx.guild.get_role(config.get('backfire_role_id')) if config.get('backfire_role_id') else role
         role_display = f"{role.mention}" if role else f"[Deleted Role: {config['role_id']}]"
+        backfire_role_display = f"{backfire_role.mention}" if backfire_role else f"[Deleted Role: {config.get('backfire_role_id', config['role_id'])}]"
+
+        def get_role_display(roleid):
+            if roleid is None:
+                return '[No Role]'
+            rol = ctx.guild.get_role(roleid)
+            return f"{rol.mention}" if rol else f"[Deleted Role: {roleid}]"
+
+        rvr, rcr, pvr, pcr = (
+            get_role_display(config.get('required_victim_role')),
+            get_role_display(config.get('required_castor_role')),
+            get_role_display(config.get('prohibited_victim_role')),
+            get_role_display(config.get('prohibited_castor_role'))
+        )
 
         copypaste = (f"/custom_role name:{command_name} role:{role_display} duration:{config['duration']} "
                      f"cooldown:{config['cooldown']} backfire_rate:{int(config['backfire_rate'] * 100)} "
-                     f"backfire_duration:{config['backfire_duration']} victims_can_use:{config.get('victims_can_use', True)} success_msg:{config['success_msg']} "
-                     f"fail_msg:{config['fail_msg']} already_msg:{config['on_already']}")
+                     f"backfire_duration:{config['backfire_duration']} backfire_role:{backfire_role_display} "
+                     f"victims_can_use:{config.get('victims_can_use', True)} success_msg:{config['success_msg']} "
+                     f"fail_msg:{config['fail_msg']} already_msg:{config['on_already']} "
+                     f"{f"required_victim_role:{rvr}" if rvr != '[No Role]' else ""} "
+                     f"{f"required_castor_role:{rcr}" if rcr != '[No Role]' else ""} "
+                     f"{f"prohibited_victim_role:{pvr}" if pvr != '[No Role]' else ""} "
+                     f"{f"prohibited_castor_role:{pcr}" if pcr != '[No Role]' else ""} "
+                     # f"required_castor_role:{rcr if rcr != '[No Role]' else ""} "
+                     # f"prohibited_victim_role:{pvr if pvr != '[No Role]' else ""} "
+                     # f"prohibited_castor_role:{pcr if pcr != '[No Role]' else ""} "
+                     f"remove_required_victim_role:{config.get('remove_required_victim_role', False)}"
+                     )
 
         embed = discord.Embed(title=f"!{command_name}", color=0xffd000)
         embed.add_field(name="Role", value=role_display, inline=False)
@@ -2154,10 +2197,19 @@ class CustomCommands(commands.Cog):
         embed.add_field(name="Cooldown", value=f"{config['cooldown']} seconds", inline=True)
         embed.add_field(name="Backfire Rate", value=f"{int(config['backfire_rate'] * 100)}%", inline=True)
         embed.add_field(name="Backfire Duration", value=f"{config['backfire_duration']} seconds", inline=True)
+        embed.add_field(name="Backfire Role", value=backfire_role_display, inline=False)
         embed.add_field(name="Victims can use", value=f"{config.get('victims_can_use', True)}", inline=True)
         embed.add_field(name="Success Message", value=f"```{config['success_msg']}```", inline=False)
         embed.add_field(name="Fail Message", value=f"```{config['fail_msg']}```", inline=False)
         embed.add_field(name="Already Has Role", value=f"```{config['on_already']}```", inline=False)
+        if rcr != '[No Role]':
+            embed.add_field(name="Required Castor Role", value=rcr, inline=False)
+        if rvr != '[No Role]':
+            embed.add_field(name="Required Victim Role", value=rvr, inline=False)
+        if pcr != '[No Role]':
+            embed.add_field(name="Prohibited Castor Role", value=pcr, inline=False)
+        if pvr != '[No Role]':
+            embed.add_field(name="Prohibited Victim Role", value=pvr, inline=False)
         embed.add_field(name="Copy Paste for easy editing", value=f"```{copypaste}```", inline=False)
 
         await ctx.send(embed=embed)
@@ -2529,13 +2581,22 @@ async def execute_custom_role_command(ctx, command_name, command_config):
     # Get the role
     role = ctx.guild.get_role(command_config['role_id'])
     if not role:
-        await ctx.send(f"⚠️ Role for `{command_name}` no longer exists! Contact an admin.")
-        return
+        return await ctx.send(f"⚠️ Role for `{command_name}` no longer exists! Contact an admin.")
+    backfired_role = ctx.guild.get_role(command_config.get('backfire_role_id')) if command_config.get('backfire_role_id') else role
+    if not backfired_role:
+        return await ctx.send(f"⚠️ Backfire Role for `{command_name}` no longer exists! Contact an admin.")
 
-    if not command_config.get('victims_can_use', True) and role in ctx.author.roles:
-        return await ctx.send(f"`{role.name}` people can't {command_name} :3")
+    extra_roles = {}
+    for i in ('required_victim_role', 'required_castor_role', 'prohibited_victim_role', 'prohibited_castor_role'):
+        cfg = command_config.get(i)
+        if cfg is None:
+            extra_roles[i] = None
+            continue
+        r = ctx.guild.get_role(cfg)
+        if not r:
+            return await ctx.send(f"⚠️ {i.replace('_', ' ').title()} for `{command_name}` no longer exists! Contact an admin.")
+        extra_roles[i] = r
 
-    # Check for user mention
     mentions = ctx.message.mentions
     if not mentions:
         await ctx.send(f'Please mention a user: `!{command_name} @user`')
@@ -2543,18 +2604,31 @@ async def execute_custom_role_command(ctx, command_name, command_config):
 
     target = mentions[0]
 
-    # Check if target is a bot
     if target.bot:
         await ctx.send(f"Can't use this command on bots!")
         return
+
+    if not command_config.get('victims_can_use', True) and role in ctx.author.roles:
+        return await ctx.send(f"`{role.name}` people can't {command_name} :3")
+
+    if extra_roles['required_castor_role'] and extra_roles['required_castor_role'] not in ctx.author.roles:
+        return await ctx.send(f"You have to be `{extra_roles['required_castor_role'].name}` in order to {command_name} :3")
+
+    if extra_roles['prohibited_castor_role'] and extra_roles['prohibited_castor_role'] in ctx.author.roles:
+        return await ctx.send(f"You can't be `{extra_roles['prohibited_castor_role'].name}` if you want to {command_name} :3")
+
+    if extra_roles['required_victim_role'] and extra_roles['required_victim_role'] not in target.roles:
+        return await ctx.send(f"{target.display_name} has to be `{extra_roles['required_victim_role'].name}` in order to {command_name} :3")
+
+    if extra_roles['prohibited_victim_role'] and extra_roles['prohibited_victim_role'] in target.roles:
+        return await ctx.send(f"{target.display_name} can't be `{extra_roles['prohibited_victim_role'].name}` if you want to {command_name} them :3")
 
     # Check if already has role
     if role in target.roles:
         msg = command_config.get('on_already', "They already have this role!")
         msg = msg.replace('<user>', target.mention).replace('<author>', caller.mention)
         msg = msg.replace('<user_name>', target.display_name).replace('<author_name>', caller.display_name)
-        await ctx.send(msg)
-        return
+        return await ctx.send(msg)
 
     # Check cooldown
     cooldown = command_config.get('cooldown', 0)
@@ -2575,8 +2649,14 @@ async def execute_custom_role_command(ctx, command_name, command_config):
         # Add role and track it
         distributed_custom_roles.setdefault(guild_id, {}).setdefault(command_name, []).append(actual_target.id)
         save_distributed_custom_roles()
-        await actual_target.add_roles(role)
-
+        role_given = backfired_role if backfired else role
+        await actual_target.add_roles(role_given)
+        if not backfired and command_config.get('remove_required_victim_role', False):
+            try:
+                await target.remove_roles(extra_roles['required_victim_role'])
+                await log_channel.send(f"✅ Removed `@{extra_roles['required_victim_role'].name}` from {target.mention} (`{command_name}` in {ctx.guild.name})")
+            except Exception as e:
+                await log_channel.send(f"❓ Error removing role from <@{target.id}>: {e}")
         # Send appropriate message
         if backfired:
             msg = command_config.get('fail_msg', 'Command backfired!')
@@ -2592,24 +2672,27 @@ async def execute_custom_role_command(ctx, command_name, command_config):
 
         # Remove role if still present
         try:
-            if role in actual_target.roles:
-                await actual_target.remove_roles(role)
-                await log_channel.send(f"✅ Removed `@{role.name}` from {actual_target.mention} (`{command_name}` in {ctx.guild.name})")
+            if role_given in actual_target.roles:
+                await actual_target.remove_roles(role_given)
+                await log_channel.send(f"✅ Removed `@{role_given.name}` from {actual_target.mention} (`{command_name}` in {ctx.guild.name})")
             else:
-                await log_channel.send(f"👍 `@{role.name}` already removed from {actual_target.mention} ({command_name} in {ctx.guild.name})")
+                await log_channel.send(f"👍 `@{role_given.name}` already removed from {actual_target.mention} ({command_name} in {ctx.guild.name})")
         except discord.Forbidden:
-            await log_channel.send(f"❌ Failed to remove `@{role.name}` from member <@{actual_target_id}> in {ctx.guild.name} - permission error")
-            distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
+            await log_channel.send(f"❌ Failed to remove `@{role_given.name}` from member <@{actual_target_id}> in {ctx.guild.name} - permission error")
+            if actual_target_id in distributed_custom_roles[guild_id][command_name]:
+                distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
         except discord.NotFound:
             await log_channel.send(f"❌ Member <@{actual_target_id}> not found in {ctx.guild.name}")
-            distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
+            if actual_target_id in distributed_custom_roles[guild_id][command_name]:
+                distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
         except Exception as e:
             await log_channel.send(f"❓ Error removing role from <@{actual_target_id}>: {e}")
 
         # Clean up tracking
         if guild_id in distributed_custom_roles and command_name in distributed_custom_roles[guild_id]:
             if actual_target_id in distributed_custom_roles[guild_id][command_name]:
-                distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
+                if actual_target_id in distributed_custom_roles[guild_id][command_name]:
+                    distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
                 save_distributed_custom_roles()
 
     except discord.errors.Forbidden:
@@ -2617,7 +2700,8 @@ async def execute_custom_role_command(ctx, command_name, command_config):
         # Clean up tracking if we failed
         if guild_id in distributed_custom_roles and command_name in distributed_custom_roles[guild_id]:
             if actual_target_id in distributed_custom_roles[guild_id][command_name]:
-                distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
+                if actual_target_id in distributed_custom_roles[guild_id][command_name]:
+                    distributed_custom_roles[guild_id][command_name].remove(actual_target_id)
                 save_distributed_custom_roles()
     except Exception as e:
         print(f"Error in custom role command '{command_name}': {e}")
