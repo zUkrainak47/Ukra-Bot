@@ -7334,7 +7334,7 @@ class Currency(commands.Cog):
             else:
                 print(f"Unexpected error: {error}")  # Log other errors for debugging
 
-    async def send_leaderboard_embed(self, ctx, t, page: int = 1):
+    async def send_leaderboard_embed(self, ctx, t, page: int = -1):
         """
         Sends the embed for a leaderboard of choice
         """
@@ -7350,6 +7350,7 @@ class Currency(commands.Cog):
                                  sorted({funder_id: global_profiles[funder_id]['num_1'] for funder_id in global_profiles if global_profiles[funder_id]['num_1']}.items(), key=lambda x: x[1], reverse=True)
                 #  FIXME probably not the best approach
                 footer = [f"Go !fund, at 250k you unlock !e", get_pfp(ctx.author)] if t == 'funders' else ['', '']
+                rank = None
                 try:
                     user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
                     rank = user_to_index[str(ctx.author.id)] + 1
@@ -7372,7 +7373,7 @@ class Currency(commands.Cog):
                     color_=0xffd000,
                     cog_=self,
                     ctx_=ctx,
-                    page_=min(page, math.ceil(len(sorted_members) / 10)),
+                    page_=min(page, math.ceil(len(sorted_members) / 10)) if (page > 0) else math.ceil(rank / 10) if (rank is not None) else 1,
                     footer_=footer
                 )
 
@@ -7387,7 +7388,7 @@ class Currency(commands.Cog):
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="glb", description="View the global leaderboard of the richest users of the bot", aliases=['global_leaderboard', 'glib'])
     @app_commands.describe(page="Leaderboard page")
-    async def global_leaderboard_embed(self, ctx, *, page: int = 1):
+    async def global_leaderboard_embed(self, ctx, *, page: int = -1):
         """
         View the richest users of the bot globally (optionally accepts a page)
         Also shows your global rank
@@ -7397,7 +7398,7 @@ class Currency(commands.Cog):
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="glbr", description="View the global leaderboard with LOANS", aliases=['global_leaderboard_read', 'glibr', 'glrb', 'glirb'])
     @app_commands.describe(page="Leaderboard page")
-    async def global_leaderboard_real_embed(self, ctx, *, page: int = 1):
+    async def global_leaderboard_real_embed(self, ctx, *, page: int = -1):
         """
         View the richest users of the bot globally with LOANS (optionally accepts a page)
         Also shows your global rank
@@ -7407,7 +7408,7 @@ class Currency(commands.Cog):
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="lb", description="View the leaderboard of the 10 richest users of this server", aliases=['leaderboard'])
     @app_commands.describe(page="Leaderboard page")
-    async def leaderboard_embed(self, ctx, *, page: int = 1):
+    async def leaderboard_embed(self, ctx, *, page: int = -1):
         """
         View the richest users of the server (optionally accepts a page)
         Also shows your rank
@@ -7421,7 +7422,7 @@ class Currency(commands.Cog):
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="funders", description="View the giveaway funders globally")
     @app_commands.describe(page="Leaderboard page")
-    async def funders_embed(self, ctx, *, page: int = 1):
+    async def funders_embed(self, ctx, *, page: int = -1):
         """
         View the giveaway funders globally (optionally accepts a page)
         In order to get on this leaderboard use `!fund`
