@@ -2627,9 +2627,7 @@ async def emote(ctx: commands.Context, emoji=''):
 
 @client.event
 async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound) and not bot_ready.is_set():
-        return await ctx.send(f"⏳ {bot_name} is starting up, please wait a moment {murmheart}")
-    elif isinstance(error, commands.CheckFailure):
+    if isinstance(error, (commands.CommandNotFound, commands.CheckFailure)) and not bot_ready.is_set():
         return
 
     await send_custom_command(ctx, error, 'normal')
@@ -2722,7 +2720,7 @@ async def execute_custom_role_command(ctx, command_name, command_config):
         if not backfired and command_config.get('remove_required_victim_role', False):
             try:
                 await target.remove_roles(extra_roles['required_victim_role'])
-                await log_channel.send(f"✅ Removed victim role `@{extra_roles['required_victim_role'].name}` from {target.mention} (`{command_name}` in {ctx.guild.name})")
+                await log_channel.send(f"✅ Removed (victim) `@{extra_roles['required_victim_role'].name}` from {target.mention} (`{command_name}` in {ctx.guild.name})")
             except Exception as e:
                 await log_channel.send(f"❓ Error removing victim role from <@{target.id}>: {e}")
         # Send appropriate message
