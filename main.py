@@ -45,6 +45,7 @@ start = time.perf_counter()
 
 bot_name = 'Ukra Bot'
 bot_down = True
+bot_ready = asyncio.Event()
 reason = f'{bot_name} is starting up'
 
 load_dotenv()
@@ -775,14 +776,32 @@ async def on_guild_join(guild: discord.Guild):
     make_sure_server_settings_exist(str(guild.id))
 
 
+@client.check
+async def globally_block_until_ready(ctx):
+    if not bot_ready.is_set():
+        await ctx.send(f"⏳ {bot_name} is starting up, please wait a moment {murmheart}")
+        return False
+
+    return True
+
+
 @client.event
 async def on_ready():
+    start_time = time.time()
     try:
+        await client.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.playing,
+                name="🔄 Starting up..."
+            )
+        )
+        client.add_command(calc)
+        client.add_command(ping)
+        client.add_command(emote)
+        client.add_command(uptime)
         client.add_command(rng)
         client.add_command(avatar)
         client.add_command(banner)
-        client.add_command(emote)
-        client.add_command(calc)
         client.add_command(set_cooldown)
         client.add_command(dnd)
         client.add_command(choose)
@@ -793,8 +812,6 @@ async def on_ready():
         client.add_command(source)
         client.add_command(donate)
         client.add_command(server)
-        client.add_command(uptime)
-        client.add_command(ping)
         client.add_command(tcc)
         client.add_command(tuc)
         await client.tree.sync()
@@ -803,6 +820,7 @@ async def on_ready():
         #     if s:
         #         print(s, client.get_guild(int(s)).name)
         global log_channel, up_channel, rare_channel, lottery_channel
+        global bot_down, reason, distributed_custom_roles
         log_channel = client.get_guild(696311992973131796).get_channel(1423717046927097911)
         up_channel = client.get_guild(696311992973131796).get_channel(1339183561135357972)
         rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
@@ -811,11 +829,14 @@ async def on_ready():
         print("Verifying settings for all guilds...")
         for guild in client.guilds:
             make_sure_server_settings_exist(str(guild.id))
+        print("✅ Settings verified")
 
-        print('Bot is up!')
-        global bot_down, reason, distributed_custom_roles
-        bot_down = False
-        reason = f'{bot_name} is in Development Mode'
+        await client.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.playing,
+                name="🧹 Cleaning up roles..."
+            )
+        )
 
         async def remove_custom_role_command_roles(guild_id, command_name):
             """Remove all roles for a specific custom role command"""
@@ -874,74 +895,99 @@ async def on_ready():
                 except Exception as e:
                     await log_channel.send(f"[RESTART] ❓ Error removing role from <@{member_id}> in {guild.name}): {e}")
 
-        print("reached end of on_ready()")
-    except Exception:
-        print(traceback.format_exc())
+        async def resume_giveaway(message_id):
+            try:
+                channel_id, guild_id, author_id, amount, end_time, remind, admin, t = active_giveaways[message_id]
+                guild = await client.fetch_guild(guild_id)
+                print('guild fetched - resume', guild.id, guild.name)
+                if not guild:
+                    print(f"Error finalizing giveaway {message_id}: guild not found")
+                    return
+                now = datetime.now(UTC)
+                duration = end_time - int(now.timestamp())
+                print(end_time)
+                print(int(now.timestamp()))
+                print('duration', duration)
+                if duration <= 0:
+                    print('duration is negative, finalizing')
+                    await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin, t, too_late=True)
+                    return
 
-    async def resume_giveaway(message_id):
+                channel = await guild.fetch_channel(channel_id)
+                if not channel:
+                    print(f"Error finalizing giveaway {message_id}: channel not found")
+                    return
+                print('channel fetched - resume', channel.id, channel.name)
+
+                message = await channel.fetch_message(int(message_id))
+                if not message:
+                    print(f"Error finalizing giveaway {message_id}: message not found")
+                    return
+                print('message fetched - resume', message.id)
+                reaction = discord.utils.get(message.reactions, emoji="🎉")
+
+                participants = [user async for user in reaction.users(limit=None) if not user.bot] if reaction else []
+                print('participants - resuming', [p.name for p in participants])
+                if remind:
+                    reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
+                    reminder_interval = duration // reminders_to_send
+                    remind_intervals = [reminder_interval for _ in range(1, reminders_to_send + 1)]
+                    print('have reminders - will not sleep - creating reminder task')
+                    await asyncio.create_task(schedule_reminders(message, amount, duration, remind_intervals))
+                else:
+                    print('have no reminders - getting ready to sleep', duration)
+                    await asyncio.sleep(duration)
+                print('finalizing giveaway', message.id)
+                await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin, t)
+            except Exception as e:
+                print(f"Error resuming giveaway {message_id}: {e}")
+
+        async def resume_giveaways():
+            print('resuming giveaways')
+            tasks = []
+            for message_id in active_giveaways:
+                tasks.append(asyncio.create_task(resume_giveaway(message_id)))
+            await asyncio.gather(*tasks)
+
         try:
-            channel_id, guild_id, author_id, amount, end_time, remind, admin, t = active_giveaways[message_id]
-            guild = await client.fetch_guild(guild_id)
-            print('guild fetched - resume', guild.id, guild.name)
-            if not guild:
-                print(f"Error finalizing giveaway {message_id}: guild not found")
-                return
-            now = datetime.now(UTC)
-            duration = end_time - int(now.timestamp())
-            print(end_time)
-            print(int(now.timestamp()))
-            print('duration', duration)
-            if duration <= 0:
-                print('duration is negative, finalizing')
-                await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin, t, too_late=True)
-                return
-
-            channel = await guild.fetch_channel(channel_id)
-            if not channel:
-                print(f"Error finalizing giveaway {message_id}: channel not found")
-                return
-            print('channel fetched - resume', channel.id, channel.name)
-
-            message = await channel.fetch_message(int(message_id))
-            if not message:
-                print(f"Error finalizing giveaway {message_id}: message not found")
-                return
-            print('message fetched - resume', message.id)
-            reaction = discord.utils.get(message.reactions, emoji="🎉")
-
-            participants = [user async for user in reaction.users(limit=None) if not user.bot] if reaction else []
-            print('participants - resuming', [p.name for p in participants])
-            if remind:
-                reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
-                reminder_interval = duration // reminders_to_send
-                remind_intervals = [reminder_interval for _ in range(1, reminders_to_send + 1)]
-                print('have reminders - will not sleep - creating reminder task')
-                await asyncio.create_task(schedule_reminders(message, amount, duration, remind_intervals))
-            else:
-                print('have no reminders - getting ready to sleep', duration)
-                await asyncio.sleep(duration)
-            print('finalizing giveaway', message.id)
-            await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin, t)
+            for guild_id in list(distributed_custom_roles.keys()):
+                for command_name in list(distributed_custom_roles.get(guild_id, {}).keys()):
+                    await remove_custom_role_command_roles(guild_id, command_name)
+            distributed_custom_roles = {}
+            save_distributed_custom_roles()
+            print("✅ Roles cleaned")
         except Exception as e:
-            print(f"Error resuming giveaway {message_id}: {e}")
+            traceback.print_exc()
 
-    async def resume_giveaways():
-        print('resuming giveaways')
-        tasks = []
-        for message_id in active_giveaways:
-            tasks.append(asyncio.create_task(resume_giveaway(message_id)))
-        await asyncio.gather(*tasks)
-    try:
-        for guild_id in list(distributed_custom_roles.keys()):
-            for command_name in list(distributed_custom_roles.get(guild_id, {}).keys()):
-                await remove_custom_role_command_roles(guild_id, command_name)
-        distributed_custom_roles = {}
-        save_distributed_custom_roles()
+        try:
+            await resume_giveaways()
+            print("✅ Giveaways resumed")
+        except Exception as e:
+            traceback.print_exc()
 
-        await resume_giveaways()
+        bot_ready.set()
+        bot_down = False
+        reason = f'{bot_name} is in Development Mode'
+        await client.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.listening,
+                name="!help"
+            )
+        )
+
+        elapsed = time.time() - start_time
+        print(f"✅ Fully ready in {elapsed:.2f}s")
+
     except Exception as e:
+        await client.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.playing,
+                name="❌ Startup failed"
+            )
+        )
+        print(f"❌ Error: {e}")
         traceback.print_exc()
-    # await refund_giveaways()
+
 
 kms = {"kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing myself', 'killing yourself'}
 
@@ -2581,6 +2627,11 @@ async def emote(ctx: commands.Context, emoji=''):
 
 @client.event
 async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound) and not bot_ready.is_set():
+        return await ctx.send(f"⏳ {bot_name} is starting up, please wait a moment {murmheart}")
+    elif isinstance(error, commands.CheckFailure):
+        return
+
     await send_custom_command(ctx, error, 'normal')
 
 templates = ['<word', '<text>', '<user', '<num']
@@ -2588,6 +2639,10 @@ templates = ['<word', '<text>', '<user', '<num']
 
 async def execute_custom_role_command(ctx, command_name, command_config):
     """Execute a custom role distribution command"""
+    if not bot_ready.is_set():
+        await ctx.send(f"⏳ {bot_name} is starting up, please wait a moment {murmheart} (how?)")
+        return
+
     caller = ctx.author
     guild_id = str(ctx.guild.id)
 
@@ -2722,6 +2777,10 @@ async def execute_custom_role_command(ctx, command_name, command_config):
 
 
 async def send_custom_command(ctx, error, mode='normal'):
+    if not bot_ready.is_set():
+        await ctx.send(f"⏳ {bot_name} is starting up, please wait a moment {murmheart} (how ?)")
+        return
+
     # --- Custom Command Handling ---
     if isinstance(error, commands.CommandNotFound):
         if not ctx.guild:
