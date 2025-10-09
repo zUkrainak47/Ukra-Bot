@@ -825,7 +825,6 @@ async def on_ready():
         up_channel = client.get_guild(696311992973131796).get_channel(1339183561135357972)
         rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
         lottery_channel = client.get_guild(696311992973131796).get_channel(1326949510336872458)
-        await up_channel.send(f'{yay} {bot_name} has connected to Discord! <@&1339183730019008513>')
         print("Verifying settings for all guilds...")
         for guild in client.guilds:
             make_sure_server_settings_exist(str(guild.id))
@@ -975,6 +974,7 @@ async def on_ready():
             )
         )
 
+        await up_channel.send(f'{yay} {bot_name} has connected to Discord! <@&1339183730019008513>')
         elapsed = time.time() - start_time
         print(f"✅ Fully ready in {elapsed:.2f}s")
 
@@ -2384,7 +2384,7 @@ async def calc(ctx: commands.Context, *, expression: str):
         await ctx.reply(f"```{expression.strip()}\n= 21```")
         return
 
-    safe_expression = expression.replace('^', '**').replace('ˆ', '**').replace('∞', 'inf')
+    safe_expression = expression.replace('^', '**').replace('ˆ', '**').replace('∞', 'inf').replace('x', '*').replace('×', '*')
 
     try:
         loop = asyncio.get_running_loop()
@@ -2405,8 +2405,7 @@ async def calc(ctx: commands.Context, *, expression: str):
         await ctx.reply(f"```\n{expression.replace('**', '^')}\n= {result_str}\n```")
 
     except asyncio.TimeoutError:
-        await ctx.reply("Error: Evaluation timed out (> 3 seconds) and was terminated.")
-
+        await ctx.reply(f"Error: Evaluation timed out (> 3 seconds) and was terminated\nThis happens sometimes {pepela} you can just try again :p")
 
     except Exception as e:
         error_snippet = str(e).split('\n')[-1][:300]
