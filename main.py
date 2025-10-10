@@ -1105,10 +1105,10 @@ async def uptime(ctx):
     run_time = end - start
 
     days = int(run_time // 86400)
-    time_str = time.strftime("%H:%M:%S", time.gmtime(run_time % 86400))
-    decimals = f'{(run_time % 1):.3f}'
+    time_str = time.strftime("%Hh %Mm %Ss", time.gmtime(run_time % 86400))
+    decimals = f'{(run_time % 1):.3f}ms'
 
-    msg = f'{bot_name} has been up for {days}d {time_str}:{str(decimals)[2:]}'
+    msg = f'{bot_name} has been up for {days}d {time_str} {str(decimals)[2:]}'
     await ctx.send(msg)
 
 
@@ -1381,9 +1381,11 @@ async def disable(ctx):
                        f"Available commands: {', '.join(toggleable_commands)}")
 
 
-@client.command()
+@client.command(aliases=['config'])
 async def settings(ctx):
-    """Shows current server settings"""
+    """
+    Shows current server settings
+    """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
     guild_settings = server_settings.get(guild_id)
@@ -1393,14 +1395,15 @@ async def settings(ctx):
     kys_allowed = 'kys_protect' in allowed_commands
     currency_allowed = 'currency_system' in allowed_commands
 
-    await ctx.send(f"```Currency System:  {allow_dict[currency_allowed]}\n" +
-                   '\n' +
-                   f"Compliments:      {allow_dict[compliments_allowed]}\n" +
-                   '\n' +
-                   f"DND:              {allow_dict[dnd_allowed]}\n" +
-                   '\n' +
-                   f"Kys Protection:   {allow_dict[kys_allowed]}" +
-                   '```')
+    await ctx.send(f"```Currency System:  {allow_dict[currency_allowed]}\n"
+                   '\n'
+                   f"Compliments:      {allow_dict[compliments_allowed]}\n"
+                   '\n'
+                   f"DND:              {allow_dict[dnd_allowed]}\n"
+                   '\n'
+                   f"Kys Protection:   {allow_dict[kys_allowed]}"
+                   '```\n'
+                   'Run `!enable` or `!disable` to enable/disable an option')
 
 
 ##########################################################
