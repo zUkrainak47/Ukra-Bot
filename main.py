@@ -880,9 +880,9 @@ async def on_ready():
                     if backfire_role is not None and backfire_role != role:
                         if backfire_role in member.roles:
                             await member.remove_roles(backfire_role)
-                            await log_channel.send(f"[RESTART] ✅ Removed (backfire) `@{backfire_role.name}` from {member.mention} (`{command_name}` in {guild.name})")
+                            await log_channel.send(f"[RESTART] ✅ Removed `@{backfire_role.name}` (backfire) from {member.mention} (`{command_name}` in {guild.name})")
                         else:
-                            await log_channel.send(f"[RESTART] 👍 Already removed (backfire) `@{backfire_role.name}` from {member.mention} (`{command_name}` in {guild.name})")
+                            await log_channel.send(f"[RESTART] 👍 Already removed `@{backfire_role.name}` (backfire) from {member.mention} (`{command_name}` in {guild.name})")
 
                     distributed_custom_roles[guild_id][command_name].remove(member_id)
                 except discord.Forbidden:
@@ -1964,7 +1964,7 @@ class CustomCommands(commands.Cog):
                 await ctx.send(f"```{r}```")
             return
 
-        await ctx.reply(f"Custom command `!{command_name}` doesn't exist.")
+        await ctx.reply(f"Custom command `!{command_name}` doesn't exist.\nIf you're looking for a custom role command, use `!cri`")
 
     @custom_inspect.error
     async def custom_inspect_error(self, ctx, error):
@@ -2211,7 +2211,7 @@ class CustomCommands(commands.Cog):
         custom_role_commands = server_settings[guild_id].setdefault('custom_role_commands', {})
 
         if command_name not in custom_role_commands:
-            await ctx.reply(f"Custom role command `!{command_name}` doesn't exist.")
+            await ctx.reply(f"Custom role command `!{command_name}` doesn't exist.\nIf you're looking for a regular custom command, use `!ci`")
             return
 
         config = custom_role_commands[command_name]
@@ -2719,7 +2719,7 @@ async def execute_custom_role_command(ctx, command_name, command_config):
         if not backfired and command_config.get('remove_required_victim_role', False):
             try:
                 await target.remove_roles(extra_roles['required_victim_role'])
-                await log_channel.send(f"✅ Removed (victim) `@{extra_roles['required_victim_role'].name}` from {target.mention} (`{command_name}` in {ctx.guild.name})")
+                await log_channel.send(f"✅ Removed `@{extra_roles['required_victim_role'].name}` (victim) from {target.mention} (`{command_name}` in {ctx.guild.name})")
             except Exception as e:
                 await log_channel.send(f"❓ Error removing victim role from <@{target.id}>: {e}")
         # Send appropriate message
@@ -2739,9 +2739,9 @@ async def execute_custom_role_command(ctx, command_name, command_config):
         try:
             if role_given in actual_target.roles:
                 await actual_target.remove_roles(role_given)
-                await log_channel.send(f"✅ Removed {"(backfire) " if backfired else ""}`@{role_given.name}` from {actual_target.mention} (`{command_name}` in {ctx.guild.name})")
+                await log_channel.send(f"✅ Removed `@{role_given.name}` {"(backfire) " if backfired else ""}from {actual_target.mention} (`{command_name}` in {ctx.guild.name})")
             else:
-                await log_channel.send(f"👍 Already removed {"(backfire) " if backfired else ""}`@{role_given.name}` from {actual_target.mention} (`{command_name}` in {ctx.guild.name})")
+                await log_channel.send(f"👍 Already removed `@{role_given.name}` {"(backfire) " if backfired else ""}from {actual_target.mention} (`{command_name}` in {ctx.guild.name})")
         except discord.Forbidden:
             await log_channel.send(f"❌ Failed to remove `@{role_given.name}` from member <@{actual_target_id}> in {ctx.guild.name} - permission error")
             if actual_target_id in distributed_custom_roles[guild_id][command_name]:
