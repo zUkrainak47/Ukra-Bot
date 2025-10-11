@@ -1161,8 +1161,8 @@ async def donate(ctx):
 @commands.hybrid_command(name="server", description=f"DM's the sender an invite link to {bot_name} Server", aliases=['invite', 'support'])
 async def server(ctx):
     """
+    DMs the sender an invite link to The Ukra Place
     You should write this command for exclusive giveaways :3
-    DM's the sender an invite link to Ukra Bot Server
     """
     if ctx.guild:
         try:
@@ -2410,7 +2410,7 @@ async def calc(ctx: commands.Context, *, expression: str):
             return
 
     if expression.strip() in ('9 + 10', '9+10', '9+ 10', '9 +10'):
-        await ctx.reply(f"```{expression.strip()}\n= 21```")
+        await ctx.reply(f"```\n{expression.strip()}\n= 21```")
         return
 
     safe_expression = expression.replace('^', '**').replace('ˆ', '**').replace('∞', 'inf').replace('x', '*').replace('×', '*')
@@ -2666,8 +2666,7 @@ templates = ['<word', '<text>', '<user', '<num']
 async def execute_custom_role_command(ctx, command_name, command_config):
     """Execute a custom role distribution command"""
     if not bot_ready.is_set():
-        await ctx.send(f"⏳ {bot_name} is starting up, please wait a moment {murmheart} (how?)")
-        return
+        return await ctx.send(f"⏳ {bot_name} is starting up, please wait a moment {murmheart} (how?)")
 
     caller = ctx.author
     guild_id = str(ctx.guild.id)
@@ -2693,14 +2692,12 @@ async def execute_custom_role_command(ctx, command_name, command_config):
 
     mentions = ctx.message.mentions
     if not mentions:
-        await ctx.send(f'Please mention a user: `!{command_name} @user`')
-        return
+        return await ctx.send(f'Please mention a user: `!{command_name} @user`')
 
     target = mentions[0]
 
     if target.bot:
-        await ctx.send(f"Can't use this command on bots!")
-        return
+        return await ctx.send(f"Can't use this command on bots!")
 
     if not command_config.get('victims_can_use', True) and role in ctx.author.roles:
         return await ctx.send(f"`{role.name}` people can't {command_name} :3")
@@ -2728,8 +2725,7 @@ async def execute_custom_role_command(ctx, command_name, command_config):
     cooldown = command_config.get('cooldown', 0)
     retry_after = check_custom_role_cooldown(guild_id, command_name, caller.id, cooldown)
     if retry_after:
-        await print_reset_time(int(retry_after), ctx, f"`!{command_name}` has a cooldown!\n")
-        return
+        return await print_reset_time(int(retry_after), ctx, f"`!{command_name}` has a cooldown!\n")
 
     # Roll for backfire
     backfire_rate = command_config.get('backfire_rate', 0.0)
