@@ -1659,7 +1659,8 @@ async def add_custom_command(ctx, name: str, response: str, mode):
 
     guild_id = str(ctx.guild.id)
     command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
-
+    if ' ' in command_name:
+        return await ctx.reply('Custom command names can only contain one word silly')
     if response[0] == response[-1] == '"':
         response = response[1:-1]
 
@@ -1832,6 +1833,8 @@ class CustomCommands(commands.Cog):
             await ctx.reply("You need the 'Manage Server' permission to use this command.")
         elif isinstance(error, commands.BadArgument):
             await ctx.reply(f"Couldn't properly understand the command name or response.")
+        elif isinstance(error, discord.ext.commands.errors.CheckFailure):
+            pass
         else:
             print(f"Error in custom: {error}")  # Log other errors
             await ctx.reply("An unexpected error occurred.")
@@ -1845,15 +1848,21 @@ class CustomCommands(commands.Cog):
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
-    @commands.hybrid_command(name='custom_list', description='cl - Lists all custom commands for the server',  aliases=['custom_commands', 'cl'])
-    @app_commands.describe(sort_alphabetically="Sorted alphabetically (True) / by time added (False)")
-    async def custom_list(self, ctx, sort_alphabetically=True):
+    @commands.hybrid_command(name='custom_list', description='!cl - Lists all custom commands for the server',  aliases=['custom_commands', 'cl'])
+    @app_commands.describe(sort_alphabetically="Sorted alphabetically (True) / by time added (False)", search='If you want to search for commands that contain a specific string')
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    async def custom_list(self, ctx, *, search: str = None, sort_alphabetically: bool = True):
         """
         Lists all custom commands for this server
-        """
-        await self.cl(ctx, sort_alphabetically)
 
-    async def cl(self, ctx, sort_alphabetically):
+        - `!cl lorem ipsum` will search for all commands that have "lorem ipsum" as part of their name or response
+        - Use `/custom_list` to select sorting (alphabetical / by time added)
+
+        Has a 5-second cooldown
+        """
+        await self.cl(ctx, sort_alphabetically, search.lower())
+
+    async def cl(self, ctx, sort_alphabetically, search):
         if not ctx.guild:
             await ctx.reply("Custom commands can only be handled in servers.")
             return
@@ -1862,21 +1871,31 @@ class CustomCommands(commands.Cog):
 
         # Ensure the structure exists
         make_sure_server_settings_exist(guild_id)
-        custom_commands = list(server_settings[guild_id].setdefault('custom_commands', {}).keys())[::-1]
+        if search is None:
+            custom_commands = list(server_settings[guild_id].setdefault('custom_commands', {}).keys())[::-1]
+        else:
+            custom_commands = [key for key, val in list(server_settings[guild_id].setdefault('custom_commands', {}).items()) if ((search in key) or (search in val.lower()))][::-1]
         if sort_alphabetically:
             custom_commands = sorted(custom_commands)
 
         embed_color = 0xffd000
-        pagination_view = PaginationView(custom_commands, title_=f"", author_=f"Custom Commands", color_=embed_color, ctx_=ctx)
+        # print(f"search: '{search}', searched_: '{(search if (search is not None) else '')}'")
+        pagination_view = PaginationView(custom_commands, title_=f"", author_=f"Custom Commands", color_=embed_color, ctx_=ctx, searched_=(search if (search is not None) else ''))
         await pagination_view.send_embed()
 
     @custom_list.error
     async def custom_list_error(self, ctx, error):
-        if isinstance(error, discord.ext.commands.errors.BadBoolArgument):
-            await self.cl(ctx, sort_alphabetically=True)
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.reply(f"Don't spam this command\nOne use per 5 seconds :)")
+        elif isinstance(error, discord.ext.commands.errors.CheckFailure):
+            pass
+        else:
+            # It's good practice to log or handle other types of errors
+            print(f"An unhandled error occurred in the custom_list command: {error}")
+            await ctx.send("An unexpected error occurred.")
 
     @commands.cooldown(1, 120, commands.BucketType.user)
-    @commands.hybrid_command(name='custom_list_dm', description='cldm - Sends you a message containing all custom command of this server', aliases=['cldm'])
+    @commands.hybrid_command(name='custom_list_dm', description='!cldm - Sends you a message containing all custom command of this server', aliases=['cldm'])
     @app_commands.describe(sort_alphabetically="Sorted alphabetically (True) / by time added (False)")
     async def custom_list_dm(self, ctx, sort_alphabetically=True):
         """
@@ -1975,6 +1994,8 @@ class CustomCommands(commands.Cog):
             await ctx.reply(f"Usage: `!custom_inspect <command_name>`")
         elif isinstance(error, commands.BadArgument):
             await ctx.reply(f"Couldn't properly understand the command name or response.")
+        elif isinstance(error, discord.ext.commands.errors.CheckFailure):
+            pass
         else:
             print(f"Error in custom: {error}")  # Log other errors
             await ctx.reply("An unexpected error occurred.")
@@ -2052,6 +2073,9 @@ class CustomCommands(commands.Cog):
 
         guild_id = str(ctx.guild.id)
         command_name = name.lower().lstrip('!')
+        if ' ' in command_name:
+            return await ctx.reply('Custom role command names can only contain one word silly')
+
         make_sure_server_settings_exist(guild_id)
         custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
         if command_name in custom_commands:
@@ -2121,8 +2145,10 @@ class CustomCommands(commands.Cog):
             await ctx.reply(f"Run `!help custom_role`")
         elif isinstance(error, commands.RoleNotFound):
             await ctx.reply("Could not find that role. Try mentioning it or using the role ID.")
-        elif isinstance(error, discord.ext.commands.errors.CheckFailure):
+        elif isinstance(error, discord.ext.commands.errors.CheckFailure) and bot_ready.is_set():
             await ctx.reply("You don't have the necessary permissions to use this command.", ephemeral=True)
+        elif isinstance(error, discord.ext.commands.errors.CheckFailure):
+            pass
         else:
             print(f"Error in custom_role: {error}")
             await ctx.reply("An unexpected error occurred.")
@@ -2358,7 +2384,7 @@ FORBIDDEN_KEYWORDS = {
 
 
 @commands.hybrid_command(name="calc", description="Simple calculator")
-@commands.cooldown(1, 3, commands.BucketType.user) # Add a reasonable cooldown (1 use per 5s per user)
+@commands.cooldown(1, 3, commands.BucketType.user)
 async def calc(ctx: commands.Context, *, expression: str):
     """
     Calculates the result of a mathematical expression.
@@ -2367,7 +2393,7 @@ async def calc(ctx: commands.Context, *, expression: str):
 
     Example: `!calc (5 + sqrt(9)) * pi / 2`
 
-    Has a 5-second cooldown
+    Has a 3-second cooldown
     """
     if not expression:
         await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
@@ -3388,7 +3414,7 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
 
 # taken from https://youtu.be/PRC4Ev5TJwc + chatgpt refined
 class PaginationView(discord.ui.View):
-    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', ctx_=None, timeout: float = 120, page_: int = 1, cog_ = None, total_number_: int = 0):
+    def __init__(self, data_, title_: str, color_, stickied_msg_: list = [], footer_: list = ['', ''], description_: str = '', author_: str = '', author_icon_: str = '', ctx_=None, timeout: float = 120, page_: int = 1, cog_ = None, total_number_: int = 0, searched_: str = ''):
         super().__init__(timeout=timeout)
         self.data = data_
         self.title = title_
@@ -3402,6 +3428,7 @@ class PaginationView(discord.ui.View):
         self.message = None
         self.cog = cog_
         self.total_number = total_number_
+        self.searched = searched_
         self.page_size = 1 if self.author.startswith('The Lore of') else \
                          10 if 'Leaderboard' in self.title else \
                          5 if (self.footer and self.footer_icon) else \
@@ -3542,9 +3569,13 @@ class PaginationView(discord.ui.View):
             return embed
 
         if self.author == "Custom Commands":
+            t = f' (*searching:* `{self.searched[:27]}{'...' if (len(self.searched) > 27) else ''}`)' if (len(self.searched) > 0) else ''
             if not data:
-                desc = "This server doesn't have any custom commands yet!\nYou can add some using `!custom`"
-                embed = discord.Embed(title="Custom Commands", color=self.color, description=desc)
+                if not self.searched:
+                    desc = "This server doesn't have any custom commands yet!\nYou can add some using `!custom`"
+                else:
+                    desc = "Nothing found!\nTip:\n- search for small snippets\n- only search for unchangeable parts of the response (no random numbers, custom text input etc.)"
+                embed = discord.Embed(title=f"Custom Commands{t}", color=self.color, description=desc)
                 return embed
 
             num_items = len(data)
@@ -3554,7 +3585,7 @@ class PaginationView(discord.ui.View):
             for item1, item2 in items_zipped:
                 desc += f"{('!'+item1):<{offset}}{('!'+item2) if item2 else ''}\n"
             desc += '```'
-            embed = discord.Embed(title="Custom Commands", color=self.color, description=desc)
+            embed = discord.Embed(title=f"Custom Commands{t}", color=self.color, description=desc)
             embed.set_footer(text=f"Page {self.current_page} / {self.total_pages()}")
             return embed
 
