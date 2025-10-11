@@ -1860,7 +1860,7 @@ class CustomCommands(commands.Cog):
 
         Has a 5-second cooldown
         """
-        await self.cl(ctx, sort_alphabetically, search.lower())
+        await self.cl(ctx, sort_alphabetically, search.lower() if search is not None else None)
 
     async def cl(self, ctx, sort_alphabetically, search):
         if not ctx.guild:
