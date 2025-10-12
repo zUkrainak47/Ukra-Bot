@@ -2366,7 +2366,8 @@ def evaluate_expression_sync(expression: str):
         'asin': math.asin, 'acos': math.acos, 'atan': math.atan, 'atan2': math.atan2,
         'log': math.log, 'log10': math.log10, 'exp': math.exp, 'pow': math.pow,
         'pi': math.pi, 'e': math.e, 'inf': float('inf'), 'floor': math.floor,
-        'ceil': math.ceil
+        'ceil': math.ceil, 'gcd': math.gcd, 'lcm': math.lcm,
+        'r': random.randint, 'rng': random.randint, 'random': random.random
     }
     safe_builtins = {
         'sum': sum, 'abs': abs, 'min': min, 'max': max, 'round': round, 'len': len, 'format': format
@@ -2392,6 +2393,14 @@ async def calc(ctx: commands.Context, *, expression: str):
     Evaluation times out after 3 seconds.
 
     Example: `!calc (5 + sqrt(9)) * pi / 2`
+
+    You may use the following:
+    `sqrt`: math.sqrt, `sin`: math.sin, `cos`: math.cos, `tan`: math.tan,
+    `asin`: math.asin, `acos`: math.acos, `atan`: math.atan, `atan2`: math.atan2,
+    `log`: math.log, `log10`: math.log10, `exp`: math.exp, `pow`: math.pow,
+    `pi`: math.pi, `e`: math.e, `inf`: float(`inf`),
+    `floor`: math.floor, `ceil`: math.ceil, `gcd`: math.gcd, `lcm`: math.lcm,
+    `r`: random.randint, `rng`: random.randint, `random`: random.random
 
     Has a 3-second cooldown
     """
