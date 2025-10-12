@@ -13,6 +13,7 @@ import time
 import traceback
 import typing
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from datetime import datetime, timedelta, UTC
 from datetime import time as datetime_time
 from itertools import zip_longest
@@ -830,7 +831,15 @@ async def on_ready():
         for guild in client.guilds:
             make_sure_server_settings_exist(str(guild.id))
         print("✅ Settings verified")
+        await client.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.playing,
+                name="🔢 Setting up calculator..."
+            )
+        )
 
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, warm_pool)
         await client.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.playing,
@@ -2328,98 +2337,134 @@ class Placeholder:
         return f"Placeholder(full='{self.full_match}', type='{self.type}', index={self.index}, default='{self.default_value}', required={self.is_required})"
 
 
+SAFE_MATH = {
+    'sqrt': math.sqrt, 'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
+    'asin': math.asin, 'acos': math.acos, 'atan': math.atan, 'atan2': math.atan2,
+    'log': math.log, 'log10': math.log10, 'exp': math.exp, 'pow': math.pow,
+    'pi': math.pi, 'e': math.e, 'inf': float('inf'), 'floor': math.floor,
+    'ceil': math.ceil, 'gcd': math.gcd, 'lcm': math.lcm,
+    'r': random.randint, 'rng': random.randint, 'random': random.random
+}
+SAFE_BUILTINS = {
+    'sum': sum, 'abs': abs, 'min': min, 'max': max, 'round': round, 'len': len, 'format': format
+}
+SAFE_BASE = {**SAFE_MATH, **SAFE_BUILTINS}
+
+_AEVAL = None
+_EXECUTOR = None
+POOL_SIZE = 2
+AEVAL_MAX_TIME = 0.1
+OUTER_TIMEOUT = 2
+
+
 def _lower_priority():
-    """
-    This function runs when a new worker process is created.
-    It sets the process to the lowest priority to prevent system lag.
-    """
     try:
         if psutil:
             p = psutil.Process(os.getpid())
             if psutil.WINDOWS:
-                p.nice(psutil.IDLE_PRIORITY_CLASS)
-            else:  # Linux/macOS
-                p.nice(19)  # Lowest priority
+                p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+            else:
+                p.nice(5)
         else:
-            # Fallback without psutil on POSIX
             if hasattr(os, "nice"):
-                os.nice(19)
+                os.nice(5)
     except Exception as e:
         print(f"Error during worker initialization: {e}")
 
-
-def _eval_worker(expr: str, q):
-    """
-    A simple, synchronous function to be run in a separate process.
-    It evaluates the given expression using asteval with a safe symbol table.
-    """
+def worker_initializer():
+    global _AEVAL
     _lower_priority()
+    _AEVAL = Interpreter(max_time=AEVAL_MAX_TIME, use_numpy=False)
+
+
+def eval_expr(task):
+    # task is (expr, max_time)
+    expr, max_time = task
+    global _AEVAL
+    if _AEVAL is None:
+        worker_initializer()
+
+    # Reset symtable per call (no cross-user state)
+    _AEVAL.symtable = SAFE_BASE.copy()
     try:
-        aeval = Interpreter(max_time=3.0, use_numpy=False)
+        _AEVAL.max_time = max_time
+    except Exception:
+        _AEVAL = Interpreter(max_time=max_time, use_numpy=False)
+        _AEVAL.symtable = SAFE_BASE.copy()
 
-        # --- Create a Whitelist of Safe Functions ---
-        safe_math_functions = {
-            'sqrt': math.sqrt, 'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
-            'asin': math.asin, 'acos': math.acos, 'atan': math.atan, 'atan2': math.atan2,
-            'log': math.log, 'log10': math.log10, 'exp': math.exp, 'pow': math.pow,
-            'pi': math.pi, 'e': math.e, 'inf': float('inf'), 'floor': math.floor,
-            'ceil': math.ceil, 'gcd': math.gcd, 'lcm': math.lcm,
-            'r': random.randint, 'rng': random.randint, 'random': random.random
-        }
-        safe_builtins = {
-            'sum': sum, 'abs': abs, 'min': min, 'max': max, 'round': round, 'len': len, 'format': format
-        }
-        aeval.symtable = {**safe_math_functions, **safe_builtins}
-        result = aeval.eval(expr)
-        if aeval.error:
-            # surface the first error; you can format more richly if you want
-            err = aeval.error[0]
-            print(f"Aeval Error. {getattr(err, 'exc', type(err)).__name__}: {getattr(err, 'msg', str(err))}")
-            msg = f"{getattr(err, 'exc', type(err)).__name__}: {getattr(err, 'msg', str(err))}"
-            q.put((False, msg))
-        else:
-            q.put((True, result))
-    except Exception as e:
-        try:
-            q.put((False, f"{type(e).__name__}: {e}"))
-        except Exception:
-            # If the process is being killed mid-put, just exit.
-            pass
-
-
-def eval_in_subprocess(expr, timeout=5.0):
-    ctx = mp.get_context('spawn')
-    q = ctx.Queue(1)
-    p = ctx.Process(target=_eval_worker, args=(expr, q), daemon=True)
-    p.start()
-    p.join(timeout)
-
-    if p.is_alive():
-        p.kill()     # hard kill (Windows-friendly)
-        p.join()
-        try:
-            q.close(); q.join_thread()
-        except Exception:
-            pass
-        raise TimeoutError(f"Evaluation timed out (> {timeout} s)")
-
+    # Optional: clear previous errors if your asteval version accumulates
     try:
-        ok, payload = q.get_nowait()
-    except (queue.Empty, EOFError) as e:
-        try:
-            q.close(); q.join_thread()
-        except Exception:
-            pass
-        raise RuntimeError("Worker exited without returning a result") from e
-
-    try:
-        q.close(); q.join_thread()
+        _AEVAL.error = []
     except Exception:
         pass
 
-    if ok:
-        return payload
-    raise RuntimeError(payload)
+    result = _AEVAL.eval(expr)
+    if _AEVAL.error:
+        err = _AEVAL.error[0]
+        raise RuntimeError(f"{getattr(err, 'exc', type(err)).__name__}: {getattr(err, 'msg', str(err))}")
+    return result
+
+
+def get_executor():
+    global _EXECUTOR
+    if _EXECUTOR is None:
+        _EXECUTOR = ProcessPoolExecutor(
+            max_workers=POOL_SIZE,
+            initializer=worker_initializer,
+        )
+    return _EXECUTOR
+
+
+def _hard_reset_executor(ex):
+    # Force-kill running workers (use private attrs; stable across CPython 3.8–3.12)
+    try:
+        procs = getattr(ex, "_processes", {})
+        for p in list(procs.values()):
+            try:
+                if hasattr(p, "kill"):
+                    p.kill()
+                else:
+                    p.terminate()
+            except Exception:
+                pass
+        # Don't wait for graceful exit; drop remaining work
+        ex.shutdown(wait=False, cancel_futures=True)
+    except Exception:
+        # Best-effort
+        pass
+    finally:
+        global _EXECUTOR
+        _EXECUTOR = None
+
+
+EVAL_CONCURRENCY = asyncio.Semaphore(POOL_SIZE)  # keep queue short; measure real runtime
+
+
+async def eval_with_pool(expr: str, timeout: float, eval_time: float):
+    ex = get_executor()
+    fut = ex.submit(eval_expr, (expr, eval_time))
+    afut = asyncio.wrap_future(fut)
+    try:
+        return await asyncio.wait_for(afut, timeout=timeout)
+    except asyncio.TimeoutError:
+        _hard_reset_executor(ex)  # kill runaway job(s)
+        raise
+    except BrokenProcessPool:
+        _hard_reset_executor(ex)
+        raise
+
+
+def _noop():
+    return True
+
+
+def warm_pool():
+    ex = get_executor()
+    # Force processes to spawn and run initializer
+    for _ in range(POOL_SIZE):
+        ex.submit(_noop).result(timeout=5)
+    # Prime the evaluator to ensure Interpreter is constructed
+    ex.submit(eval_expr, ("1+1", 0.05)).result(timeout=5)
 
 
 FORBIDDEN_KEYWORDS = {
@@ -2427,7 +2472,6 @@ FORBIDDEN_KEYWORDS = {
     '__import__', 'def', 'class', 'lambda', 'yield'
 }
 FORBIDDEN_RE = re.compile(r'\b(while|for|import|open|eval|exec|__import__|def|class|lambda|yield)\b', re.I)
-EVAL_CONCURRENCY = asyncio.Semaphore(4)
 
 
 @commands.hybrid_command(name="calc", description="Simple calculator")
@@ -2447,7 +2491,7 @@ async def calc(ctx: commands.Context, *, expression: str):
     `pi`: math.pi, `e`: math.e, `inf`: float(`inf`),
     `floor`: math.floor, `ceil`: math.ceil, `gcd`: math.gcd, `lcm`: math.lcm,
     `r`: random.randint, `rng`: random.randint, `random`: random.random
-    `sum`: sum, `abs`: abs, `min`: min, `max`: max, `round`: round, `len`: len
+    `sum`: sum, `abs`: abs, `min`: min, `max`: max, `round`: round, `len`: len, `format`: format
 
     Has a 3-second cooldown
     """
@@ -2458,6 +2502,7 @@ async def calc(ctx: commands.Context, *, expression: str):
 
     if ctx.author.id in the_users:
         ctx.command.reset_cooldown(ctx)
+
     se = FORBIDDEN_RE.search(expression.lower())
     if se:
         return await ctx.reply(f"Error: Use of forbidden keyword (`{se.group(0)}`)")
@@ -2473,23 +2518,23 @@ async def calc(ctx: commands.Context, *, expression: str):
         .replace('∞', 'inf')
     )
     safe_expression = re.sub(r"(?<=[\d)'\"])\s*[x×]\s*(?=[\d('\"TFN])", '*', safe_expression)
+
     try:
         async with EVAL_CONCURRENCY:
-            loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(None, eval_in_subprocess, safe_expression, 5.0)
+            result = await eval_with_pool(
+                safe_expression,
+                timeout=OUTER_TIMEOUT,
+                eval_time=AEVAL_MAX_TIME
+            )
 
-        # --- Formatting Output ---
         result_str = f"{result:,}" if isinstance(result, (int, float)) else str(result)
-
-        # --- Limit Output Length ---
         if len(result_str) > 1800:
             result_str = result_str[:1800] + "...\n(Output truncated)"
 
         await ctx.reply(f"```\n{expression.replace('**', '^')}\n= {result_str}\n```")
 
-    except TimeoutError:
-        await ctx.reply(f"Error: Evaluation timed out (> 5 seconds) and was terminated")
-
+    except asyncio.TimeoutError:
+        await ctx.reply(f"Error: Evaluation timed out (> {OUTER_TIMEOUT} seconds) and was terminated")
     except Exception as e:
         error_snippet = str(e).split('\n')[-1][:300]
         await ctx.reply(f"Error evaluating expression: ```\n{error_snippet}\n```")
@@ -3108,7 +3153,7 @@ async def send_custom_command(ctx, error, mode='normal'):
 
                     # 3. Evaluate all expressions in parallel using the secure executor
                     tasks = [
-                        loop.run_in_executor(executor, evaluate_expression_sync, expr)
+                        asyncio.wrap_future(get_executor().submit(eval_expr, (expr, AEVAL_MAX_TIME)))
                         for expr in expressions_to_eval
                     ]
                     # A total timeout for all math in one custom command
