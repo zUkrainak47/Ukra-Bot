@@ -17,18 +17,13 @@ from datetime import datetime, timedelta, UTC
 from datetime import time as datetime_time
 from itertools import zip_longest
 from pathlib import Path
-
 import aiohttp
 import discord
 import finnhub
 import matplotlib.pyplot as plt
-# import matplotlib.dates as mdates
 import mplfinance as mpf  # For candlestick charts
 import pandas as pd
-import psutil
-# import numpy as np
 import pytz
-# import yfinance
 from apnggif import apnggif
 from asteval import Interpreter
 from discord import Intents, app_commands
@@ -36,6 +31,12 @@ from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from rapidfuzz import process
 from stockdex import Ticker
+import multiprocessing as mp
+import queue
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 start = time.perf_counter()
 
@@ -2327,61 +2328,106 @@ class Placeholder:
         return f"Placeholder(full='{self.full_match}', type='{self.type}', index={self.index}, default='{self.default_value}', required={self.is_required})"
 
 
-def worker_initializer():
+def _lower_priority():
     """
     This function runs when a new worker process is created.
     It sets the process to the lowest priority to prevent system lag.
     """
     try:
-        p = psutil.Process(os.getpid())
-        if psutil.WINDOWS:
-            p.nice(psutil.IDLE_PRIORITY_CLASS)
-        else:  # Linux/macOS
-            p.nice(19)  # Lowest priority
+        if psutil:
+            p = psutil.Process(os.getpid())
+            if psutil.WINDOWS:
+                p.nice(psutil.IDLE_PRIORITY_CLASS)
+            else:  # Linux/macOS
+                p.nice(19)  # Lowest priority
+        else:
+            # Fallback without psutil on POSIX
+            if hasattr(os, "nice"):
+                os.nice(19)
     except Exception as e:
         print(f"Error during worker initialization: {e}")
 
-    except Exception as e:
-        # Log if something goes wrong during initialization, but don't crash.
-        print(f"Error during worker initialization: {e}")
 
-
-executor = ProcessPoolExecutor(
-    max_workers=2,
-    initializer=worker_initializer
-)
-
-
-def evaluate_expression_sync(expression: str):
+def _eval_worker(expr: str, q):
     """
     A simple, synchronous function to be run in a separate process.
     It evaluates the given expression using asteval with a safe symbol table.
     """
-    # max_time is a cooperative, secondary check. The real timeout is handled by the caller.
-    aeval = Interpreter(max_time=3.0, use_numpy=False)
+    _lower_priority()
+    try:
+        aeval = Interpreter(max_time=3.0, use_numpy=False)
 
-    # --- Create a Whitelist of Safe Functions ---
-    safe_math_functions = {
-        'sqrt': math.sqrt, 'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
-        'asin': math.asin, 'acos': math.acos, 'atan': math.atan, 'atan2': math.atan2,
-        'log': math.log, 'log10': math.log10, 'exp': math.exp, 'pow': math.pow,
-        'pi': math.pi, 'e': math.e, 'inf': float('inf'), 'floor': math.floor,
-        'ceil': math.ceil, 'gcd': math.gcd, 'lcm': math.lcm,
-        'r': random.randint, 'rng': random.randint, 'random': random.random
-    }
-    safe_builtins = {
-        'sum': sum, 'abs': abs, 'min': min, 'max': max, 'round': round, 'len': len, 'format': format
-    }
-    final_symtable = {**safe_math_functions, **safe_builtins}
+        # --- Create a Whitelist of Safe Functions ---
+        safe_math_functions = {
+            'sqrt': math.sqrt, 'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
+            'asin': math.asin, 'acos': math.acos, 'atan': math.atan, 'atan2': math.atan2,
+            'log': math.log, 'log10': math.log10, 'exp': math.exp, 'pow': math.pow,
+            'pi': math.pi, 'e': math.e, 'inf': float('inf'), 'floor': math.floor,
+            'ceil': math.ceil, 'gcd': math.gcd, 'lcm': math.lcm,
+            'r': random.randint, 'rng': random.randint, 'random': random.random
+        }
+        safe_builtins = {
+            'sum': sum, 'abs': abs, 'min': min, 'max': max, 'round': round, 'len': len, 'format': format
+        }
+        aeval.symtable = {**safe_math_functions, **safe_builtins}
+        result = aeval.eval(expr)
+        if aeval.error:
+            # surface the first error; you can format more richly if you want
+            err = aeval.error[0]
+            print(f"Aeval Error. {getattr(err, 'exc', type(err)).__name__}: {getattr(err, 'msg', str(err))}")
+            msg = f"{getattr(err, 'exc', type(err)).__name__}: {getattr(err, 'msg', str(err))}"
+            q.put((False, msg))
+        else:
+            q.put((True, result))
+    except Exception as e:
+        try:
+            q.put((False, f"{type(e).__name__}: {e}"))
+        except Exception:
+            # If the process is being killed mid-put, just exit.
+            pass
 
-    aeval.symtable = final_symtable
-    return aeval.eval(expression)
+
+def eval_in_subprocess(expr, timeout=5.0):
+    ctx = mp.get_context('spawn')
+    q = ctx.Queue(1)
+    p = ctx.Process(target=_eval_worker, args=(expr, q), daemon=True)
+    p.start()
+    p.join(timeout)
+
+    if p.is_alive():
+        p.kill()     # hard kill (Windows-friendly)
+        p.join()
+        try:
+            q.close(); q.join_thread()
+        except Exception:
+            pass
+        raise TimeoutError(f"Evaluation timed out (> {timeout} s)")
+
+    try:
+        ok, payload = q.get_nowait()
+    except (queue.Empty, EOFError) as e:
+        try:
+            q.close(); q.join_thread()
+        except Exception:
+            pass
+        raise RuntimeError("Worker exited without returning a result") from e
+
+    try:
+        q.close(); q.join_thread()
+    except Exception:
+        pass
+
+    if ok:
+        return payload
+    raise RuntimeError(payload)
 
 
 FORBIDDEN_KEYWORDS = {
     'while', 'for', 'import', 'open', 'eval', 'exec',
     '__import__', 'def', 'class', 'lambda', 'yield'
 }
+FORBIDDEN_RE = re.compile(r'\b(while|for|import|open|eval|exec|__import__|def|class|lambda|yield)\b', re.I)
+EVAL_CONCURRENCY = asyncio.Semaphore(4)
 
 
 @commands.hybrid_command(name="calc", description="Simple calculator")
@@ -2401,37 +2447,36 @@ async def calc(ctx: commands.Context, *, expression: str):
     `pi`: math.pi, `e`: math.e, `inf`: float(`inf`),
     `floor`: math.floor, `ceil`: math.ceil, `gcd`: math.gcd, `lcm`: math.lcm,
     `r`: random.randint, `rng`: random.randint, `random`: random.random
+    `sum`: sum, `abs`: abs, `min`: min, `max`: max, `round`: round, `len`: len
 
     Has a 3-second cooldown
     """
     if not expression:
-        await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
-        return
+        return await ctx.reply("Please provide an expression to calculate. Example: `!calc 2 * (3 + 4)`")
+
+    print(f"\n{ctx.author.name}\n{ctx.author.id} - {expression}")
 
     if ctx.author.id in the_users:
         ctx.command.reset_cooldown(ctx)
-
-    lowered_expression = expression.lower()
-    for keyword in FORBIDDEN_KEYWORDS:
-        # A simple `in` check is sufficient for these highly specific keywords.
-        if keyword in lowered_expression:
-            await ctx.reply(f"Error: Use of forbidden keyword (`{keyword}`) is not allowed.")
-            return
+    se = FORBIDDEN_RE.search(expression.lower())
+    if se:
+        return await ctx.reply(f"Error: Use of forbidden keyword (`{se.group(0)}`)")
 
     if expression.strip() in ('9 + 10', '9+10', '9+ 10', '9 +10'):
         await ctx.reply(f"```\n{expression.strip()}\n= 21```")
         return
 
-    safe_expression = expression.replace('^', '**').replace('ˆ', '**').replace('∞', 'inf').replace('x', '*').replace('×', '*')
-
+    safe_expression = (
+        expression
+        .replace('^', '**')
+        .replace('ˆ', '**')
+        .replace('∞', 'inf')
+    )
+    safe_expression = re.sub(r"(?<=[\d)'\"])\s*[x×]\s*(?=[\d('\"TFN])", '*', safe_expression)
     try:
-        loop = asyncio.get_running_loop()
-
-        eval_task = loop.run_in_executor(
-            executor, evaluate_expression_sync, safe_expression
-        )
-
-        result = await asyncio.wait_for(eval_task, timeout=3.0)
+        async with EVAL_CONCURRENCY:
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(None, eval_in_subprocess, safe_expression, 5.0)
 
         # --- Formatting Output ---
         result_str = f"{result:,}" if isinstance(result, (int, float)) else str(result)
@@ -2442,8 +2487,8 @@ async def calc(ctx: commands.Context, *, expression: str):
 
         await ctx.reply(f"```\n{expression.replace('**', '^')}\n= {result_str}\n```")
 
-    except asyncio.TimeoutError:
-        await ctx.reply(f"Error: Evaluation timed out (> 3 seconds) and was terminated\nThis happens sometimes {pepela} you can just try again :p")
+    except TimeoutError:
+        await ctx.reply(f"Error: Evaluation timed out (> 5 seconds) and was terminated")
 
     except Exception as e:
         error_snippet = str(e).split('\n')[-1][:300]
@@ -3047,10 +3092,10 @@ async def send_custom_command(ctx, error, mode='normal'):
 
                     for match in matches:
                         expression_str = match.group(1).strip()
-
+                        lowered_expression = expression_str.lower().replace('format', '')
                         # 1. Security Check: Forbidden Keywords
                         for keyword in FORBIDDEN_KEYWORDS:
-                            if keyword in expression_str.lower().replace('format', ''):
+                            if keyword in lowered_expression:
                                 raise ValueError(f"Forbidden keyword (`{keyword}`) in expression.")
 
                         # 2. Pre-process expression (replace placeholders, randoms, etc.)
@@ -4366,7 +4411,7 @@ class MyHelpCommand(commands.HelpCommand):
 
     # Optional: Override help for specific commands/cogs if needed
     async def send_command_help(self, command):
-        title_ = self.get_command_signature(command).replace('*', '\*') if command.name not in only_prefix else '!' + self.get_command_signature(command)[1:]
+        title_ = self.get_command_signature(command).replace('*', r'\*') if command.name not in only_prefix else '!' + self.get_command_signature(command)[1:]
         embed = discord.Embed(title=title_ if len(title_) <= 256 else command.name,
                               description=command.help or "No description provided.",
                               color=0xffd000)
@@ -9069,6 +9114,9 @@ async def setup():
 
 
 def log_shutdown():
+    if mp.current_process().name != "MainProcess":
+        return
+
     perform_backup('bot shutdown')
     end = time.perf_counter()
     run_time = end - start
