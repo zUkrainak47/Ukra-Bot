@@ -831,15 +831,17 @@ async def on_ready():
         for guild in client.guilds:
             make_sure_server_settings_exist(str(guild.id))
         print("✅ Settings verified")
+
         await client.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.playing,
                 name="🔢 Setting up calculator..."
             )
         )
-
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, warm_pool)
+        print("✅ Set up calculator")
+
         await client.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.playing,
@@ -2371,6 +2373,7 @@ def _lower_priority():
     except Exception as e:
         print(f"Error during worker initialization: {e}")
 
+
 def worker_initializer():
     global _AEVAL
     _lower_priority()
@@ -2754,7 +2757,7 @@ async def emote(ctx: commands.Context, emoji=''):
 
 @client.event
 async def on_command_error(ctx, error):
-    if isinstance(error, (commands.CommandNotFound, commands.CheckFailure)) and not bot_ready.is_set():
+    if (isinstance(error, commands.CommandOnCooldown)) or (isinstance(error, (commands.CommandNotFound, commands.CheckFailure)) and not bot_ready.is_set()):
         return
 
     await send_custom_command(ctx, error, 'normal')
@@ -5353,7 +5356,7 @@ class Lore(commands.Cog):
         if isinstance(error, commands.CommandOnCooldown):
             await print_reset_time(int(error.retry_after), ctx, f"You're adding lore too quickly! ")
 
-    @commands.hybrid_command(name="lore", description="Displays the lore of a user in this server")
+    @commands.hybrid_command(name="lore", description="Displays the lore of a user in this server", aliases=['lore1'])
     @app_commands.describe(user="The user whose lore you're checking", page="Entry number")
     @custom_cooldown_check(default_seconds=0)
     async def view_lore(self, ctx, user: typing.Optional[discord.User] = None, page: typing.Optional[int] = 1):
@@ -5715,14 +5718,16 @@ class Lore(commands.Cog):
         entry_counts = {user_id: len(entries) for user_id, entries in guild_lore.items()}
         total_entries = sum(entry_counts.values())
         sorted_entries = sorted(entry_counts.items(), key=lambda item: item[1], reverse=True)
+        your_rank = None
         rank = 1
         footer = ['', '']
         for user_id, message_count in sorted_entries:
             user = await self.get_user(int(user_id), ctx)
             if int(user_id) == ctx.author.id:
-                footer = [f"You're at #{rank}", get_pfp(ctx.author)]
+                footer = [f"You're at #{rank} with {message_count} entr{'ies' if message_count != 1 else 'y'}", get_pfp(ctx.author)]
+                your_rank = rank
             embed_data.append({
-                'label': f"**#{rank}** - {user.display_name}",
+                'label': f"**#{rank}** - {user.display_name if user != ctx.author else user.mention}",
                 'item': f"**{message_count}** entr{'ies' if message_count != 1 else 'y'}"
             })
             rank += 1
@@ -5732,7 +5737,7 @@ class Lore(commands.Cog):
             title_='Lore Leaderboard',
             color_=0xffd000,
             ctx_=ctx,
-            page_=min(page, len(embed_data)),
+            page_=min(page, len(embed_data)) if (page > 0) else math.ceil(your_rank / 10) if (your_rank is not None) else 1,
             footer_=footer,
             total_number_=total_entries
         )
@@ -6093,7 +6098,7 @@ class Currency(commands.Cog):
     @item.error
     async def item_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.reply("You need to provide the item name!\nExample: `!item rigged`\nRun `items` for the list of all items")
+            await ctx.reply("You need to provide the item name!\nExample: `!item rigged`\nRun `!items` for the list of all items")
         else:
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
