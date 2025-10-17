@@ -651,13 +651,13 @@ def make_sure_server_settings_exist(guild_id: str, save=True):
     """
     Makes sure the server settings exist, saves them to file by default, returns list of users in server
     """
-    if guild_id:
+    if guild_id and guild_id not in server_settings:
         server_settings.setdefault(guild_id, {}).setdefault('allowed_commands', default_allowed_commands)
         server_settings.get(guild_id).setdefault('members', [])
         server_settings.get(guild_id).setdefault('command_cooldowns', {})
         if save:
             save_settings()
-        return server_settings.get(guild_id).get('members')
+    return server_settings.get(guild_id).get('members')
 
 
 def get_default_profile(user_balance: int) -> dict:
@@ -805,6 +805,8 @@ async def on_ready():
         client.add_command(avatar)
         client.add_command(banner)
         client.add_command(set_cooldown)
+        client.add_command(enable)
+        client.add_command(disable)
         client.add_command(dnd)
         client.add_command(choose)
         client.add_command(compliment)
@@ -851,9 +853,10 @@ async def on_ready():
 
         async def remove_custom_role_command_roles(guild_id, command_name):
             """Remove all roles for a specific custom role command"""
-            print(f'Handling custom role command: {command_name} in guild {guild_id}')
+            print(f'Handling custom role command: {command_name} in guild {guild_id} ', end='')
             try:
                 guild = await client.fetch_guild(int(guild_id))
+                print(guild.name)
             except discord.NotFound:
                 # Guild not found, clean up
                 if guild_id in distributed_custom_roles and command_name in distributed_custom_roles[guild_id]:
@@ -1006,7 +1009,7 @@ kms = {"kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing my
 
 @client.event
 async def on_message(message: discord.Message):
-    if message.guild and 'kys_protect' in server_settings.get(str(message.guild.id), {}).get('allowed_commands'):
+    if message.guild and 'KYS Protection' in server_settings.get(str(message.guild.id), {}).get('allowed_commands'):
         if message.author == client.user:
             return
         content = message.content.lower()
@@ -1220,7 +1223,7 @@ async def dnd(ctx, *, dice: str = ''):
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
 
     make_sure_server_settings_exist(guild_id)
-    if 'dnd' in server_settings.get(guild_id).get('allowed_commands'):
+    if 'DND' in server_settings.get(guild_id).get('allowed_commands'):
         contents = dice.replace(' ', '')
         if not len(contents):
             await ctx.reply(f"Rolling **1d6**: `{random.choice(range(1, 7))}`")
@@ -1324,9 +1327,13 @@ async def compliment(ctx, *, user: discord.User = None):
     Compliments user based on 3x100 most popular compliments lmfaoooooo
     Usage: `!compliment @user`
     """
+    await comp(ctx, user)
+
+
+async def comp(ctx, user: discord.User = None):
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
-    if 'compliment' in server_settings.get(guild_id).get('allowed_commands'):
+    if 'Compliment' in server_settings.get(guild_id).get('allowed_commands'):
         with open(Path('dev', 'compliments.txt')) as fp:
             compliment_ = random.choice(fp.readlines())
             fp.close()
@@ -1334,14 +1341,22 @@ async def compliment(ctx, *, user: discord.User = None):
             await ctx.send(f"{user.mention}, {compliment_[0].lower()}{compliment_[1:]}")
         else:
             await ctx.send(compliment_)
-        # await log_channel.send(f'✅ {ctx.author.mention} casted a compliment in {ctx.channel.mention} ({ctx.guild.name} - {ctx.guild.id})')
-    # else:
-        # await log_channel.send(f"🫡 {ctx.author.mention} tried to cast a compliment in {ctx.channel.mention} but compliments aren't allowed in this server ({ctx.guild.name} - {ctx.guild.id})")
 
 
-@client.command(aliases=['allow'])
+@compliment.error
+async def compliment_error(ctx, error):
+    if isinstance(error, commands.UserNotFound):
+        await comp(ctx, None)
+
+
+# ENABLING/DISABLING
+toggleable_commands = ['Compliment', 'DND', 'Currency System', 'KYS Protection', 'Lore']
+default_allowed_commands = ['Compliment', 'DND', 'Currency System', 'Lore']
+
+
+@commands.hybrid_command(name='enable', aliases=['allow'])
 @commands.check(is_admin)
-async def enable(ctx):
+async def enable(ctx, *, command):
     """
     Enables command of choice
 
@@ -1352,23 +1367,41 @@ async def enable(ctx):
         await ctx.reply("Can't use this in DMs!")
         return
     make_sure_server_settings_exist(guild_id)
-    cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
-    if cmd in toggleable_commands and cmd not in server_settings.get(guild_id).get('allowed_commands'):
-        server_settings.get(guild_id).get('allowed_commands').append(cmd)
-        await log_channel.send(f'{wicked} {ctx.author.mention} enabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
-        success = f"{cmd} has been enabled"
-        await ctx.send(success)
+    try:
+        command = [x for x in toggleable_commands if x.lower() == command.lower()][0]
+    except IndexError:
+        return await ctx.send(f"Command usage: `!enable <command>`\n"
+                              f"Available commands: {', '.join(toggleable_commands)}")
+
+    if command not in server_settings.get(guild_id).get('allowed_commands'):
+        server_settings.get(guild_id).get('allowed_commands').append(command)
         save_settings()
-    elif cmd in toggleable_commands:
-        await ctx.send(f"{cmd} is already enabled")
+        await log_channel.send(f'{wicked} {ctx.author.mention} enabled {command} ({ctx.guild.name} - {ctx.guild.id})')
+        await ctx.send(f"{command} has been enabled")
     else:
-        await ctx.send(f"Command usage: `!enable <cmd>`\n"
+        await ctx.send(f"{command} is already enabled")
+
+
+@enable.error
+async def enable_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send(f"Command usage: `!enable <command>`\n"
                        f"Available commands: {', '.join(toggleable_commands)}")
 
 
-@client.command(aliases=['disallow', 'prevent'])
+@enable.autocomplete("command")
+async def enable_autocomplete(ctx, current: str):
+    choices = [
+        app_commands.Choice(name=cmd_name, value=cmd_name)
+        for cmd_name in sorted(toggleable_commands)
+        if (str(ctx.guild.id) in server_settings) and (current.lower() in cmd_name.lower()) and (cmd_name not in server_settings[str(ctx.guild.id)].get('allowed_commands'))
+    ]
+    return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+
+
+@commands.hybrid_command(name='disable', aliases=['disallow', 'prevent'])
 @commands.check(is_admin)
-async def disable(ctx):
+async def disable(ctx, *, command):
     """
     Disables command of choice
 
@@ -1379,18 +1412,36 @@ async def disable(ctx):
         await ctx.reply("Can't use this in DMs!")
         return
     make_sure_server_settings_exist(guild_id)
-    cmd = ctx.message.content.split()[1] if len(ctx.message.content.split()) > 1 else None
-    if cmd in toggleable_commands and cmd in server_settings.get(guild_id).get('allowed_commands'):
-        server_settings.get(guild_id).get('allowed_commands').remove(cmd)
-        await log_channel.send(f'{deadge} {ctx.author.mention} disabled {cmd} ({ctx.guild.name} - {ctx.guild.id})')
-        success = f"{cmd} has been disabled"
-        await ctx.send(success)
+    try:
+        command = [x for x in toggleable_commands if x.lower() == command.lower()][0]
+    except IndexError:
+        return await ctx.send(f"Command usage: `!disable <command>`\n"
+                              f"Available commands: {', '.join(toggleable_commands)}")
+
+    if command in server_settings.get(guild_id).get('allowed_commands'):
+        server_settings.get(guild_id).get('allowed_commands').remove(command)
         save_settings()
-    elif cmd in toggleable_commands:
-        await ctx.send(f"{cmd} is already disabled")
+        await log_channel.send(f'{deadge} {ctx.author.mention} disabled {command} ({ctx.guild.name} - {ctx.guild.id})')
+        await ctx.send(f"{command} has been disabled")
     else:
-        await ctx.send(f"Command usage: `!disable <cmd>`\n"
+        await ctx.send(f"{command} is already disabled")
+
+
+@disable.error
+async def disable_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send(f"Command usage: `!disable <command>`\n"
                        f"Available commands: {', '.join(toggleable_commands)}")
+
+
+@disable.autocomplete("command")
+async def disable_autocomplete(ctx, current: str):
+    choices = [
+        app_commands.Choice(name=cmd_name, value=cmd_name)
+        for cmd_name in sorted(toggleable_commands)
+        if (str(ctx.guild.id) in server_settings) and (current.lower() in cmd_name.lower()) and (cmd_name in server_settings[str(ctx.guild.id)].get('allowed_commands'))
+    ]
+    return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
 
 @client.command(aliases=['config'])
@@ -1402,12 +1453,16 @@ async def settings(ctx):
     make_sure_server_settings_exist(guild_id)
     guild_settings = server_settings.get(guild_id)
     allowed_commands = guild_settings.get('allowed_commands')
-    compliments_allowed = 'compliment' in allowed_commands
-    dnd_allowed = 'dnd' in allowed_commands
-    kys_allowed = 'kys_protect' in allowed_commands
-    currency_allowed = 'currency_system' in allowed_commands
+    compliments_allowed = 'Compliment' in allowed_commands
+    dnd_allowed = 'DND' in allowed_commands
+    kys_allowed = 'KYS Protection' in allowed_commands
+    currency_allowed = 'Currency System' in allowed_commands
+    lore_allowed = 'Lore' in allowed_commands
 
-    await ctx.send(f"```Currency System:  {allow_dict[currency_allowed]}\n"
+    await ctx.send(
+                   f"```Currency System:  {allow_dict[currency_allowed]}\n"
+                   '\n'
+                   f"Lore:             {allow_dict[lore_allowed]}\n"
                    '\n'
                    f"Compliments:      {allow_dict[compliments_allowed]}\n"
                    '\n'
@@ -1590,11 +1645,6 @@ async def set_cooldown_error(ctx, error):
         await ctx.reply(f"Usage: `!setcd <command> <cooldown>`")
 
 
-# ENABLING/DISABLING
-toggleable_commands = ['compliment', 'dnd', 'currency_system', 'kys_protect']
-default_allowed_commands = ['compliment', 'dnd', 'currency_system']
-
-
 @commands.hybrid_command(name="tcc", description="Toggle Channel Currency", aliases=['toggle_channel_currency'])
 @commands.check(is_admin)
 async def tcc(ctx):
@@ -1610,7 +1660,7 @@ async def tcc(ctx):
         await ctx.reply("Can't use this in DMs!")
         return
     make_sure_server_settings_exist(guild_id)
-    if 'currency_system' in server_settings.get(guild_id).get('allowed_commands') and ctx.channel.id in ignored_channels:
+    if 'Currency System' in server_settings.get(guild_id).get('allowed_commands') and ctx.channel.id in ignored_channels:
         ignored_channels.remove(ctx.channel.id)
         save_ignored_channels()
         await ctx.send(f"{bot_name} will no longer ignore currency system commands in this channel")
@@ -2477,7 +2527,7 @@ FORBIDDEN_KEYWORDS = {
 FORBIDDEN_RE = re.compile(r'\b(while|for|import|open|eval|exec|__import__|def|class|lambda|yield)\b', re.I)
 
 
-@commands.hybrid_command(name="calc", description="Simple calculator")
+@commands.hybrid_command(name="calc", description="Simple calculator", aliases=['calculate'])
 @commands.cooldown(1, 3, commands.BucketType.user)
 async def calc(ctx: commands.Context, *, expression: str):
     """
@@ -3229,7 +3279,7 @@ def currency_allowed(context):
     guild_ = '' if not context.guild else str(context.guild.id)
     make_sure_server_settings_exist(guild_)
     channel_ = 0 if not context.channel else context.channel.id
-    return 'currency_system' in server_settings.get(guild_).get('allowed_commands') and channel_ not in ignored_channels
+    return 'Currency System' in server_settings.get(guild_).get('allowed_commands') and channel_ not in ignored_channels
 
 
 def currency_allowed_slash(interaction):
@@ -3239,7 +3289,7 @@ def currency_allowed_slash(interaction):
     guild_ = '' if not interaction.guild else str(interaction.guild.id)
     make_sure_server_settings_exist(guild_)
     channel_ = 0 if not interaction.channel else interaction.channel.id
-    return 'currency_system' in server_settings.get(guild_).get('allowed_commands') and channel_ not in ignored_channels
+    return 'Currency System' in server_settings.get(guild_).get('allowed_commands') and channel_ not in ignored_channels
 
 
 def bot_down_check(guild_: str):
@@ -5206,9 +5256,11 @@ class Lore(commands.Cog):
             return await ctx.reply("Lore can only be managed in a server.")
 
         guild_id = str(ctx.guild.id)
-        author_id = str(ctx.author.id)
         make_sure_server_settings_exist(guild_id)
+        if 'Lore' not in server_settings.get(guild_id).get('allowed_commands'):
+            return
 
+        author_id = str(ctx.author.id)
         if author_id not in server_settings.get(guild_id).setdefault('not_lore_users', []):
             server_settings[guild_id]['not_lore_users'].append(author_id)
             save_settings()
@@ -5229,8 +5281,14 @@ class Lore(commands.Cog):
         Only usable on your own messages
         Moderators can use this on any message
         """
+
         if not ctx.guild:
             return await ctx.reply("Lore can only be managed in a server.")
+
+        guild_id = str(ctx.guild.id)
+        make_sure_server_settings_exist(guild_id)
+        if 'Lore' not in server_settings.get(guild_id).get('allowed_commands'):
+            return
 
         if not ctx.message.reference:
             return await ctx.reply("You need to reply to the message you want to toggle.")
@@ -5243,11 +5301,9 @@ class Lore(commands.Cog):
         if referenced_message.author != ctx.author and not await is_manager(ctx):
             return await ctx.reply("You can only toggle your own messages and you're not a moderator c:")
 
-        guild_id = str(ctx.guild.id)
         msg_id = str(referenced_message.id)
         subject_id = str(referenced_message.author.id)
 
-        make_sure_server_settings_exist(guild_id)
         if msg_id not in server_settings.get(guild_id).setdefault('not_lore_messages', []):
             server_settings[guild_id]['not_lore_messages'].append(msg_id)
             save_settings()
@@ -5270,6 +5326,11 @@ class Lore(commands.Cog):
         if not ctx.guild:
             return await ctx.reply("Lore can only be added in a server.")
 
+        guild_id = str(ctx.guild.id)
+        make_sure_server_settings_exist(guild_id)
+        if 'Lore' not in server_settings.get(guild_id).get('allowed_commands'):
+            return
+
         # if ctx.channel.id != 1327070617480069151:
         #     return await ctx.reply("🕓 `addlore` is under maintenance")
 
@@ -5285,7 +5346,6 @@ class Lore(commands.Cog):
 
         lore_subject = referenced_message.author
         adder = ctx.author
-        guild_id = str(ctx.guild.id)
         subject_id = str(lore_subject.id)
 
         if lore_subject.id == adder.id:
@@ -5294,7 +5354,6 @@ class Lore(commands.Cog):
         if subject_id in server_settings[guild_id].setdefault('not_lore_users', []):
             return await ctx.reply("This user has lore disabled.\n-# (!help toggle_lore)")
 
-        # make_sure_server_settings_exist(guild_id)  # redundant due to new cooldown function already calling this
         if msg_id in server_settings[guild_id].setdefault('not_lore_messages', []):
             return await ctx.reply("You can't add this message to lore.\n-# (!help tml)")
 
@@ -5408,6 +5467,10 @@ class Lore(commands.Cog):
             return await ctx.reply("Lore can only be viewed in a server.")
 
         guild_id = str(ctx.guild.id)
+        make_sure_server_settings_exist(guild_id)
+        if 'Lore' not in server_settings.get(guild_id).get('allowed_commands'):
+            return
+
         target_user = None
         page_num = 1
 
@@ -5504,8 +5567,12 @@ class Lore(commands.Cog):
         if not ctx.guild:
             return await ctx.reply("Lore can only be viewed in a server.")
 
-        target_user = user if user is not None else ctx.author
         guild_id = str(ctx.guild.id)
+        make_sure_server_settings_exist(guild_id)
+        if 'Lore' not in server_settings.get(guild_id).get('allowed_commands'):
+            return
+
+        target_user = user if user is not None else ctx.author
         user_id = str(target_user.id)
 
         user_lore = lore_data.get(guild_id, {}).get(user_id, [])
@@ -5604,6 +5671,12 @@ class Lore(commands.Cog):
         """
         if not ctx.guild:
             return await ctx.reply("Lore can only be managed in a server.")
+
+        guild_id = str(ctx.guild.id)
+        make_sure_server_settings_exist(guild_id)
+        if 'Lore' not in server_settings.get(guild_id).get('allowed_commands'):
+            return
+
         if message_id_to_remove is None:
             if ctx.message.reference:
                 message_id_to_remove = str(ctx.message.reference.message_id)
@@ -5613,7 +5686,6 @@ class Lore(commands.Cog):
             message_id_to_remove = message_id_to_remove.split("/")[-1]
         if not message_id_to_remove.isdigit():
             return await ctx.reply("Please provide a Message ID or a link to the message.")
-        guild_id = str(ctx.guild.id)
         guild_lore = lore_data.setdefault(guild_id, {})
 
         found_entry = None
@@ -5671,6 +5743,9 @@ class Lore(commands.Cog):
             user = ctx.author
 
         guild_id = str(ctx.guild.id)
+        make_sure_server_settings_exist(guild_id)
+        if 'Lore' not in server_settings.get(guild_id).get('allowed_commands'):
+            return
 
         # Permission Check
         if user != ctx.author and not await is_admin(ctx):
@@ -5709,7 +5784,12 @@ class Lore(commands.Cog):
         """
         if not ctx.guild:
             return await ctx.reply("Lore can only be managed in a server.")
+
         guild_id = str(ctx.guild.id)
+        make_sure_server_settings_exist(guild_id)
+        if 'Lore' not in server_settings.get(guild_id).get('allowed_commands'):
+            return
+
         guild_lore = lore_data.get(guild_id, {})
         if not guild_lore:
             return await ctx.reply("There is no lore in this server yet!")
