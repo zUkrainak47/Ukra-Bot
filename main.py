@@ -65,7 +65,28 @@ allowed_users = [369809123925295104]
 dev_mode_users = [694664131000795307]
 the_users = allowed_users + dev_mode_users
 # the_users = []
-no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse', 'getlegacy'}
+ukra_bypass = True
+all_bot_commands = []
+no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse', 'getlegacy', 'ukrabypass'}
+global_command_cooldowns = {  # command: (number_of_uses, seconds)
+    "custom_list": (1, 5),
+    "custom_list_dm": (1, 120),
+    "calc": (1, 3),
+    "banner": (1, 15),
+    "stock": (2, 10),
+    "dig": (1, 20),
+    "mine": (1, 120),
+    "work": (1, 300),
+    "fish": (1, 600),
+    "glb": (1, 3),
+    "glbr": (1, 3),
+    "lb": (1, 3),
+    "funders": (1, 3),
+    "gamble": (1, 1),
+    "dice": (1, 1),
+    "twodice": (1, 1),
+    "slots": (1, 1),
+}
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 MAX_INITIAL_RESPONSE_LENGTH = 1950
@@ -379,6 +400,10 @@ def save_everything():
     save_active_lottery()
     save_active_loans()
     save_lore()
+
+
+async def is_dev(ctx):
+    return ctx.author.id in allowed_users
 
 
 async def is_admin(ctx):
@@ -805,6 +830,8 @@ async def on_ready():
         client.add_command(avatar)
         client.add_command(banner)
         client.add_command(set_cooldown)
+        client.add_command(check_cd)
+        client.add_command(ukrabypass_command)
         client.add_command(enable)
         client.add_command(disable)
         client.add_command(dnd)
@@ -957,7 +984,7 @@ async def on_ready():
                 print(f"Error resuming giveaway {message_id}: {e}")
 
         async def resume_giveaways():
-            print('resuming giveaways')
+            # print('resuming giveaways')
             tasks = []
             for message_id in active_giveaways:
                 tasks.append(asyncio.create_task(resume_giveaway(message_id)))
@@ -978,6 +1005,9 @@ async def on_ready():
             print("✅ Giveaways resumed")
         except Exception as e:
             traceback.print_exc()
+
+        global all_bot_commands
+        all_bot_commands = sorted([_.name for _ in client.commands])
 
         bot_ready.set()
         bot_down = False
@@ -1370,8 +1400,8 @@ async def enable(ctx, *, command):
     try:
         command = [x for x in toggleable_commands if x.lower() == command.lower()][0]
     except IndexError:
-        return await ctx.send(f"Command usage: `!enable <command>`\n"
-                              f"Available commands: {', '.join(toggleable_commands)}")
+        return await ctx.send(f"Command usage: `!enable <command>`\nAvailable commands:\n"
+                              f"```{', '.join(toggleable_commands)}```")
 
     if command not in server_settings.get(guild_id).get('allowed_commands'):
         server_settings.get(guild_id).get('allowed_commands').append(command)
@@ -1415,8 +1445,8 @@ async def disable(ctx, *, command):
     try:
         command = [x for x in toggleable_commands if x.lower() == command.lower()][0]
     except IndexError:
-        return await ctx.send(f"Command usage: `!disable <command>`\n"
-                              f"Available commands: {', '.join(toggleable_commands)}")
+        return await ctx.send(f"Command usage: `!disable <command>`\nAvailable commands:\n"
+                              f"```{', '.join(toggleable_commands)}```")
 
     if command in server_settings.get(guild_id).get('allowed_commands'):
         server_settings.get(guild_id).get('allowed_commands').remove(command)
@@ -1464,11 +1494,11 @@ async def settings(ctx):
                    '\n'
                    f"Lore:             {allow_dict[lore_allowed]}\n"
                    '\n'
-                   f"Compliments:      {allow_dict[compliments_allowed]}\n"
+                   f"Compliment:       {allow_dict[compliments_allowed]}\n"
                    '\n'
                    f"DND:              {allow_dict[dnd_allowed]}\n"
                    '\n'
-                   f"Kys Protection:   {allow_dict[kys_allowed]}"
+                   f"KYS Protection:   {allow_dict[kys_allowed]}"
                    '```\n'
                    'Run `!enable` or `!disable` to enable/disable an option')
 
@@ -1524,7 +1554,7 @@ def custom_cooldown_check(default_seconds: int):
         if ctx.guild is None:
             return True
 
-        if ctx.author.id in the_users:
+        if ctx.author.id in the_users and ukra_bypass:
             return True
 
         guild_id = str(ctx.guild.id)
@@ -1583,11 +1613,12 @@ configurable_commands = {'addlore': (0, 300),
 
 
 @commands.hybrid_command(name="setcd")
+@app_commands.describe(command_name="Name of the command you're setting a cooldown for", cooldown_seconds="Cooldown in seconds (set -1 for default cooldown)")
 @commands.check(is_manager)
 async def set_cooldown(ctx: commands.Context, command_name: str, cooldown_seconds: int):
     """
     Sets a custom cooldown for a command in this server.
-    Usage: `!setcd command seconds`
+    Usage: `!setcd <command> <seconds>`
 
     Example: `!setcd addlore 60` to set cooldown to 60s
     Example: `!setcd addlore -1` to reset cooldown to its default value
@@ -1596,7 +1627,7 @@ async def set_cooldown(ctx: commands.Context, command_name: str, cooldown_second
     """
     cmd = ctx.bot.get_command(command_name.lower())
     if not cmd:
-        return await ctx.reply(f"I can't find a command named `{command_name}`.")
+        return await ctx.reply(f"I can't find a command named `{command_name}`")
 
     if cmd.qualified_name not in configurable_commands:
         return await ctx.reply(f"`{cmd.qualified_name}` is not configurable. Available:\n```{', '.join(sorted(configurable_commands.keys()))}```")
@@ -1643,6 +1674,65 @@ async def set_cooldown_autocomplete(ctx, current: str):
 async def set_cooldown_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.reply(f"Usage: `!setcd <command> <cooldown>`")
+
+
+@commands.hybrid_command(name="check_cd", description="!ccd - Check the cooldown of any command", aliases=['ccd'])
+async def check_cd(ctx: commands.Context, command_name: str):
+    """
+    Checks the cooldown for a command in this server.
+    Usage: `!ccd <command>`
+    """
+
+    cmd = ctx.bot.get_command(command_name.lower())
+    if not cmd:
+        return await ctx.reply(f"I can't find a command named `{command_name}`")
+
+    guild_id_str = str(ctx.guild.id)
+    user_id = str(ctx.author.id)
+
+    make_sure_server_settings_exist(guild_id_str)
+    if cmd.qualified_name in server_settings[guild_id_str]['command_cooldowns']:
+        cd_seconds = server_settings[guild_id_str]['command_cooldowns'].get(cmd.qualified_name)
+    else:
+        cd_seconds = (configurable_commands.get(cmd.qualified_name, (None, None))[1] or
+                      global_command_cooldowns.get(cmd.qualified_name, (0, 0))[1])
+    cd_uses = global_command_cooldowns.get(cmd.qualified_name, (1, 1))[0]
+    if cmd.cooldown:
+        retry_after = cmd._buckets.get_bucket(ctx.message).get_retry_after()
+        response = f"You can use `!{cmd.qualified_name}` {get_timestamp(int(retry_after)) if retry_after > 0 else ''}\n"
+    else:
+        now = time.time()
+        next_allowed = cooldown_state.get(guild_id_str, {}).get(cmd.qualified_name, {}).get(user_id, 0.0)
+        retry_after = next_allowed - now
+        response = f"You can use `!{cmd.qualified_name}` {get_timestamp(int(retry_after)) if retry_after > 0 else ''}\n"
+
+    response += (f"The cooldown for `!{cmd.qualified_name}` is `{cd_seconds}` second{"s" if cd_seconds != 1 else ''}" if cd_uses == 1 else
+                 f"`!{cmd.qualified_name}` can be used `{cd_uses}` times every `{cd_seconds}` second{"s" if cd_seconds != 1 else ''}")
+    return await ctx.reply(response)
+
+
+@check_cd.autocomplete("command_name")
+async def check_cd_autocomplete(ctx, current: str):
+    choices = [
+        app_commands.Choice(name=f"{cmd_name} (aka {cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name, value=cmd_name)
+        for cmd_name in all_bot_commands
+        if current.lower() in cmd_name.lower() or current.lower() in cmd_aliases.get(cmd_name, '') and cmd_name not in no_help_commands
+    ]
+    return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+
+
+@check_cd.error
+async def check_cd_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.reply(f"Usage: `!ccd <command>`")
+
+
+@commands.command(name='ukrabypass')
+@commands.check(is_dev)
+async def ukrabypass_command(ctx):
+    global ukra_bypass
+    ukra_bypass = not ukra_bypass
+    return await ctx.reply(f'ok bypass is set to {ukra_bypass}')
 
 
 @commands.hybrid_command(name="tcc", description="Toggle Channel Currency", aliases=['toggle_channel_currency'])
@@ -1958,14 +2048,14 @@ class CustomCommands(commands.Cog):
 
     @commands.cooldown(1, 120, commands.BucketType.user)
     @commands.hybrid_command(name='custom_list_dm', description='!cldm - Sends you a message containing all custom command of this server', aliases=['cldm'])
-    @app_commands.describe(sort_alphabetically="Sorted alphabetically (True) / by time added (False)")
-    async def custom_list_dm(self, ctx, sort_alphabetically=True):
+    @app_commands.describe(sort_alphabetically="Sorted alphabetically (True) / by time added (False)", search='If you want to search for commands that contain a specific string')
+    async def custom_list_dm(self, ctx, *, search: str = None, sort_alphabetically: bool = True):
         """
         Sends you a message containing all custom command of this server
         """
-        await self.cldm(ctx, sort_alphabetically)
+        await self.cldm(ctx, search, sort_alphabetically)
 
-    async def cldm(self, ctx, sort_alphabetically):
+    async def cldm(self, ctx, search, sort_alphabetically):
         if not ctx.guild:
             await ctx.reply("Custom commands can only be handled in servers.")
             return
@@ -1979,10 +2069,18 @@ class CustomCommands(commands.Cog):
             await ctx.reply("This server doesn't have any custom commands configured yet.\nUse `!custom` to add some")
             return
 
-        if sort_alphabetically:
-            custom_commands = {key: value for key, value in sorted(custom_commands.items())}
+        if search is None:
+            if sort_alphabetically:
+                custom_commands = {key: value for key, value in sorted(custom_commands.items())}
+        else:
+            if sort_alphabetically:
+                custom_commands = {key: value for key, value in sorted(custom_commands.items()) if (search in key) or (search in value)}
+            else:
+                custom_commands = {key: value for key, value in custom_commands.items() if (search in key) or (search in value)}
+            if not custom_commands:
+                return await ctx.reply(f"Nothing found when searching for `{search[:27]}{'...' if (len(search) > 27) else ''}`\nSorry, try again {get_timestamp(120)}\n\nTry searching `!cl` first btw")
 
-        if ctx.author.id in the_users:
+        if ctx.author.id in the_users and ukra_bypass:
             ctx.command.reset_cooldown(ctx)
 
         # Sanitize the server name to create a valid filename
@@ -2553,7 +2651,7 @@ async def calc(ctx: commands.Context, *, expression: str):
 
     print(f"\n{ctx.author.name}\n{ctx.author.id} - {expression}")
 
-    if ctx.author.id in the_users:
+    if ctx.author.id in the_users and ukra_bypass:
         ctx.command.reset_cooldown(ctx)
 
     se = FORBIDDEN_RE.search(expression.lower())
@@ -4190,7 +4288,7 @@ cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
                'info': 'i', 'profile': 'p', 'inventory': 'inv', 'stock_prices': 'sp',
                'lore_compact': 'lore2', 'lore_leaderboard': 'lorelb', 'lore_remove': 'rmlore', 'lore_random': 'lore*', 'server_lore': 'sl',
                'custom_inspect': 'ci', 'custom_list': 'cl', 'custom_list_dm': 'cldm', 'custom_remove': 'crm',
-               'custom_role_inspect': 'cri', 'custom_role_list': 'crl', 'custom_role_remove': 'crr'
+               'custom_role_inspect': 'cri', 'custom_role_list': 'crl', 'custom_role_remove': 'crr', 'check_cd': 'ccd'
                }
 
 
@@ -5891,6 +5989,17 @@ class Currency(commands.Cog):
 
             await help_cmd.command_not_found(command)
 
+    @help.autocomplete("command")
+    async def help_autocomplete(self, ctx, current: str):
+        choices = [
+            app_commands.Choice(
+                name=f"{cmd_name} (aka {cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name,
+                value=cmd_name)
+            for cmd_name in all_bot_commands
+            if current.lower() in cmd_name.lower() or current.lower() in cmd_aliases.get(cmd_name, '') and cmd_name not in no_help_commands
+        ]
+        return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+
     async def get_user(self, id_: int, ctx=None):
         if ctx is not None and ctx.guild:
             user = ctx.guild.get_member(id_)
@@ -5905,7 +6014,6 @@ class Currency(commands.Cog):
             return user
         except discord.errors.NotFound:
             return None
-
 
     async def get_user_profile(self, ctx, target, full_info=False):
         """
