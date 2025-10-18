@@ -1120,7 +1120,6 @@ async def on_message(message: discord.Message):
             if 'pixiv.net' in fixed_content:
                 fixed_content = PIXIV_PATTERN.sub(r'https://phixiv.net/artworks/\1\2', fixed_content)
 
-                await message.delete()
             if 'instagram.com' in fixed_content:
                 fixed_content = INSTAGRAM_PATTERN.sub(r'https://kkinstagram.com/\1/\2', fixed_content)
 
