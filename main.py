@@ -1147,7 +1147,7 @@ async def on_message(message: discord.Message):
                         kwargs["reference"] = message.reference
                         kwargs["mention_author"] = replied_to_author in message.mentions
 
-                    sent_message = await message.channel.send(**kwargs)
+                    await message.channel.send(**kwargs)
                     await message.delete()
 
                     # Suppress original message embeds
@@ -1502,7 +1502,7 @@ async def enable(ctx, *, command):
     - **Compliment**: the `!compliment` command
     - **DND**: the `!dnd` command
     - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
-    - **Fix Bad Embeds**: (will also sanitize the links if applicable)
+    - **Fix Bad Embeds**: (will also sanitize the links if applicable. Manage Messages permission is recommended)
       - x/twitter -> *fxtwitter*
       - reddit -> *rxddit*
       - pixiv -> *phixiv*
@@ -1532,8 +1532,12 @@ async def enable(ctx, *, command):
     if command not in server_settings.get(guild_id).get('allowed_commands'):
         server_settings.get(guild_id).get('allowed_commands').append(command)
         save_settings()
+        if command == "Fix Bad Embeds" and not ctx.channel.permissions_for(ctx.guild.me).manage_messages:
+            additional = '\nIMPORTANT: Consider giving me the "Manage Messages" permission, otherwise I won\'t be able to delete the original messages. Messages will be doubled'
+        else:
+            additional = ''
         await log_channel.send(f'{wicked} {ctx.author.mention} enabled {command} ({ctx.guild.name} - {ctx.guild.id})')
-        await ctx.reply(f"{command} has been enabled")
+        await ctx.reply(f"{command} has been enabled{additional}")
     else:
         await ctx.reply(f"{command} is already enabled")
 
@@ -1568,7 +1572,7 @@ async def disable(ctx, *, command):
     - **Compliment**: the `!compliment` command
     - **DND**: the `!dnd` command
     - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
-    - **Fix Bad Embeds**: (will also sanitize the links if applicable)
+    - **Fix Bad Embeds**: (will also sanitize the links if applicable. Manage Messages permission is recommended)
       - x/twitter -> *fxtwitter*
       - reddit -> *rxddit*
       - pixiv -> *phixiv*
@@ -1633,7 +1637,7 @@ async def settings(ctx):
     - **Compliment**: the `!compliment` command
     - **DND**: the `!dnd` command
     - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
-    - **Fix Bad Embeds**: (will also sanitize the links if applicable)
+    - **Fix Bad Embeds**: (will also sanitize the links if applicable. Manage Messages permission is recommended)
       - x/twitter -> *fxtwitter*
       - reddit -> *rxddit*
       - pixiv -> *phixiv*
