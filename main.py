@@ -1042,6 +1042,9 @@ PIXIV_PATTERN = re.compile(r'https?://(?:www\.)?pixiv\.net/(?:en/)?artworks/(\d+
 INSTAGRAM_PATTERN = re.compile(r'https?://(?:www\.)?instagram\.com/(p|reel|reels)/([^/?\s]+)([^\s]*)')
 BILIBILI_PATTERN = re.compile(r'https?://(?:www\.)?bilibili\.com(?:/video)?/([^/?\s]+)([^\s]*)')
 BSKY_PATTERN = re.compile(r'https?://bsky\.app/profile/([^/\s]+)/post/([^\s]+)')
+TIKTOK_PATTERN = re.compile(r'https?://(?:vm\.|www\.)?tiktok\.com/([^?\s]+)(?:\?[^\s]*)?')
+TWITCH_CLIP_PATTERN = re.compile(r'https?://(?:clips\.twitch\.tv|www\.twitch\.tv/[^/]+/clip)/([^\s?]+)(?:\?[^\s]*)?')
+THREADS_PATTERN = re.compile(r'https?://(?:www\.)?threads\.(?:com|net)/([^?\s]+)(?:\?[^\s]*)?')
 
 
 @client.event
@@ -1078,9 +1081,12 @@ async def on_message(message: discord.Message):
         fixed_content = TWITTER_PATTERN.sub(r'https://fxtwitter.com/\2/status/\3\4', fixed_content)
         fixed_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\1', fixed_content)
         fixed_content = PIXIV_PATTERN.sub(r'https://phixiv.net/artworks/\1\2', fixed_content)
-        fixed_content = INSTAGRAM_PATTERN.sub(r'https://eeinstagram.com/\1/\2', fixed_content)
+        fixed_content = INSTAGRAM_PATTERN.sub(r'https://kkinstagram.com/\1/\2', fixed_content)
         fixed_content = BILIBILI_PATTERN.sub(r'https://vxbilibili.com/video/\1', fixed_content)
         fixed_content = BSKY_PATTERN.sub(r'https://fxbsky.app/profile/\1/post/\2', fixed_content)
+        fixed_content = TIKTOK_PATTERN.sub(r'https://tnktok.com/\1', fixed_content)
+        fixed_content = TWITCH_CLIP_PATTERN.sub(r'https://fxtwitch.seria.moe/clip/\1', fixed_content)
+        fixed_content = THREADS_PATTERN.sub(r'https://fixthreads.net/\1', fixed_content)
 
         if fixed_content != content:
             try:
@@ -1453,7 +1459,10 @@ async def enable(ctx, *, command):
       - reddit -> *rxddit*
       - pixiv -> *phixiv*
       - bilibili -> *vxbilibili*
-      - instagram -> *eeinstagram*
+      - instagram -> *kkinstagram*
+      - tiktok -> *tnktok*
+      - twitch clip -> *fxtwitch*
+      - threads -> *fixthreads*
       - bsky -> *fxbsky*
       - Add -n to a message to not fix its links
     
@@ -1516,7 +1525,10 @@ async def disable(ctx, *, command):
       - reddit -> *rxddit*
       - pixiv -> *phixiv*
       - bilibili -> *vxbilibili*
-      - instagram -> *eeinstagram*
+      - instagram -> *kkinstagram*
+      - tiktok -> *tnktok*
+      - twitch clip -> *fxtwitch*
+      - threads -> *fixthreads*
       - bsky -> *fxbsky*
       - Add -n to a message to not fix its links
 
@@ -1578,7 +1590,10 @@ async def settings(ctx):
       - reddit -> *rxddit*
       - pixiv -> *phixiv*
       - bilibili -> *vxbilibili*
-      - instagram -> *eeinstagram*
+      - instagram -> *kkinstagram*
+      - tiktok -> *tnktok*
+      - twitch clip -> *fxtwitch*
+      - threads -> *fixthreads*
       - bsky -> *fxbsky*
       - Add -n to a message to not fix its links
     """
