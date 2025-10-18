@@ -1036,12 +1036,17 @@ async def on_ready():
 
 kms = {"kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing myself', 'killing yourself'}
 
+TWITTER_PATTERN = re.compile(r'https?://(?:www\.)?(twitter\.com|x\.com)/([^/\s]+)/status/(\d+)([^\s]*)')
+REDDIT_PATTERN = re.compile(r'https?://(?:www\.|old\.|new\.)?reddit\.com/(r/[^/\s]+/comments/[^\s]+)')
+PIXIV_PATTERN = re.compile(r'https?://(?:www\.)?pixiv\.net/(?:en/)?artworks/(\d+)([^\s]*)')
+
 
 @client.event
 async def on_message(message: discord.Message):
+    if message.author == client.user:
+        return
+
     if message.guild and 'KYS Protection' in server_settings.get(str(message.guild.id), {}).get('allowed_commands'):
-        if message.author == client.user:
-            return
         content = message.content.lower()
         if any(x in content for x in kms):
             try:
@@ -1050,6 +1055,43 @@ async def on_message(message: discord.Message):
                 print(f"Cannot kys protect in {message.channel.name} (guild: {message.guild.name if message.guild else 'DM'}) due to permissions.")
             except Exception as e:
                 print(f"Error kys protecting reply: {e}")
+
+    if (message.guild and 'Fix Bad Embeds' in server_settings.get(str(message.guild.id), {}).get('allowed_commands')) or not message.guild:
+        content = message.content
+
+        # Early exit if no URLs at all (tiny performance boost)
+        if 'http://' not in content and 'https://' not in content:
+            await client.process_commands(message)
+            return
+
+        fixed_content = content
+
+        # Use pre-compiled patterns
+        fixed_content = TWITTER_PATTERN.sub(r'https://fxtwitter.com/\2/status/\3\4', fixed_content)
+        fixed_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\1', fixed_content)
+        fixed_content = PIXIV_PATTERN.sub(r'https://phixiv.net/artworks/\1\2', fixed_content)
+
+        if fixed_content != content:
+            try:
+                # If the original message was a reply, preserve that reply chain
+                if message.reference and message.reference.resolved:
+                    # Check if the original sender pinged the person they replied to
+                    replied_to_author = message.reference.resolved.author
+                    should_mention = replied_to_author in message.mentions
+
+                    await message.channel.send(
+                        f"Sent by {message.author.mention}:\n{fixed_content}",
+                        reference=message.reference,
+                        mention_author=should_mention
+                    )
+                else:
+                    await message.channel.send(f"Sent by {message.author.mention}:\n{fixed_content}")
+
+                await message.delete()
+            except discord.Forbidden:
+                print(f"Cannot fix embeds in {message.channel.name} (guild: {message.guild.name if message.guild else 'DM'}) due to permissions.")
+            except Exception as e:
+                print(f"Error fixing embeds: {e}")
 
     await client.process_commands(message)
 
@@ -1380,7 +1422,7 @@ async def compliment_error(ctx, error):
 
 
 # ENABLING/DISABLING
-toggleable_commands = ['Compliment', 'DND', 'Currency System', 'KYS Protection', 'Lore']
+toggleable_commands = ['Compliment', 'DND', 'Currency System', 'KYS Protection', 'Lore', 'Fix Bad Embeds']
 default_allowed_commands = ['Compliment', 'DND', 'Currency System', 'Lore']
 
 
@@ -1388,7 +1430,14 @@ default_allowed_commands = ['Compliment', 'DND', 'Currency System', 'Lore']
 @commands.check(is_admin)
 async def enable(ctx, *, command):
     """
-    Enables command of choice
+    Enables functionality of choice
+
+    - **Currency System**: commands like `!gamble`, `!balance`, `!dice`, `!give`, `!item`, `!daily` etc.
+    - **Lore**: commands like `!addlore`, `!lore`, `!lore2`, `!sl` etc.
+    - **Compliment**: the `!compliment` command
+    - **DND**: the `!dnd` command
+    - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
+    - **Fix Bad Embeds**: replaces x/twitter links with fxtwitter, reddit with rxddit and pixiv with phixiv
 
     **Only usable by Administrators**
     """
@@ -1400,23 +1449,27 @@ async def enable(ctx, *, command):
     try:
         command = [x for x in toggleable_commands if x.lower() == command.lower()][0]
     except IndexError:
-        return await ctx.send(f"Command usage: `!enable <command>`\nAvailable commands:\n"
-                              f"```{', '.join(toggleable_commands)}```")
+        return await ctx.reply(f"Command usage: `!enable <option>`\n"
+                               f"Available options (`!help enable` for more info):\n"
+                               f"```{', '.join(toggleable_commands)}```"
+                               )
 
     if command not in server_settings.get(guild_id).get('allowed_commands'):
         server_settings.get(guild_id).get('allowed_commands').append(command)
         save_settings()
         await log_channel.send(f'{wicked} {ctx.author.mention} enabled {command} ({ctx.guild.name} - {ctx.guild.id})')
-        await ctx.send(f"{command} has been enabled")
+        await ctx.reply(f"{command} has been enabled")
     else:
-        await ctx.send(f"{command} is already enabled")
+        await ctx.reply(f"{command} is already enabled")
 
 
 @enable.error
 async def enable_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"Command usage: `!enable <command>`\n"
-                       f"Available commands: {', '.join(toggleable_commands)}")
+        await ctx.reply(f"Command usage: `!enable <option>`\n"
+                        f"Available options (`!help enable` for more info):\n"
+                        f"```{', '.join(toggleable_commands)}```"
+                        )
 
 
 @enable.autocomplete("command")
@@ -1433,7 +1486,14 @@ async def enable_autocomplete(ctx, current: str):
 @commands.check(is_admin)
 async def disable(ctx, *, command):
     """
-    Disables command of choice
+    Disables functionality of choice
+
+    - **Currency System**: commands like `!gamble`, `!balance`, `!dice`, `!give`, `!item`, `!daily` etc.
+    - **Lore**: commands like `!addlore`, `!lore`, `!lore2`, `!sl` etc.
+    - **Compliment**: the `!compliment` command
+    - **DND**: the `!dnd` command
+    - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
+    - **Fix Bad Embeds**: replaces x/twitter links with fxtwitter, reddit with rxddit and pixiv with phixiv
 
     **Only usable by Administrators**
     """
@@ -1445,23 +1505,27 @@ async def disable(ctx, *, command):
     try:
         command = [x for x in toggleable_commands if x.lower() == command.lower()][0]
     except IndexError:
-        return await ctx.send(f"Command usage: `!disable <command>`\nAvailable commands:\n"
-                              f"```{', '.join(toggleable_commands)}```")
+        return await ctx.reply(f"Command usage: `!disable <option>`\n"
+                               f"Available options (`!help disable` for more info):\n"
+                               f"```{', '.join(toggleable_commands)}```"
+                               )
 
     if command in server_settings.get(guild_id).get('allowed_commands'):
         server_settings.get(guild_id).get('allowed_commands').remove(command)
         save_settings()
         await log_channel.send(f'{deadge} {ctx.author.mention} disabled {command} ({ctx.guild.name} - {ctx.guild.id})')
-        await ctx.send(f"{command} has been disabled")
+        await ctx.reply(f"{command} has been disabled")
     else:
-        await ctx.send(f"{command} is already disabled")
+        await ctx.reply(f"{command} is already disabled")
 
 
 @disable.error
 async def disable_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"Command usage: `!disable <command>`\n"
-                       f"Available commands: {', '.join(toggleable_commands)}")
+        await ctx.reply(f"Command usage: `!disable <option>`\n"
+                        f"Available options (`!help disable` for more info):\n"
+                        f"```{', '.join(toggleable_commands)}```"
+                        )
 
 
 @disable.autocomplete("command")
@@ -1478,6 +1542,13 @@ async def disable_autocomplete(ctx, current: str):
 async def settings(ctx):
     """
     Shows current server settings
+
+    - **Currency System**: commands like `!gamble`, `!balance`, `!dice`, `!give`, `!item`, `!daily` etc.
+    - **Lore**: commands like `!addlore`, `!lore`, `!lore2`, `!sl` etc.
+    - **Compliment**: the `!compliment` command
+    - **DND**: the `!dnd` command
+    - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
+    - **Fix Bad Embeds**: replaces x/twitter links with fxtwitter, reddit with rxddit and pixiv with phixiv
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
@@ -1486,6 +1557,7 @@ async def settings(ctx):
     compliments_allowed = 'Compliment' in allowed_commands
     dnd_allowed = 'DND' in allowed_commands
     kys_allowed = 'KYS Protection' in allowed_commands
+    embed_replacement = 'Fix Bad Embeds' in allowed_commands
     currency_allowed = 'Currency System' in allowed_commands
     lore_allowed = 'Lore' in allowed_commands
 
@@ -1498,8 +1570,11 @@ async def settings(ctx):
                    '\n'
                    f"DND:              {allow_dict[dnd_allowed]}\n"
                    '\n'
-                   f"KYS Protection:   {allow_dict[kys_allowed]}"
+                   f"KYS Protection:   {allow_dict[kys_allowed]}\n"
+                   '\n'
+                   f"Fix Bad Embeds:   {allow_dict[embed_replacement]}"
                    '```\n'
+                   'Use `!help settings` for more info on each option\n'
                    'Run `!enable` or `!disable` to enable/disable an option')
 
 
@@ -1609,10 +1684,11 @@ configurable_commands = {'addlore': (0, 300),
                          "lore_random": (0, 0),
                          "server_lore": (0, 0),
                          "lore_compact": (0, 0),
+                         "!": (0, 0)
                          }
 
 
-@commands.hybrid_command(name="setcd")
+@commands.hybrid_command(name='setcd')
 @app_commands.describe(command_name="Name of the command you're setting a cooldown for", cooldown_seconds="Cooldown in seconds (set -1 for default cooldown)")
 @commands.check(is_manager)
 async def set_cooldown(ctx: commands.Context, command_name: str, cooldown_seconds: int):
@@ -1663,7 +1739,7 @@ async def set_cooldown(ctx: commands.Context, command_name: str, cooldown_second
 @set_cooldown.autocomplete("command_name")
 async def set_cooldown_autocomplete(ctx, current: str):
     choices = [
-        app_commands.Choice(name=f"{cmd_name} (aka {cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name, value=cmd_name)
+        app_commands.Choice(name=f"{cmd_name} ({cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name, value=cmd_name)
         for cmd_name in sorted(configurable_commands)
         if current.lower() in cmd_name.lower() or current.lower() in cmd_aliases.get(cmd_name, '')
     ]
@@ -1714,7 +1790,7 @@ async def check_cd(ctx: commands.Context, command_name: str):
 @check_cd.autocomplete("command_name")
 async def check_cd_autocomplete(ctx, current: str):
     choices = [
-        app_commands.Choice(name=f"{cmd_name} (aka {cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name, value=cmd_name)
+        app_commands.Choice(name=f"{cmd_name} ({cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name, value=cmd_name)
         for cmd_name in all_bot_commands
         if current.lower() in cmd_name.lower() or current.lower() in cmd_aliases.get(cmd_name, '') and cmd_name not in no_help_commands
     ]
@@ -1735,13 +1811,13 @@ async def ukrabypass_command(ctx):
     return await ctx.reply(f'ok bypass is set to {ukra_bypass}')
 
 
-@commands.hybrid_command(name="tcc", description="Toggle Channel Currency", aliases=['toggle_channel_currency'])
+@commands.hybrid_command(name="toggle_channel_currency", description="!tcc - Toggle Channel Currency", aliases=['tcc'])
 @commands.check(is_admin)
 async def tcc(ctx):
     """
-    If currency system is enabled in a server, starts ignoring the channel this command was sent in
+    If Currency System is enabled in a server, starts ignoring the channel this command was sent in
     If channel is already ignored, will stop ignoring it
-    If currency system is disabled, will have no effect
+    If Currency System is disabled, will have no effect
 
     **Only usable by Administrators**
     """
@@ -1753,11 +1829,11 @@ async def tcc(ctx):
     if 'Currency System' in server_settings.get(guild_id).get('allowed_commands') and ctx.channel.id in ignored_channels:
         ignored_channels.remove(ctx.channel.id)
         save_ignored_channels()
-        await ctx.send(f"{bot_name} will no longer ignore currency system commands in this channel")
+        await ctx.send(f"{bot_name} will no longer ignore Currency System commands in this channel")
     elif currency_allowed(ctx):
         ignored_channels.append(ctx.channel.id)
         save_ignored_channels()
-        await ctx.send(f"{bot_name} will now ignore currency system commands in this channel")
+        await ctx.send(f"{bot_name} will now ignore Currency System commands in this channel")
     else:
         await ctx.send("Currency system is disabled in your server already. This command won't do anything")
 
@@ -1789,7 +1865,7 @@ async def tuc(ctx, *, target: discord.User):
         save_ignored_users()
         await ctx.send(f"{bot_name} will no longer ignore {target.display_name}")
         try:
-            await target.send(f"You have been unbanned from using {bot_name}'s currency system")
+            await target.send(f"You have been unbanned from using {bot_name}'s Currency System")
         except:
             pass
     elif target is not None and target_id not in ignored_users:
@@ -1797,7 +1873,7 @@ async def tuc(ctx, *, target: discord.User):
         save_ignored_users()
         await ctx.send(f"{bot_name} will now ignore {target.display_name}")
         try:
-            await target.send(f"You have been banned from using {bot_name}'s currency system")
+            await target.send(f"You have been banned from using {bot_name}'s Currency System")
         except:
             pass
     else:
@@ -2169,12 +2245,14 @@ class CustomCommands(commands.Cog):
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
+    @custom_cooldown_check(default_seconds=0)
     @commands.command(name='!')
     async def random_custom(self, ctx):
         """
         Sends a random custom command from the server!
         """
         await send_custom_command(ctx, None, 'random')
+        apply_custom_cooldown(ctx, default_seconds=0)
 
     @commands.hybrid_command(name='custom_role', description='Create a custom role distribution command')
     @app_commands.describe(
@@ -4288,7 +4366,8 @@ cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
                'info': 'i', 'profile': 'p', 'inventory': 'inv', 'stock_prices': 'sp',
                'lore_compact': 'lore2', 'lore_leaderboard': 'lorelb', 'lore_remove': 'rmlore', 'lore_random': 'lore*', 'server_lore': 'sl',
                'custom_inspect': 'ci', 'custom_list': 'cl', 'custom_list_dm': 'cldm', 'custom_remove': 'crm',
-               'custom_role_inspect': 'cri', 'custom_role_list': 'crl', 'custom_role_remove': 'crr', 'check_cd': 'ccd'
+               'custom_role_inspect': 'cri', 'custom_role_list': 'crl', 'custom_role_remove': 'crr', 'check_cd': 'ccd',
+               'toggle_channel_currency': 'tcc'
                }
 
 
@@ -5956,7 +6035,7 @@ async def get_direct_tenor_url(tenor_url: str):
 
 
 class Currency(commands.Cog):
-    """Commands related to the currency system"""
+    """Commands related to the Currency System"""
 
     def __init__(self, bot):
         self.bot = bot
@@ -5993,7 +6072,7 @@ class Currency(commands.Cog):
     async def help_autocomplete(self, ctx, current: str):
         choices = [
             app_commands.Choice(
-                name=f"{cmd_name} (aka {cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name,
+                name=f"{cmd_name} ({cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name,
                 value=cmd_name)
             for cmd_name in all_bot_commands
             if current.lower() in cmd_name.lower() or current.lower() in cmd_aliases.get(cmd_name, '') and cmd_name not in no_help_commands
