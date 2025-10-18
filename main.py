@@ -1764,9 +1764,29 @@ async def check_cd(ctx: commands.Context, command_name: str):
         return await ctx.reply(f"I can't find a command named `{command_name}`")
 
     guild_id_str = str(ctx.guild.id)
-    user_id = str(ctx.author.id)
+    author_id = str(ctx.author.id)
 
     make_sure_server_settings_exist(guild_id_str)
+
+    if cmd.qualified_name == 'weekly':
+        now = datetime.now()
+        start_of_week = now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
+        reset_timestamp = int((start_of_week + timedelta(weeks=1)).timestamp())
+        r = f"`!weekly` can be used once every week. The next reset is at <t:{reset_timestamp}>"
+        last_used_w = user_last_used_w.setdefault(author_id, datetime.today() - timedelta(weeks=1))
+        if last_used_w >= start_of_week:
+            return await ctx.reply(f"You can use `!weekly` <t:{reset_timestamp}:R>\n{r}")
+        return await ctx.reply(f"You can use `!weekly`\n{r}")
+
+    elif cmd.qualified_name == 'daily':
+        now = datetime.now()
+        daily_reset = get_daily_reset_timestamp()
+        r = f"`!daily` can be used once every day. The next reset is at <t:{daily_reset}>"
+        last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=3))
+        if last_used.date() == now.date():
+            return await ctx.reply(f"You can use `!daily` <t:{daily_reset}:R>\n{r}")
+        return await ctx.reply(f"You can use `!daily`\n{r}")
+
     if cmd.qualified_name in server_settings[guild_id_str]['command_cooldowns']:
         cd_seconds = server_settings[guild_id_str]['command_cooldowns'].get(cmd.qualified_name)
     else:
@@ -1778,7 +1798,7 @@ async def check_cd(ctx: commands.Context, command_name: str):
         response = f"You can use `!{cmd.qualified_name}` {get_timestamp(int(retry_after)) if retry_after > 0 else ''}\n"
     else:
         now = time.time()
-        next_allowed = cooldown_state.get(guild_id_str, {}).get(cmd.qualified_name, {}).get(user_id, 0.0)
+        next_allowed = cooldown_state.get(guild_id_str, {}).get(cmd.qualified_name, {}).get(author_id, 0.0)
         retry_after = next_allowed - now
         response = f"You can use `!{cmd.qualified_name}` {get_timestamp(int(retry_after)) if retry_after > 0 else ''}\n"
 
@@ -6126,7 +6146,7 @@ class Currency(commands.Cog):
                     highest_net_check(guild_id, target_id_, num, save=True, make_sure=False)
                     user_streak = daily_streaks.setdefault(target_id_, 0)
                     now = datetime.now()
-                    last_used = user_last_used.setdefault(target_id_, datetime.today() - timedelta(days=2))
+                    last_used = user_last_used.setdefault(target_id_, datetime.today() - timedelta(days=3))
                     # print((now - timedelta(days=1)).date())
                     if last_used.date() == now.date():
                         d_msg = f"{user_streak:,}"
@@ -7059,6 +7079,7 @@ class Currency(commands.Cog):
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
+    @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
     @commands.hybrid_command(name="cd", description="Displays cooldowns for farming commands", aliases=['cooldown', 'cooldowns', 'xd', 'св'])
     async def cooldowns(self, ctx):
         """
@@ -7083,7 +7104,7 @@ class Currency(commands.Cog):
                 cooldowns_status.append('')
                 now = datetime.now()
 
-                last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=2))
+                last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=3))
                 # user_streak = server_settings.get(guild_id).get('daily_streak').setdefault(author_id, 0)
                 user_streak = daily_streaks.setdefault(author_id, 0)
                 if user_streak == 0:
@@ -7605,7 +7626,7 @@ class Currency(commands.Cog):
             make_sure_user_profile_exists(guild_id, author_id)
             user_streak = daily_streaks.setdefault(author_id, 0)
             now = datetime.now()
-            last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=2))
+            last_used = user_last_used.setdefault(author_id, datetime.today() - timedelta(days=3))
             # print((now - timedelta(days=1)).date())
             if last_used.date() == now.date():
                 await ctx.reply(f"You can use `daily` again <t:{get_daily_reset_timestamp()}:R>\nYour current streak is **{user_streak:,}**")
