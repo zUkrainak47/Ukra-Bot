@@ -1000,12 +1000,6 @@ async def on_ready():
         except Exception as e:
             traceback.print_exc()
 
-        try:
-            await resume_giveaways()
-            print("✅ Giveaways resumed")
-        except Exception as e:
-            traceback.print_exc()
-
         global all_bot_commands
         all_bot_commands = sorted([_.name for _ in client.commands])
         client.add_view(DeleteMessageView())  # Registers persistent view
@@ -1023,6 +1017,12 @@ async def on_ready():
         await up_channel.send(f'{yay} {bot_name} has connected to Discord! <@&1339183730019008513>')
         elapsed = time.time() - start_time
         print(f"✅ Fully ready in {elapsed:.2f}s")
+
+        try:
+            print("✅ Resuming giveaways")
+            await resume_giveaways()
+        except Exception as e:
+            traceback.print_exc()
 
     except Exception as e:
         await client.change_presence(
@@ -1687,8 +1687,9 @@ async def settings(ctx):
                    '\n'
                    f"Fix Bad Embeds:   {allow_dict[embed_replacement]}"
                    '```\n'
-                   'Use `!help settings` for more info on each option\n'
-                   'Run `!enable` or `!disable` to enable/disable an option')
+                   'Use `!help settings` for more info on each option'
+                   f'{"\nRun `!enable` or `!disable` to enable/disable an option" if ctx.guild else ''}'
+    )
 
 
 ##########################################################
@@ -1819,6 +1820,9 @@ async def set_cooldown(ctx: commands.Context, command_name: str, cooldown_second
     if not cmd:
         return await ctx.reply(f"I can't find a command named `{command_name}`")
 
+    if not ctx.guild:
+        return await ctx.reply("Can't use this in DMs!")
+
     if cmd.qualified_name not in configurable_commands:
         return await ctx.reply(f"`{cmd.qualified_name}` is not configurable. Available:\n```{', '.join(sorted(configurable_commands.keys()))}```")
 
@@ -1878,7 +1882,7 @@ async def check_cd(ctx: commands.Context, command_name: str):
     if not cmd:
         return await ctx.reply(f"I can't find a command named `{command_name}`")
 
-    guild_id_str = str(ctx.guild.id)
+    guild_id_str = str(ctx.guild.id) if ctx.guild else ''
     author_id = str(ctx.author.id)
 
     make_sure_server_settings_exist(guild_id_str)
