@@ -1140,7 +1140,7 @@ async def on_message(message: discord.Message):
 
             if fixed_content != content:
                 try:
-                    kwargs = {"content": f"Sent by {message.author.mention}:\n{fixed_content}", "view": DeleteMessageView()}
+                    kwargs = {"content": f"{f"Sent by {message.author.mention}:\n" if message.guild else ''}{fixed_content}", "view": DeleteMessageView() if message.guild else None}
 
                     if message.reference and message.reference.resolved:
                         replied_to_author = message.reference.resolved.author
