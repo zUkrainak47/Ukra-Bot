@@ -1008,6 +1008,7 @@ async def on_ready():
 
         global all_bot_commands
         all_bot_commands = sorted([_.name for _ in client.commands])
+        client.add_view(DeleteMessageView())  # Registers persistent view
 
         bot_ready.set()
         bot_down = False
@@ -1034,13 +1035,49 @@ async def on_ready():
         traceback.print_exc()
 
 
+class DeleteMessageView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Delete",
+        style=discord.ButtonStyle.danger,
+        emoji="🗑️",
+        custom_id="delete_embed_fix"
+    )
+    async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Parse author from the known first line only
+        first_line = interaction.message.content.splitlines()[0]
+        m = re.search(r'<@!?(\d+)>', first_line)
+
+        if not m:
+            await interaction.response.send_message("Error parsing original author.", ephemeral=True)
+            return
+
+        original_author_id = int(m.group(1))
+
+        if interaction.user.id != original_author_id:
+            await interaction.response.send_message(
+                f"Only <@{original_author_id}> can use this button, silly",
+                ephemeral=True
+            )
+            return
+
+        # Ack then delete to avoid "interaction failed"
+        await interaction.response.defer()
+        try:
+            await interaction.message.delete()
+        except discord.NotFound:
+            await interaction.followup.send("Message already deleted.", ephemeral=True)
+
+
 kms = {"kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing myself', 'killing yourself'}
 
 TWITTER_PATTERN = re.compile(r'https?://(?:www\.)?(twitter\.com|x\.com)/([^/\s]+)/status/(\d+)([^\s]*)')
-REDDIT_PATTERN = re.compile(r'https?://(?:www\.|old\.|new\.)?reddit\.com/(r/[^/\s]+/comments/[^\s]+)')
+REDDIT_PATTERN = re.compile(r'https?://(?:www\.|old\.|new\.)?reddit\.com/(r/[^/\s]+/comments/[^?\s]+)(?:\?[^\s]*)?')
 PIXIV_PATTERN = re.compile(r'https?://(?:www\.)?pixiv\.net/(?:en/)?artworks/(\d+)([^\s]*)')
 INSTAGRAM_PATTERN = re.compile(r'https?://(?:www\.)?instagram\.com/(p|reel|reels)/([^/?\s]+)([^\s]*)')
-BILIBILI_PATTERN = re.compile(r'https?://(?:www\.)?bilibili\.com(?:/video)?/([^/?\s]+)([^\s]*)')
+BILIBILI_PATTERN = re.compile(r'https?://(?:www\.|m\.)?bilibili\.com(?:/video)?/([^/?\s]+)([^\s]*)')
 BSKY_PATTERN = re.compile(r'https?://bsky\.app/profile/([^/\s]+)/post/([^\s]+)')
 TIKTOK_PATTERN = re.compile(r'https?://(?:vm\.|www\.)?tiktok\.com/([^?\s]+)(?:\?[^\s]*)?')
 TWITCH_CLIP_PATTERN = re.compile(r'https?://(?:clips\.twitch\.tv|www\.twitch\.tv/[^/]+/clip)/([^\s?]+)(?:\?[^\s]*)?')
@@ -1051,6 +1088,8 @@ THREADS_PATTERN = re.compile(r'https?://(?:www\.)?threads\.(?:com|net)/([^?\s]+)
 async def on_message(message: discord.Message):
     if message.author == client.user:
         return
+
+    await client.process_commands(message)
 
     if message.guild and 'KYS Protection' in server_settings.get(str(message.guild.id), {}).get('allowed_commands'):
         content = message.content.lower()
@@ -1065,52 +1104,62 @@ async def on_message(message: discord.Message):
     if (message.guild and 'Fix Bad Embeds' in server_settings.get(str(message.guild.id), {}).get('allowed_commands')) or not message.guild:
         content = message.content
 
-        # Early exit if no URLs at all
-        if 'http://' not in content and 'https://' not in content:
-            await client.process_commands(message)
-            return
+        has_urls = 'http://' in content or 'https://' in content
+        has_no_flag = '-n' not in content.split()
 
-        # Check for -n flag to disable replacement
-        if any(x == '-n' for x in content.split()):
-            await client.process_commands(message)
-            return
+        if has_urls and has_no_flag:
+            fixed_content = content
 
-        fixed_content = content
+            # Use pre-compiled patterns
+            if 'x.com' in fixed_content or 'twitter.com' in fixed_content:
+                fixed_content = TWITTER_PATTERN.sub(r'https://fxtwitter.com/\2/status/\3\4', fixed_content)
 
-        # Use pre-compiled patterns
-        fixed_content = TWITTER_PATTERN.sub(r'https://fxtwitter.com/\2/status/\3\4', fixed_content)
-        fixed_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\1', fixed_content)
-        fixed_content = PIXIV_PATTERN.sub(r'https://phixiv.net/artworks/\1\2', fixed_content)
-        fixed_content = INSTAGRAM_PATTERN.sub(r'https://kkinstagram.com/\1/\2', fixed_content)
-        fixed_content = BILIBILI_PATTERN.sub(r'https://vxbilibili.com/video/\1', fixed_content)
-        fixed_content = BSKY_PATTERN.sub(r'https://fxbsky.app/profile/\1/post/\2', fixed_content)
-        fixed_content = TIKTOK_PATTERN.sub(r'https://tnktok.com/\1', fixed_content)
-        fixed_content = TWITCH_CLIP_PATTERN.sub(r'https://fxtwitch.seria.moe/clip/\1', fixed_content)
-        fixed_content = THREADS_PATTERN.sub(r'https://fixthreads.net/\1', fixed_content)
+            if 'reddit.com' in fixed_content:
+                fixed_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\1', fixed_content)
 
-        if fixed_content != content:
-            try:
-                # If the original message was a reply, preserve that reply chain
-                if message.reference and message.reference.resolved:
-                    # Check if the original sender pinged the person they replied to
-                    replied_to_author = message.reference.resolved.author
-                    should_mention = replied_to_author in message.mentions
-
-                    await message.channel.send(
-                        f"Sent by {message.author.mention}:\n{fixed_content}",
-                        reference=message.reference,
-                        mention_author=should_mention
-                    )
-                else:
-                    await message.channel.send(f"Sent by {message.author.mention}:\n{fixed_content}")
+            if 'pixiv.net' in fixed_content:
+                fixed_content = PIXIV_PATTERN.sub(r'https://phixiv.net/artworks/\1\2', fixed_content)
 
                 await message.delete()
-            except discord.Forbidden:
-                print(f"Cannot fix embeds in {message.channel.name} (guild: {message.guild.name if message.guild else 'DM'}) due to permissions.")
-            except Exception as e:
-                print(f"Error fixing embeds: {e}")
+            if 'instagram.com' in fixed_content:
+                fixed_content = INSTAGRAM_PATTERN.sub(r'https://kkinstagram.com/\1/\2', fixed_content)
 
-    await client.process_commands(message)
+            if 'bilibili.com' in fixed_content:
+                fixed_content = BILIBILI_PATTERN.sub(r'https://vxbilibili.com/video/\1', fixed_content)
+
+            if 'bsky.app' in fixed_content:
+                fixed_content = BSKY_PATTERN.sub(r'https://fxbsky.app/profile/\1/post/\2', fixed_content)
+
+            if 'tiktok.com' in fixed_content:
+                fixed_content = TIKTOK_PATTERN.sub(r'https://tnktok.com/\1', fixed_content)
+
+            if 'twitch.tv' in fixed_content:
+                fixed_content = TWITCH_CLIP_PATTERN.sub(r'https://fxtwitch.seria.moe/clip/\1', fixed_content)
+
+            if 'threads.com' in fixed_content or 'threads.net' in fixed_content:
+                fixed_content = THREADS_PATTERN.sub(r'https://fixthreads.net/\1', fixed_content)
+
+            if fixed_content != content:
+                try:
+                    kwargs = {"content": f"Sent by {message.author.mention}:\n{fixed_content}", "view": DeleteMessageView()}
+
+                    if message.reference and message.reference.resolved:
+                        replied_to_author = message.reference.resolved.author
+                        kwargs["reference"] = message.reference
+                        kwargs["mention_author"] = replied_to_author in message.mentions
+
+                    sent_message = await message.channel.send(**kwargs)
+                    await message.delete()
+
+                    # Suppress original message embeds
+                    # await message.edit(suppress=True)
+                    #
+                    # # Send fixed version as reply
+                    # await message.reply(fixed_content, mention_author=False)
+                except discord.Forbidden:
+                    pass
+                except Exception as e:
+                    print(f"Error fixing embeds: {e}")
 
 
 @client.hybrid_command(name="delete_bot_message", aliases=['delbotmsg'])
@@ -2093,7 +2142,7 @@ class CustomCommands(commands.Cog):
             print(f"Error in custom: {error}")  # Log other errors
             await ctx.reply("An unexpected error occurred.")
 
-    @commands.hybrid_command(name='custom_remove', description='Removes a custom command from this server',  aliases=['rmc', 'crm'])
+    @commands.hybrid_command(name='custom_remove', description='!crm - Removes a custom command from this server',  aliases=['rmc', 'crm'])
     @app_commands.describe(name='Custom command name')
     @commands.check(custom_perms)
     async def custom_remove(self, ctx, name: str):
