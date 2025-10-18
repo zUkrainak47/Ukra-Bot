@@ -1162,6 +1162,7 @@ async def on_message(message: discord.Message):
 
 
 @client.hybrid_command(name="delete_bot_message", aliases=['delbotmsg'])
+@app_commands.allowed_installs(guilds=True, users=False)
 # @commands.has_permissions(manage_messages=True) # Alternative: check Discord perms
 async def delete_bot_message(ctx: commands.Context, message_id: str):
     """Deletes a specific message sent by the bot in the current channel."""
@@ -1235,6 +1236,7 @@ async def delete_bot_message_error(ctx, error):
 
 
 @commands.hybrid_command(name="ping", description="Pong")
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 async def ping(ctx):
     """pong"""
     await ctx.send(f"Pong! {round(client.latency * 1000)}ms")
@@ -1265,6 +1267,7 @@ async def uptime(ctx):
 
 
 @commands.hybrid_command(name="rng", description="Choose a random number from n1 to n2")
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @app_commands.describe(n1="Lower bound", n2="Upper bound")
 async def rng(ctx, n1: int, n2: int):
     """
@@ -1289,6 +1292,7 @@ async def rng_error(ctx: commands.Context, error):
 
 
 @commands.hybrid_command(name="source", description="Sends the GitHub link to this bot's repo", aliases=['github'])
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 async def source(ctx):
     """
     Sends the GitHub link to this bot's repo
@@ -1297,6 +1301,7 @@ async def source(ctx):
 
 
 @commands.hybrid_command(name="donate", description="$1 per 10k coins, payment methods include kofi and a monobank jar", aliases=['jar', 'ko-fi', 'kofi'])
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 async def donate(ctx):
     """
     I accept donations! $1 per 10k coins is the current rate
@@ -1311,6 +1316,7 @@ async def donate(ctx):
 
 
 @commands.hybrid_command(name="server", description=f"DM's the sender an invite link to {bot_name} Server", aliases=['invite', 'support'])
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 async def server(ctx):
     """
     DMs the sender an invite link to The Ukra Place
@@ -1327,6 +1333,7 @@ async def server(ctx):
 
 
 @commands.hybrid_command(name="choose", description="Chooses from multiple options separated by |", aliases=['choice'])
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @app_commands.describe(options="Separated by |")
 async def choose(ctx, *, options: str):
     """
@@ -1345,6 +1352,7 @@ async def choose(ctx, *, options: str):
 
 
 @commands.hybrid_command(name="dnd", description="Rolls dnd dice using DND dice notation", aliases=['roll'])
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @app_commands.describe(dice="DND notation")
 async def dnd(ctx, *, dice: str = ''):
     """
@@ -1408,6 +1416,7 @@ async def dnd(ctx, *, dice: str = ''):
 
 
 @commands.hybrid_command(name="botafk", description="Toggles currency commands globally", aliases=['botdown'])
+@app_commands.allowed_installs(guilds=True, users=False)
 async def botafk(ctx):
     """
     Toggles currency commands globally
@@ -1430,6 +1439,7 @@ async def botafk(ctx):
 
 
 @commands.hybrid_command(name="save", description="Saves everything")
+@app_commands.allowed_installs(guilds=True, users=False)
 async def save(ctx):
     """
     Saves everything
@@ -1444,6 +1454,7 @@ async def save(ctx):
 
 
 @commands.hybrid_command(name="backup", description="Backs up all data")
+@app_commands.allowed_installs(guilds=True, users=False)
 async def backup(ctx):
     """
     Backs up all data
@@ -1458,6 +1469,7 @@ async def backup(ctx):
 
 
 @commands.hybrid_command(name="compliment", description="Compliments user based on 3x100 most popular compliments")
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @app_commands.describe(user='The user you want to compliment (optional)')
 async def compliment(ctx, *, user: discord.User = None):
     """
@@ -1492,6 +1504,7 @@ default_allowed_commands = ['Compliment', 'DND', 'Currency System', 'Lore']
 
 
 @commands.hybrid_command(name='enable', aliases=['allow'])
+@app_commands.allowed_installs(guilds=True, users=False)
 @commands.check(is_admin)
 async def enable(ctx, *, command):
     """
@@ -1562,6 +1575,7 @@ async def enable_autocomplete(ctx, current: str):
 
 
 @commands.hybrid_command(name='disable', aliases=['disallow', 'prevent'])
+@app_commands.allowed_installs(guilds=True, users=False)
 @commands.check(is_admin)
 async def disable(ctx, *, command):
     """
@@ -1788,6 +1802,7 @@ configurable_commands = {'addlore': (0, 300),
 
 
 @commands.hybrid_command(name='setcd')
+@app_commands.allowed_installs(guilds=True, users=False)
 @app_commands.describe(command_name="Name of the command you're setting a cooldown for", cooldown_seconds="Cooldown in seconds (set -1 for default cooldown)")
 @commands.check(is_manager)
 async def set_cooldown(ctx: commands.Context, command_name: str, cooldown_seconds: int):
@@ -1852,6 +1867,7 @@ async def set_cooldown_error(ctx, error):
 
 
 @commands.hybrid_command(name="check_cd", description="!ccd - Check the cooldown of any command", aliases=['ccd'])
+@app_commands.allowed_installs(guilds=True, users=False)
 async def check_cd(ctx: commands.Context, command_name: str):
     """
     Checks the cooldown for a command in this server.
@@ -1931,6 +1947,7 @@ async def ukrabypass_command(ctx):
 
 
 @commands.hybrid_command(name="toggle_channel_currency", description="!tcc - Toggle Channel Currency", aliases=['tcc'])
+@app_commands.allowed_installs(guilds=True, users=False)
 @commands.check(is_admin)
 async def tcc(ctx):
     """
@@ -1958,6 +1975,7 @@ async def tcc(ctx):
 
 
 @commands.hybrid_command(name="tuc", description="Ban user from using the bot", aliases=['toggle_user_currency'])
+@app_commands.allowed_installs(guilds=True, users=False)
 async def tuc(ctx, *, target: discord.User):
     """
     Starts ignoring the mentioned user
@@ -2053,6 +2071,7 @@ class CustomCommands(commands.Cog):
         self.__cog_name__ = 'Custom Commands'
 
     @commands.hybrid_command(name='custom', description='Adds a custom command to the server',  aliases=['custom_add', 'add_custom'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(name='Custom command name', response='Custom response (!help custom for details)')
     @commands.check(custom_perms)
     async def custom(self, ctx, name: str, *, response: str):
@@ -2101,6 +2120,7 @@ class CustomCommands(commands.Cog):
             await ctx.reply("An unexpected error occurred.")
 
     @commands.hybrid_command(name='custom_append', description='Extends an existing custom command by adding something to the end of the existing response',  aliases=['append_custom'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(name='Custom command name', appended_response="What you're appending to the existing response")
     @commands.check(custom_perms)
     async def custom_append(self, ctx, name: str, *, appended_response: str):
@@ -2146,6 +2166,7 @@ class CustomCommands(commands.Cog):
             await ctx.reply("An unexpected error occurred.")
 
     @commands.hybrid_command(name='custom_remove', description='!crm - Removes a custom command from this server',  aliases=['rmc', 'crm'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(name='Custom command name')
     @commands.check(custom_perms)
     async def custom_remove(self, ctx, name: str):
@@ -2196,6 +2217,7 @@ class CustomCommands(commands.Cog):
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.hybrid_command(name='custom_list', description='!cl - Lists all custom commands for the server',  aliases=['custom_commands', 'cl'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(sort_alphabetically="Sorted alphabetically (True) / by time added (False)", search='If you want to search for commands that contain a specific string')
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def custom_list(self, ctx, *, search: str = None, sort_alphabetically: bool = True):
@@ -2243,6 +2265,7 @@ class CustomCommands(commands.Cog):
 
     @commands.cooldown(1, 120, commands.BucketType.user)
     @commands.hybrid_command(name='custom_list_dm', description='!cldm - Sends you a message containing all custom command of this server', aliases=['cldm'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(sort_alphabetically="Sorted alphabetically (True) / by time added (False)", search='If you want to search for commands that contain a specific string')
     async def custom_list_dm(self, ctx, *, search: str = None, sort_alphabetically: bool = True):
         """
@@ -2316,6 +2339,7 @@ class CustomCommands(commands.Cog):
             await self.cldm(ctx, sort_alphabetically=True)
 
     @commands.hybrid_command(name='custom_inspect', description='Inspect a custom command on this server',  aliases=['custom_command', 'ci'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(name='Custom command name')
     async def custom_inspect(self, ctx, name: str):
         """
@@ -2374,6 +2398,7 @@ class CustomCommands(commands.Cog):
         apply_custom_cooldown(ctx, default_seconds=0)
 
     @commands.hybrid_command(name='custom_role', description='Create a custom role distribution command')
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(
         name='Command name',
         role='Role to distribute (mention or ID)',
@@ -2511,6 +2536,7 @@ class CustomCommands(commands.Cog):
             await ctx.reply("An unexpected error occurred.")
 
     @commands.hybrid_command(name='custom_role_remove', description='Remove a custom role command', aliases=['crr'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(name='Custom role command name')
     @commands.check(is_admin)
     async def custom_role_remove(self, ctx, name: str):
@@ -2548,6 +2574,7 @@ class CustomCommands(commands.Cog):
         return choices[:25]
 
     @commands.hybrid_command(name='custom_role_list', description='List all custom role commands', aliases=['crl'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def custom_role_list(self, ctx):
         """
         List all custom role commands for this server
@@ -2580,6 +2607,7 @@ class CustomCommands(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name='custom_role_inspect', description='Inspect a custom role command', aliases=['cri'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(name='Custom role command name')
     async def custom_role_inspect(self, ctx, name: str):
         """
@@ -2823,6 +2851,7 @@ FORBIDDEN_RE = re.compile(r'\b(while|for|import|open|eval|exec|__import__|def|cl
 
 
 @commands.hybrid_command(name="calc", description="Simple calculator", aliases=['calculate'])
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @commands.cooldown(1, 3, commands.BucketType.user)
 async def calc(ctx: commands.Context, *, expression: str):
     """
@@ -2906,6 +2935,7 @@ async def calc_error(ctx, error):
 
 
 @commands.hybrid_command(name="avatar", description="Displays a user's pfp (profile picture).", aliases=['pfp', 'av'])
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @app_commands.describe(user="The user whose avatar you want to view.")
 async def avatar(ctx: commands.Context, user: typing.Optional[discord.User] = None):
     """
@@ -2948,6 +2978,7 @@ async def get_user(id_: int, ctx=None, force_fetch=False):
 
 @commands.cooldown(1, 15, commands.BucketType.user)
 @commands.hybrid_command(name="banner", description="Displays a user's banner if they have one!")
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @app_commands.describe(user="The user whose banner you want to view.")
 async def banner(ctx: commands.Context, user: typing.Optional[discord.User] = None):
     """
@@ -3049,7 +3080,10 @@ async def sticker(ctx: commands.Context):
 
 EMOJI_REGEX = r'<(?P<animated>a?):(?P<name>[a-zA-Z0-9_]{2,32}):(?P<id>[0-9]{18,22})>'
 EMOJI_REGEX_VENCORD = r'https?:\/\/cdn\.discordapp\.com\/emojis\/(?P<id>[0-9]{18,22})\.(?P<extension>gif|png|webp)(?:\?(?:(?=.*name=(?P<name>[a-zA-Z0-9_]{2,32})))?(?:(?=.*animated=(?P<animated>true|false)))?.*)?'
+
+
 @commands.hybrid_command(name="emote", description="Sends an emote as an Image", aliases=["emoji"])
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @app_commands.describe(emoji="The emote you want to convert to an Image")
 async def emote(ctx: commands.Context, emoji=''):
     """
@@ -5543,6 +5577,7 @@ class Lore(commands.Cog):
             return None
 
     @commands.hybrid_command(name="toggle_lore", description="Enables or disables lore functionality for you", aliases=['opt_out_of_lore'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def toggle_lore(self, ctx):
         """
         If you have lore activated in this server, will deactivate it for you and vice versa
@@ -5712,6 +5747,7 @@ class Lore(commands.Cog):
             await print_reset_time(int(error.retry_after), ctx, f"You're adding lore too quickly! ")
 
     @commands.hybrid_command(name="lore", description="Displays the lore of a user in this server", aliases=['lore1'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="The user whose lore you're checking", page="Entry number")
     @custom_cooldown_check(default_seconds=0)
     async def view_lore(self, ctx, user: typing.Optional[discord.User] = None, page: typing.Optional[int] = 1):
@@ -5725,6 +5761,7 @@ class Lore(commands.Cog):
         apply_custom_cooldown(ctx, default_seconds=0)
 
     @commands.hybrid_command(name="lore_random", description="Displays a random lore entry of a user in this server", aliases=['lore*', 'lore_r', 'rl', 'lr'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="The user whose lore you're checking")
     @custom_cooldown_check(default_seconds=0)
     async def lore_random(self, ctx, user: typing.Optional[discord.User] = None):
@@ -5738,6 +5775,7 @@ class Lore(commands.Cog):
         apply_custom_cooldown(ctx, default_seconds=0)
 
     @commands.hybrid_command(name="server_lore", description="Displays a random lore entry of a random user in this server", aliases=['lore**', 'rl*', 'lr*', 'sl'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @custom_cooldown_check(default_seconds=0)
     async def server_lore(self, ctx):
         """
@@ -5851,6 +5889,7 @@ class Lore(commands.Cog):
         await pagination_view.send_embed()
 
     @commands.hybrid_command(name="lore_compact", description="Displays a condensed version of a user's lore, aka lore2", aliases=['lore2'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="The user whose lore you're checking", page="The page number to start on")
     @custom_cooldown_check(default_seconds=0)
     async def lore_compact(self, ctx, user: typing.Optional[discord.User] = None, page: int = 1):
@@ -5958,6 +5997,7 @@ class Lore(commands.Cog):
 
     @commands.hybrid_command(name="lore_remove", description="Removes a lore entry by its message ID (or a link to the message)",
                              aliases=['rmlore', 'removelore', 'dellore', 'deletelore'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def lore_remove(self, ctx, message_id_to_remove=None):
         """
         Removes a lore entry by its message ID, a link to the message, or by replying to it
@@ -6026,6 +6066,7 @@ class Lore(commands.Cog):
     #         await ctx.reply(f"Usage: `!rmlore <Message ID>`")
 
     @commands.hybrid_command(name="remove_all_lore", description="Used to remove all lore entries")
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def remove_all_lore(self, ctx, user: discord.User = None):
         """
         Removes all lore entries for a user
@@ -6072,6 +6113,7 @@ class Lore(commands.Cog):
             print(traceback.format_exc())
 
     @commands.hybrid_command(name="lore_leaderboard", description="Server Lore Leaderboard", aliases=['lorelb'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def lore_leaderboard(self, ctx, page: int = 1):
         """
         Shows the server leaderboard of lore entries
@@ -6164,6 +6206,7 @@ class Currency(commands.Cog):
         self.update_stock_prices.cancel()  # Stop task when the cog is unloaded
 
     @commands.hybrid_command(name="help", description="Shows help information for commands.")
+    @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     @app_commands.describe(command="The command you need help with (optional)")
     async def help(self, ctx: commands.Context, *, command: str = None):
         """Shows help information for commands."""
@@ -6339,6 +6382,7 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.hybrid_command(name="profile", description="Check your or someone else's profile", aliases=['p'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="Whose profile you want to view")
     async def profile(self, ctx, *, user: discord.User = None):
         """
@@ -6356,6 +6400,7 @@ class Currency(commands.Cog):
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.hybrid_command(name="info", description="Check your or someone else's info", aliases=['i'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="Whose info you want to view")
     async def info(self, ctx, *, user: discord.User = None):
         """
@@ -6373,6 +6418,7 @@ class Currency(commands.Cog):
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.hybrid_command(name="request", description="DMs you all data the bot collected about you")
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def request(self, ctx):
         """
         DMs you all data the bot collected about you
@@ -6393,6 +6439,7 @@ class Currency(commands.Cog):
             await ctx.reply(known_data)
 
     @commands.hybrid_command(name="inventory", description="Displays your or someone else's inventory", aliases=['inv'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def inventory(self, ctx, *, user: discord.User = None):
         """
         Displays your or someone else's inventory
@@ -6428,6 +6475,7 @@ class Currency(commands.Cog):
             print(traceback.format_exc())
 
     @commands.hybrid_command(name="shop", description="Item shop!", aliases=['store'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def shop(self, ctx):
         """
         Item shop!
@@ -6447,6 +6495,7 @@ class Currency(commands.Cog):
             print(traceback.format_exc())
 
     @commands.hybrid_command(name="item", description="Displays info on an item")
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(item="The name of the item")
     async def item(self, ctx, *, item: str):
         """
@@ -6503,6 +6552,7 @@ class Currency(commands.Cog):
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.hybrid_command(name="items", description="Lists all items in the bot")
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def items(self, ctx):
         """
         Lists all items in the bot
@@ -6522,6 +6572,7 @@ class Currency(commands.Cog):
             print(traceback.format_exc())
 
     @commands.hybrid_command(name="use", description="Use item of choice")
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(item="The name of the item", amount="How many you want to use. Only used for some items", target="For items like evil potion", parameter="For evil and math potions")
     async def use(self, ctx: commands.Context, item: str, amount: int = 1, target: discord.Member = None, parameter: str = '0'):
         """
@@ -6632,6 +6683,7 @@ class Currency(commands.Cog):
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.hybrid_command(name="buy", description="Purchase item of choice", aliases=['purchase'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(item="The name of the item", amount="How many you want to buy")
     async def buy(self, ctx, *, item: str, amount: int = 1):
         """
@@ -6692,6 +6744,7 @@ class Currency(commands.Cog):
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.hybrid_command(name="fund", description="Fund the global giveaway pool")
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(amount="How many coins you're adding to the pool")
     async def fund(self, ctx, *, amount: str):
         """
@@ -6733,6 +6786,7 @@ class Currency(commands.Cog):
 
     @commands.cooldown(rate=2, per=10, type=commands.BucketType.user)
     @commands.hybrid_command(name="stock", description="Inspect, buy or sell stocks of choice", alias=['stocks'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(stock="The name of the stock", action="Inspect/Buy/Sell", amount="How many you want to buy or sell")
     async def stock(self, ctx, stock: str, action: str = 'Inspect - day', amount: int = 1):
         """
@@ -6944,7 +6998,7 @@ class Currency(commands.Cog):
             print("Error updating stock prices:")
             print(traceback.format_exc())
 
-    @commands.hybrid_command(name="stock_prices", description="Sends a list of stock prices", aliases=['stock_price', 'stocks_price', 'stocks_prices', 'sp'])
+    @commands.hybrid_command(name="stock_prices", description="!sp - Sends a list of stock prices", aliases=['stock_price', 'stocks_price', 'stocks_prices', 'sp'])
     async def stock_prices(self, ctx):
         """
         Sends a list of stock prices (updated every 15 seconds)
@@ -6972,6 +7026,7 @@ class Currency(commands.Cog):
             await ctx.reply("An error occurred while retrieving stock prices.")
 
     @commands.hybrid_command(name="title", description="Change the title in your profile", aliases=['titles'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(title="The title you want to set")
     async def title(self, ctx, *, title=None):
         """
@@ -7034,6 +7089,7 @@ class Currency(commands.Cog):
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.hybrid_command(name="add_title", description="Adds title to user. Only usable by bot developer", aliases=['give_title', 'givetitle', 'addtitle'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="Who the title is for", title="The title you want to add")
     async def add_title(self, ctx, user: discord.User, *, title: str):
         """
@@ -7091,6 +7147,7 @@ class Currency(commands.Cog):
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
     @commands.hybrid_command(name="balance", description="Check your or someone else's balance and net worth", aliases=['b', 'bal', 'net', 'networth', 'nw'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="Whose balance you want to check")
     async def balance(self, ctx, *, user: discord.User = None):
         """
@@ -7180,6 +7237,7 @@ class Currency(commands.Cog):
 
     @commands.cooldown(rate=1, per=2, type=commands.BucketType.user)
     @commands.hybrid_command(name="cd", description="Displays cooldowns for farming commands", aliases=['cooldown', 'cooldowns', 'xd', 'св'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def cooldowns(self, ctx):
         """
         Displays cooldowns for farming commands
@@ -7349,6 +7407,7 @@ class Currency(commands.Cog):
         #     ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="dig", description="Dig and get a very small number of coins", aliases=['d', 'в'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @commands.cooldown(rate=1, per=20, type=commands.BucketType.user)
     async def dig(self, ctx):
         """
@@ -7454,6 +7513,7 @@ class Currency(commands.Cog):
         #     ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="mine", description="Mine and get a small number of coins", aliases=['m', 'ь'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
     async def mine(self, ctx):
         """
@@ -7506,6 +7566,7 @@ class Currency(commands.Cog):
         #     ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="work", description="Work and get a moderate number of coins", aliases=['w', 'ц'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @commands.cooldown(rate=1, per=300, type=commands.BucketType.user)
     async def work(self, ctx):
         """
@@ -7630,6 +7691,7 @@ class Currency(commands.Cog):
         #     ctx.command.reset_cooldown(ctx)
 
     @commands.hybrid_command(name="fish", description="Fish and get a random number of coins from 1 to 167", aliases=['fishinge', 'f', 'а'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @commands.cooldown(rate=1, per=600, type=commands.BucketType.user)
     async def fishinge(self, ctx):
         """
@@ -7659,6 +7721,7 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.hybrid_command(name="e", description="Farm dig, mine, work and fish in one command", aliases=['у'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def e(self, ctx):
         """
         Dig, mine, work and fish in one command.
@@ -7713,6 +7776,7 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.hybrid_command(name="daily", description="Claim 1 Daily Item and daily coins!")
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def daily(self, ctx):
         """
         Claim 1 Daily Item and a random number of daily coins from 140 to 260
@@ -7778,6 +7842,7 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.hybrid_command(name="weekly", description="Claim 1 Weekly Item and weekly coins!")
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def weekly(self, ctx):
         """
         Claim a random number of weekly coins from 1500 to 2500
@@ -7816,6 +7881,7 @@ class Currency(commands.Cog):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
     @commands.hybrid_command(name="give", description="Give someone an amount of coins", aliases=['pay', 'gift'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="Who you'd like to give coins to", number="How many coins you'd like to give")
     async def give(self, ctx, user: discord.User, number: str):
         """
@@ -7964,6 +8030,7 @@ class Currency(commands.Cog):
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="glb", description="View the global leaderboard of the richest users of the bot", aliases=['global_leaderboard', 'glib'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(page="Leaderboard page")
     async def global_leaderboard_embed(self, ctx, *, page: int = -1):
         """
@@ -7974,6 +8041,7 @@ class Currency(commands.Cog):
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="glbr", description="View the global leaderboard with LOANS", aliases=['global_leaderboard_read', 'glibr', 'glrb', 'glirb'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(page="Leaderboard page")
     async def global_leaderboard_real_embed(self, ctx, *, page: int = -1):
         """
@@ -7984,6 +8052,7 @@ class Currency(commands.Cog):
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="lb", description="View the leaderboard of the 10 richest users of this server", aliases=['leaderboard'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(page="Leaderboard page")
     async def leaderboard_embed(self, ctx, *, page: int = -1):
         """
@@ -7998,6 +8067,7 @@ class Currency(commands.Cog):
 
     @commands.cooldown(rate=1, per=3, type=commands.BucketType.guild)
     @commands.hybrid_command(name="funders", description="View the giveaway funders globally")
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(page="Leaderboard page")
     async def funders_embed(self, ctx, *, page: int = -1):
         """
@@ -8089,6 +8159,7 @@ class Currency(commands.Cog):
 
     @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
     @commands.hybrid_command(name="gamble", description="Takes a bet, 50% win rate", aliases=['g'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(number="How many coins you're betting")
     async def gamble(self, ctx, *, number: str = ''):
         """
@@ -8131,6 +8202,7 @@ class Currency(commands.Cog):
 
     @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
     @commands.hybrid_command(name="dice", description="Takes a bet, rolls 1d6, if it rolled 6 you win 5x the bet", aliases=['1d', 'onedice'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(number="How many coins you're betting")
     async def dice(self, ctx, *, number: str = ''):
         """
@@ -8178,6 +8250,7 @@ class Currency(commands.Cog):
 
     @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
     @commands.hybrid_command(name="twodice", description="Takes a bet, rolls 2d6, if it rolled 12 you win 35x the bet", aliases=['2d'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(number="How many coins you're betting")
     async def twodice(self, ctx, *, number: str = ''):
         """
@@ -8221,6 +8294,7 @@ class Currency(commands.Cog):
         pass
 
     @commands.hybrid_command(name="pvp", description="Takes a user mention and a bet, one of the users wins", aliases=['fight', 'battle'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="The member you want to PVP", number="How many coins you're betting")
     async def pvp(self, ctx, user: discord.Member, number: str = '0'):
         """
@@ -8371,6 +8445,7 @@ class Currency(commands.Cog):
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.hybrid_command(name="loan", description="Loan someone coins with optional interest", aliases=['lend'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="Who you'd like to loan", number='How much would you like to loan', interest='Optional - how much do you want on top')
     async def loan(self, ctx, user: discord.User, number: str, interest: str = '0'):
         """
@@ -8560,6 +8635,7 @@ class Currency(commands.Cog):
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.hybrid_command(name="loans", description="Check your or someone else's active loans")
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def loans(self, ctx, *, user: discord.User=None):
         """
         Displays your or someone else's active loans
@@ -8625,6 +8701,7 @@ class Currency(commands.Cog):
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
     @commands.hybrid_command(name="pb", description="Pay back a loan", aliases=['payback', 'pay_back'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user='Who you owe coins')
     async def pb(self, ctx, *, user: discord.User):
         """
@@ -8693,6 +8770,7 @@ class Currency(commands.Cog):
 
     @commands.cooldown(rate=1, per=1, type=commands.BucketType.user)
     @commands.hybrid_command(name="slots", description="Takes a bet, spins three wheels of 10 emojis if all of them match you win", aliases=['slot', 's'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(number="How many coins you're betting")
     async def slots(self, ctx, *, number: str = ''):
         """
@@ -8804,6 +8882,7 @@ class Currency(commands.Cog):
             print(traceback.format_exc())
 
     @commands.hybrid_command(name="lotto", description="Lottery!", aliases=['lottery'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def lotto(self, ctx):
         """
         Lottery!
@@ -8939,6 +9018,7 @@ class Currency(commands.Cog):
     #     await self.run_giveaway(ctx, admin=False)
 
     @commands.hybrid_command(name="admin_giveaway", description="Starts a giveaway using coins from the !pool", aliases=['aga'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(amount="How much you're giving away", duration="How long the giveaway will last - in 1h30m45s format")
     async def admin_giveaway(self, ctx, amount: str, duration: str):
         """
@@ -8949,6 +9029,7 @@ class Currency(commands.Cog):
         await self.run_giveaway(ctx, amount, duration, admin=True)
 
     @commands.hybrid_command(name="giveaway_pool", description="Checks how many coins there are in the global giveaway pool", aliases=['pool'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def giveaway_pool(self, ctx):
         """
         Shows how many coins there are for official giveaways to use.
@@ -9182,6 +9263,7 @@ class Marriage(commands.Cog):
         await self.bot.wait_until_ready()
 
     @commands.hybrid_command(name="marry", description="Propose marriage to another user", aliases=['propose'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="The user you want to marry")
     async def marry(self, ctx, user: discord.User):
         """
@@ -9300,6 +9382,7 @@ class Marriage(commands.Cog):
             print(f"Unexpected error: {error}")
 
     @commands.hybrid_command(name="divorce", description="Divorce your current partner")
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def divorce(self, ctx):
         """
         Divorce your current partner
@@ -9370,6 +9453,7 @@ class Marriage(commands.Cog):
 
     @commands.hybrid_command(name="marriage", description="Check marriage status",
                              aliases=['marriage_info', 'marriage_status'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="The user whose marriage status to check (optional)")
     async def marriage(self, ctx, user: discord.User = None):
         """
@@ -9462,6 +9546,7 @@ class Marriage(commands.Cog):
             print(f"Unexpected error: {error}")
 
     @commands.hybrid_command(name="marrylb", description="Shows the server's marriage leaderboard", aliases=['marriagelb'])
+    @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(page="The page number to view")
     async def marriage_leaderboard(self, ctx, page: int = 1):
         """

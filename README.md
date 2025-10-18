@@ -3,7 +3,7 @@ Has some silly commands and, most notably, a currency system
 
 [Join the Ukra Bot Server](https://discord.gg/n24Bbdjg43)
 or
-[add this bot to your own server!](https://discord.com/oauth2/authorize?client_id=1322197604297085020&permissions=268561472&integration_type=0&scope=bot+applications.commands)
+[add this bot to your own server!](https://discord.com/oauth2/authorize?client_id=1322197604297085020)
 
 
 @Ukra Bot#3418, ID: 1322197604297085020
