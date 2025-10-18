@@ -1039,6 +1039,9 @@ kms = {"kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing my
 TWITTER_PATTERN = re.compile(r'https?://(?:www\.)?(twitter\.com|x\.com)/([^/\s]+)/status/(\d+)([^\s]*)')
 REDDIT_PATTERN = re.compile(r'https?://(?:www\.|old\.|new\.)?reddit\.com/(r/[^/\s]+/comments/[^\s]+)')
 PIXIV_PATTERN = re.compile(r'https?://(?:www\.)?pixiv\.net/(?:en/)?artworks/(\d+)([^\s]*)')
+INSTAGRAM_PATTERN = re.compile(r'https?://(?:www\.)?instagram\.com/(p|reel|reels)/([^/?\s]+)([^\s]*)')
+BILIBILI_PATTERN = re.compile(r'https?://(?:www\.)?bilibili\.com(?:/video)?/([^/?\s]+)([^\s]*)')
+BSKY_PATTERN = re.compile(r'https?://bsky\.app/profile/([^/\s]+)/post/([^\s]+)')
 
 
 @client.event
@@ -1059,8 +1062,13 @@ async def on_message(message: discord.Message):
     if (message.guild and 'Fix Bad Embeds' in server_settings.get(str(message.guild.id), {}).get('allowed_commands')) or not message.guild:
         content = message.content
 
-        # Early exit if no URLs at all (tiny performance boost)
+        # Early exit if no URLs at all
         if 'http://' not in content and 'https://' not in content:
+            await client.process_commands(message)
+            return
+
+        # Check for -n flag to disable replacement
+        if any(x == '-n' for x in content.split()):
             await client.process_commands(message)
             return
 
@@ -1070,6 +1078,9 @@ async def on_message(message: discord.Message):
         fixed_content = TWITTER_PATTERN.sub(r'https://fxtwitter.com/\2/status/\3\4', fixed_content)
         fixed_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\1', fixed_content)
         fixed_content = PIXIV_PATTERN.sub(r'https://phixiv.net/artworks/\1\2', fixed_content)
+        fixed_content = INSTAGRAM_PATTERN.sub(r'https://eeinstagram.com/\1/\2', fixed_content)
+        fixed_content = BILIBILI_PATTERN.sub(r'https://vxbilibili.com/video/\1', fixed_content)
+        fixed_content = BSKY_PATTERN.sub(r'https://fxbsky.app/profile/\1/post/\2', fixed_content)
 
         if fixed_content != content:
             try:
@@ -1437,8 +1448,15 @@ async def enable(ctx, *, command):
     - **Compliment**: the `!compliment` command
     - **DND**: the `!dnd` command
     - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
-    - **Fix Bad Embeds**: replaces x/twitter links with fxtwitter, reddit with rxddit and pixiv with phixiv
-
+    - **Fix Bad Embeds**: (will also sanitize the links if applicable)
+      - x/twitter -> *fxtwitter*
+      - reddit -> *rxddit*
+      - pixiv -> *phixiv*
+      - bilibili -> *vxbilibili*
+      - instagram -> *eeinstagram*
+      - bsky -> *fxbsky*
+      - Add -n to a message to not fix its links
+    
     **Only usable by Administrators**
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -1493,7 +1511,14 @@ async def disable(ctx, *, command):
     - **Compliment**: the `!compliment` command
     - **DND**: the `!dnd` command
     - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
-    - **Fix Bad Embeds**: replaces x/twitter links with fxtwitter, reddit with rxddit and pixiv with phixiv
+    - **Fix Bad Embeds**: (will also sanitize the links if applicable)
+      - x/twitter -> *fxtwitter*
+      - reddit -> *rxddit*
+      - pixiv -> *phixiv*
+      - bilibili -> *vxbilibili*
+      - instagram -> *eeinstagram*
+      - bsky -> *fxbsky*
+      - Add -n to a message to not fix its links
 
     **Only usable by Administrators**
     """
@@ -1548,7 +1573,14 @@ async def settings(ctx):
     - **Compliment**: the `!compliment` command
     - **DND**: the `!dnd` command
     - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
-    - **Fix Bad Embeds**: replaces x/twitter links with fxtwitter, reddit with rxddit and pixiv with phixiv
+    - **Fix Bad Embeds**: (will also sanitize the links if applicable)
+      - x/twitter -> *fxtwitter*
+      - reddit -> *rxddit*
+      - pixiv -> *phixiv*
+      - bilibili -> *vxbilibili*
+      - instagram -> *eeinstagram*
+      - bsky -> *fxbsky*
+      - Add -n to a message to not fix its links
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
@@ -6191,7 +6223,7 @@ class Currency(commands.Cog):
 
                     if full_info:
                         profile_embed.add_field(name="Highest Net Worth", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
-                        profile_embed.add_field(name="Highest Global Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
+                        profile_embed.add_field(name="Highest Recorded Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
                         profile_embed.add_field(name="Total Given Away", value=f"{target_profile['num_1']:,} {coin}", inline=True)
 
                     profile_embed.add_field(name="Highest Single Win", value=f"{target_profile['highest_single_win']:,} {coin}", inline=True)
