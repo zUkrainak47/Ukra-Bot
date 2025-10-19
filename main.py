@@ -273,6 +273,14 @@ else:
     active_giveaways = {}
 
 
+IGNORE_BAD_EMBED_CHANNELS = Path("dev", "ignore_bad_embed_channels.json")
+if os.path.exists(IGNORE_BAD_EMBED_CHANNELS):
+    with open(IGNORE_BAD_EMBED_CHANNELS, "r") as file:
+        ignore_bad_embed_channels = json.load(file)
+else:
+    ignore_bad_embed_channels = []
+
+
 IGNORED_CHANNELS = Path("dev", "ignored_channels.json")
 if os.path.exists(IGNORED_CHANNELS):
     with open(IGNORED_CHANNELS, "r") as file:
@@ -361,6 +369,11 @@ def save_active_giveaways():
         json.dump(active_giveaways, file, indent=4)
 
 
+def save_ignore_bad_embed_channels():
+    with open(IGNORE_BAD_EMBED_CHANNELS, "w") as file:
+        json.dump(ignore_bad_embed_channels, file, indent=4)
+
+
 def save_ignored_channels():
     with open(IGNORED_CHANNELS, "w") as file:
         json.dump(ignored_channels, file, indent=4)
@@ -395,6 +408,7 @@ def save_everything():
     save_last_used_w()
     save_distributed_custom_roles()
     save_active_giveaways()
+    save_ignore_bad_embed_channels()
     save_ignored_channels()
     save_ignored_users()
     save_active_lottery()
@@ -843,6 +857,7 @@ async def on_ready():
         client.add_command(source)
         client.add_command(donate)
         client.add_command(server)
+        client.add_command(tcef)
         client.add_command(tcc)
         client.add_command(tuc)
         await client.tree.sync()
@@ -1101,7 +1116,7 @@ async def on_message(message: discord.Message):
             except Exception as e:
                 print(f"Error kys protecting reply: {e}")
 
-    if (message.guild and 'Fix Bad Embeds' in server_settings.get(str(message.guild.id), {}).get('allowed_commands')) or not message.guild:
+    if (message.guild and ('Fix Bad Embeds' in server_settings.get(str(message.guild.id), {}).get('allowed_commands')) and (message.channel.id not in ignore_bad_embed_channels)) or not message.guild:
         content = message.content
 
         has_urls = 'http://' in content or 'https://' in content
@@ -1950,12 +1965,42 @@ async def ukrabypass_command(ctx):
     return await ctx.reply(f'ok bypass is set to {ukra_bypass}')
 
 
+@commands.hybrid_command(name="toggle_channel_embed_fix", description=f"!tcef - Makes {bot_name} not fix links sent in this channel", aliases=['tcef'])
+@app_commands.allowed_installs(guilds=True, users=False)
+@commands.check(is_admin)
+async def tcef(ctx):
+    """
+    If Fix Bad Embeds is enabled in this server, will no longer fix embeds in the channel this command was sent in
+    If channel is already ignored, will resume fixing embeds instead
+    If Fix Bad Embeds is disabled, will have no effect
+
+    **Only usable by Administrators**
+    """
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    if not guild_id:
+        await ctx.reply("Can't use this in DMs!")
+        return
+    make_sure_server_settings_exist(guild_id)
+    if 'Fix Bad Embeds' in server_settings.get(guild_id).get('allowed_commands'):
+        if ctx.channel.id in ignore_bad_embed_channels:
+            ignore_bad_embed_channels.remove(ctx.channel.id)
+            save_ignore_bad_embed_channels()
+            await ctx.send(f"{bot_name} will fix embeds in this channel")
+        else:
+            ignore_bad_embed_channels.append(ctx.channel.id)
+            save_ignore_bad_embed_channels()
+            await ctx.send(f"{bot_name} will no longer fix embeds in this channel")
+    else:
+        await ctx.send("`Fix Bad Embeds` isn't enabled in your server. This command won't do anything\n"
+                       "To enable, run `!enable fix bad embeds`")
+
+
 @commands.hybrid_command(name="toggle_channel_currency", description="!tcc - Toggle Channel Currency", aliases=['tcc'])
 @app_commands.allowed_installs(guilds=True, users=False)
 @commands.check(is_admin)
 async def tcc(ctx):
     """
-    If Currency System is enabled in a server, starts ignoring the channel this command was sent in
+    If Currency System is enabled in this server, starts ignoring the channel this command was sent in
     If channel is already ignored, will stop ignoring it
     If Currency System is disabled, will have no effect
 
@@ -1975,7 +2020,7 @@ async def tcc(ctx):
         save_ignored_channels()
         await ctx.send(f"{bot_name} will now ignore Currency System commands in this channel")
     else:
-        await ctx.send("Currency system is disabled in your server already. This command won't do anything")
+        await ctx.send("Currency System is disabled in your server already. This command won't do anything")
 
 
 @commands.hybrid_command(name="tuc", description="(Dev only) !tuc - Ban user from using the bot", aliases=['toggle_user_currency'])
