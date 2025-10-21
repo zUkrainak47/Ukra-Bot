@@ -273,12 +273,12 @@ else:
     active_giveaways = {}
 
 
-IGNORE_BAD_EMBED_CHANNELS = Path("dev", "ignore_bad_embed_channels.json")
-if os.path.exists(IGNORE_BAD_EMBED_CHANNELS):
-    with open(IGNORE_BAD_EMBED_CHANNELS, "r") as file:
-        ignore_bad_embed_channels = json.load(file)
+IGNORED_EMBED_CHANNELS = Path("dev", "ignored_embed_channels.json")
+if os.path.exists(IGNORED_EMBED_CHANNELS):
+    with open(IGNORED_EMBED_CHANNELS, "r") as file:
+        ignored_embed_channels = json.load(file)
 else:
-    ignore_bad_embed_channels = []
+    ignored_embed_channels = []
 
 
 IGNORED_CHANNELS = Path("dev", "ignored_channels.json")
@@ -295,6 +295,14 @@ if os.path.exists(IGNORED_USERS):
         ignored_users = json.load(file)
 else:
     ignored_users = []
+
+
+IGNORED_EMBED_USERS = Path("dev", "ignored_embed_users.json")
+if os.path.exists(IGNORED_EMBED_USERS):
+    with open(IGNORED_EMBED_USERS, "r") as file:
+        ignored_embed_users = json.load(file)
+else:
+    ignored_embed_users = []
 
 
 LOTTERY_FILE = Path("dev", "active_lottery.json")
@@ -369,9 +377,9 @@ def save_active_giveaways():
         json.dump(active_giveaways, file, indent=4)
 
 
-def save_ignore_bad_embed_channels():
-    with open(IGNORE_BAD_EMBED_CHANNELS, "w") as file:
-        json.dump(ignore_bad_embed_channels, file, indent=4)
+def save_ignored_embed_channels():
+    with open(IGNORED_EMBED_CHANNELS, "w") as file:
+        json.dump(ignored_embed_channels, file, indent=4)
 
 
 def save_ignored_channels():
@@ -382,6 +390,11 @@ def save_ignored_channels():
 def save_ignored_users():
     with open(IGNORED_USERS, "w") as file:
         json.dump(ignored_users, file, indent=4)
+
+
+def save_ignored_embed_users():
+    with open(IGNORED_EMBED_USERS, "w") as file:
+        json.dump(ignored_embed_users, file, indent=4)
 
 
 def save_active_lottery():
@@ -408,7 +421,8 @@ def save_everything():
     save_last_used_w()
     save_distributed_custom_roles()
     save_active_giveaways()
-    save_ignore_bad_embed_channels()
+    save_ignored_embed_channels()
+    save_ignored_embed_users()
     save_ignored_channels()
     save_ignored_users()
     save_active_lottery()
@@ -859,6 +873,7 @@ async def on_ready():
         client.add_command(donate)
         client.add_command(server)
         client.add_command(tcef)
+        client.add_command(toggle_my_embed_fix)
         client.add_command(tcc)
         client.add_command(tuc)
         await client.tree.sync()
@@ -896,7 +911,7 @@ async def on_ready():
 
         async def remove_custom_role_command_roles(guild_id, command_name):
             """Remove all roles for a specific custom role command"""
-            print(f'Handling custom role command: {command_name} in guild {guild_id} ', end='')
+            # print(f'Handling custom role command: {command_name} in guild {guild_id} ', end='')
             try:
                 guild = await client.fetch_guild(int(guild_id))
                 print(guild.name)
@@ -1118,7 +1133,7 @@ async def on_message(message: discord.Message):
             except Exception as e:
                 print(f"Error kys protecting reply: {e}")
 
-    if (message.guild and ('Fix Bad Embeds' in server_settings.get(str(message.guild.id), {}).get('allowed_commands')) and (message.channel.id not in ignore_bad_embed_channels)) or not message.guild:
+    if (message.guild and ('Fix Bad Embeds' in server_settings.get(str(message.guild.id), {}).get('allowed_commands')) and (message.channel.id not in ignored_embed_channels) and (message.author.id not in ignored_embed_users)) or not message.guild:
         content = message.content
 
         has_urls = 'http://' in content or 'https://' in content
@@ -1520,7 +1535,7 @@ toggleable_commands = ['Compliment', 'DND', 'Currency System', 'KYS Protection',
 default_allowed_commands = ['Compliment', 'DND', 'Currency System', 'Lore']
 
 
-@commands.hybrid_command(name='fix_bad_embeds', description='Toggles Fix Bad Embeds on or off', aliases=['fixbadembeds'])
+@commands.hybrid_command(name='fix_bad_embeds', description='Toggles Fix Bad Embeds on or off in this server', aliases=['fixbadembeds'])
 @app_commands.allowed_installs(guilds=True, users=False)
 @commands.check(is_admin)
 async def fix_bad_embeds(ctx):
@@ -1528,6 +1543,7 @@ async def fix_bad_embeds(ctx):
     Toggle Fix Bad Embeds in this server
 
     Will replace links sent in this server with ones that have better embeds. Will also sanitize the links if applicable
+    This functionality is enabled in your DMs with Ukra Bot
 
     - Replaces the following:
       - x/twitter -> *fxtwitter*
@@ -1541,12 +1557,13 @@ async def fix_bad_embeds(ctx):
       - bsky -> *fxbsky*
 
     Add -n to a message to not fix its links
+    Use `/toggle_my_embed_fix` and I won't fix your links anywhere except our DMs
 
     **Only usable by Administrators**
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     if not guild_id:
-        await ctx.reply("Can't use this in DMs!")
+        await ctx.reply("Fix Bad Embeds is enabled in DMs")
         return
     make_sure_server_settings_exist(guild_id)
     command = "Fix Bad Embeds"
@@ -1989,6 +2006,28 @@ async def ukrabypass_command(ctx):
     return await ctx.reply(f'ok bypass is set to {ukra_bypass}')
 
 
+@commands.hybrid_command(name="toggle_my_embed_fix", description=f"Makes {bot_name} not fix your links anywhere except DMs with the bot")
+@app_commands.allowed_installs(guilds=True, users=False)
+async def toggle_my_embed_fix(ctx):
+    """
+    Disables Fix Bad Embeds for your links everywhere (`!help fix_bad_embeds`)
+    You can use Fix Bad Embeds in DMs with Ukra Bot regardless of this setting
+
+    This setting is global
+    """
+    if ctx.author.id in ignored_embed_users:
+        guild_id = '' if not ctx.guild else str(ctx.guild.id)
+        make_sure_server_settings_exist(guild_id)
+        ignored_embed_users.remove(ctx.author.id)
+        save_ignored_embed_users()
+        await ctx.reply(f"Ok, I will resume fixing your embeds\n"
+                        f"{'To use this functionality in this server, `/fix_bad_embeds` needs to be ran' if 'Fix Bad Embeds' not in server_settings.get(guild_id).get('allowed_commands') else ''}\n")
+    else:
+        ignored_embed_users.append(ctx.author.id)
+        save_ignored_embed_users()
+        await ctx.reply(f"Ok, I will no longer fix your embeds anywhere except our DMs")
+
+
 @commands.hybrid_command(name="toggle_channel_embed_fix", description=f"!tcef - Makes {bot_name} not fix links sent in this channel", aliases=['tcef'])
 @app_commands.allowed_installs(guilds=True, users=False)
 @commands.check(is_admin)
@@ -2006,13 +2045,13 @@ async def tcef(ctx):
         return
     make_sure_server_settings_exist(guild_id)
     if 'Fix Bad Embeds' in server_settings.get(guild_id).get('allowed_commands'):
-        if ctx.channel.id in ignore_bad_embed_channels:
-            ignore_bad_embed_channels.remove(ctx.channel.id)
-            save_ignore_bad_embed_channels()
+        if ctx.channel.id in ignored_embed_channels:
+            ignored_embed_channels.remove(ctx.channel.id)
+            save_ignored_embed_channels()
             await ctx.send(f"{bot_name} will fix embeds in this channel")
         else:
-            ignore_bad_embed_channels.append(ctx.channel.id)
-            save_ignore_bad_embed_channels()
+            ignored_embed_channels.append(ctx.channel.id)
+            save_ignored_embed_channels()
             await ctx.send(f"{bot_name} will no longer fix embeds in this channel")
     else:
         await ctx.send("`Fix Bad Embeds` isn't enabled in your server. This command won't do anything\n"
@@ -2152,8 +2191,7 @@ class CustomCommands(commands.Cog):
         Adds or updates a custom command for this server
         Usage: `!custom <command_name> <response_text>`
 
-        !!! Keep in mind that bots can send messages up to 2000 characters in length !!!
-        You can add up to 1000 custom commands per server
+        Use `!ci <command>` to inspect a custom command or `!cl` to view all.
 
         Include the following for additional functionality:
         - `<user>       ` to take a user mention
@@ -2170,12 +2208,15 @@ class CustomCommands(commands.Cog):
         - `r(n1, n2)    ` to choose a random number between n1 and n2
         - `{r(2,5) + 5 * <num1=2>}`  --  mathematical expressions are supported in {}
 
-        Example:
-        - !custom kiss <author> kissed <user> :heart:
-        - !custom food Today we are getting [burger|pizza|asian]
-        - !custom fireball <user> took {<num1=1>*(r(1,8) + r(1,8) + r(1,8) + r(1,8) + r(1,8))} fire damage
-        - !custom numbers {<num1> + <num2> * <num3>}
-        - !custom random_multiply {[10|53] * [15|25|35] * r(3, 7)}
+        Examples:
+        - `!custom kiss <author> kissed <user> :heart:`
+        - `!custom food Today we are getting [burger|pizza|asian]`
+        - `!custom fireball <user> took {<num1=1>*(r(1,8) + r(1,8) + r(1,8) + r(1,8) + r(1,8))} fire damage`
+        - `!custom numbers {<num1> + <num2> * <num3>}`
+        - `!custom random_multiply {[10|53] * [15|25|35] * r(3, 7)}`
+
+        You can add up to 1000 custom commands per server
+        !!! Keep in mind that bots can send messages up to 2000 characters in length !!!
 
         **Only usable by Moderators as well as users with a role called "Custom Commands Manager"**
         """
@@ -2365,10 +2406,11 @@ class CustomCommands(commands.Cog):
             if sort_alphabetically:
                 custom_commands = {key: value for key, value in sorted(custom_commands.items())}
         else:
+            search = search.lower()
             if sort_alphabetically:
-                custom_commands = {key: value for key, value in sorted(custom_commands.items()) if (search in key) or (search in value)}
+                custom_commands = {key: value for key, value in sorted(custom_commands.items()) if (search in key.lower()) or (search in value.lower())}
             else:
-                custom_commands = {key: value for key, value in custom_commands.items() if (search in key) or (search in value)}
+                custom_commands = {key: value for key, value in custom_commands.items() if (search in key.lower()) or (search in value.lower())}
             if not custom_commands:
                 return await ctx.reply(f"Nothing found when searching for `{search[:27]}{'...' if (len(search) > 27) else ''}`\nSorry, try again {get_timestamp(120)}\n\nTry searching `!cl` first btw")
 
@@ -2389,7 +2431,7 @@ class CustomCommands(commands.Cog):
             # 2. DM the file to the user who triggered the command
             try:
                 await ctx.author.send(
-                    f"Here are the custom commands for **{ctx.guild.name}**:",
+                    f"Here are the custom commands for **{ctx.guild.name}**:{f'\n-# Searching for `{search}`' if search is not None else ''}",
                     file=discord.File(filename)
                 )
                 # Let the user know to check their DMs
@@ -2514,11 +2556,13 @@ class CustomCommands(commands.Cog):
         - `<author>` / `<author_name>` - command caller
 
         **Examples:**
-        - Shoot ```/custom_role name:shoot role:@Shadow Realm duration:240 cooldown:0 backfire_rate:20 backfire_duration:480 victims_can_use:False success_msg:<user> got shot! fail_msg:OOPS! You missed :3c already_msg:https://giphy.com/gifs/the-simpsons-stop-hes-already-dead-JCAZQKoMefkoX6TyTb```
+        - Shoot (by J4rv) ```/custom_role name:shoot role:@Shadow Realm duration:240 cooldown:0 backfire_rate:20 backfire_duration:480 victims_can_use:False success_msg:<user> got shot! fail_msg:OOPS! You missed :3c already_msg:https://giphy.com/gifs/the-simpsons-stop-hes-already-dead-JCAZQKoMefkoX6TyTb```
         - Revive ```/custom_role name:revive role:@Revived duration:300 cooldown:300 backfire_rate:80 backfire_duration:150 backfire_role:@Shadow Realm victims_can_use:False success_msg:Bravo! <author> hast yank'd <user> from the shadow realm fail_msg:I swoop'd in to saveth mine own cousin from the shadow realm, only to trippeth and yeet us both into a deep'r void <:deadge:1323075561089929300> already_msg:He's already alive, dont ascend him to heaven bro required_victim_role:@Shadow Realm prohibited_castor_role:@Shadow Realm remove_required_victim_role:True```
         - Silence ```/custom_role name:silence role:@Silenced duration:15 cooldown:900 backfire_rate:30 backfire_duration:30 victims_can_use:True success_msg:<author> has silenced <user> <:peeposcheme:1322225542027804722> fail_msg:OOPS! Silencing failed <:teripoint:1322718769679827024> already_msg:They're already silenced bro please```
         Legacy (silence/segs/backshot):
         - `!getlegacy`
+
+        You can add up to 25 custom role commands per server
 
         **Only usable by Administrators**
         """
@@ -4586,7 +4630,7 @@ class LottoView(discord.ui.View):
                 print("Failed to update the message on timeout:", e)
 
 
-only_prefix = {'disable', 'enable', 'settings', 'getlegacy'
+only_prefix = {'disable', 'enable', 'getlegacy'
                'coinflip', 'redeem', 'tml', 'bless', 'curse', 'sticker'
                'addlore', '!'}
 
@@ -4916,7 +4960,7 @@ class MyHelpCommand(commands.HelpCommand):
     # Optional: Override help for specific commands/cogs if needed
     async def send_command_help(self, command):
         title_ = self.get_command_signature(command).replace('*', r'\*') if command.name not in only_prefix else '!' + self.get_command_signature(command)[1:]
-        embed = discord.Embed(title=title_ if len(title_) <= 256 else command.name,
+        embed = discord.Embed(title=title_ if len(title_) <= 256 else f'!{command.name}',
                               description=command.help or "No description provided.",
                               color=0xffd000)
         if self.context.interaction:
