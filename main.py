@@ -1106,7 +1106,7 @@ class DeleteMessageView(discord.ui.View):
 kms = {"kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing myself', 'killing yourself'}
 
 TWITTER_PATTERN = re.compile(r'https?://(?:www\.)?(twitter\.com|x\.com)/([^/\s]+)/status/(\d+)([^\s]*)')
-REDDIT_PATTERN = re.compile(r'https?://(?:www\.|old\.|new\.)?reddit\.com/(r/[^/\s]+/comments/[^?\s]+)(?:\?[^\s]*)?')
+REDDIT_PATTERN = re.compile(r'https?://(?:www\.|old\.|new\.)?reddit\.com/(?:r/[^/\s]+/)?(comments/[^?\s]+)(?:\?[^\s]*)?')
 PIXIV_PATTERN = re.compile(r'https?://(?:www\.)?pixiv\.net/(?:en/)?artworks/(\d+)([^\s]*)')
 INSTAGRAM_PATTERN = re.compile(r'https?://(?:www\.)?instagram\.com/(p|reel|reels)/([^/?\s]+)([^\s]*)')
 BILIBILI_LIVE_PATTERN = re.compile(r'https?://live\.bilibili\.com/([^/?\s]+)([^\s]*)')
@@ -2068,11 +2068,12 @@ async def toggle_my_embed_fix(ctx):
         ignored_embed_users.remove(ctx.author.id)
         save_ignored_embed_users()
         await ctx.reply(f"Ok, I will resume fixing your embeds\n"
-                        f"{'To use this functionality in this server, `/fix_bad_embeds` needs to be ran' if 'Fix Bad Embeds' not in server_settings.get(guild_id).get('allowed_commands') else ''}\n")
+                        f"{'To use this functionality in this server, `/fix_bad_embeds` needs to be ran' if 'Fix Bad Embeds' not in server_settings.get(guild_id).get('allowed_commands') else ''}\n",
+                        ephemeral=True)
     else:
         ignored_embed_users.append(ctx.author.id)
         save_ignored_embed_users()
-        await ctx.reply(f"Ok, I will no longer fix your embeds anywhere except our DMs")
+        await ctx.reply(f"Ok, I will no longer fix your embeds anywhere except our DMs", ephemeral=True)
 
 
 @commands.hybrid_command(name="toggle_channel_embed_fix", description=f"!tcef - Makes {bot_name} not fix links sent in this channel", aliases=['tcef'])
