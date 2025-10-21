@@ -846,6 +846,7 @@ async def on_ready():
         client.add_command(set_cooldown)
         client.add_command(check_cd)
         client.add_command(ukrabypass_command)
+        client.add_command(fix_bad_embeds)
         client.add_command(enable)
         client.add_command(disable)
         client.add_command(dnd)
@@ -1092,6 +1093,7 @@ TWITTER_PATTERN = re.compile(r'https?://(?:www\.)?(twitter\.com|x\.com)/([^/\s]+
 REDDIT_PATTERN = re.compile(r'https?://(?:www\.|old\.|new\.)?reddit\.com/(r/[^/\s]+/comments/[^?\s]+)(?:\?[^\s]*)?')
 PIXIV_PATTERN = re.compile(r'https?://(?:www\.)?pixiv\.net/(?:en/)?artworks/(\d+)([^\s]*)')
 INSTAGRAM_PATTERN = re.compile(r'https?://(?:www\.)?instagram\.com/(p|reel|reels)/([^/?\s]+)([^\s]*)')
+BILIBILI_LIVE_PATTERN = re.compile(r'https?://live\.bilibili\.com/([^/?\s]+)([^\s]*)')
 BILIBILI_PATTERN = re.compile(r'https?://(?:www\.|m\.)?bilibili\.com(?:/video)?/([^/?\s]+)([^\s]*)')
 BSKY_PATTERN = re.compile(r'https?://bsky\.app/profile/([^/\s]+)/post/([^\s]+)')
 TIKTOK_PATTERN = re.compile(r'https?://(?:vm\.|www\.)?tiktok\.com/([^?\s]+)(?:\?[^\s]*)?')
@@ -1139,6 +1141,7 @@ async def on_message(message: discord.Message):
                 fixed_content = INSTAGRAM_PATTERN.sub(r'https://kkinstagram.com/\1/\2', fixed_content)
 
             if 'bilibili.com' in fixed_content:
+                fixed_content = BILIBILI_LIVE_PATTERN.sub(r'https://live.vxbilibili.com/\1', fixed_content)
                 fixed_content = BILIBILI_PATTERN.sub(r'https://vxbilibili.com/video/\1', fixed_content)
 
             if 'bsky.app' in fixed_content:
@@ -1355,7 +1358,6 @@ async def choose(ctx, *, options: str):
     Chooses from provided options, separated by |
     Example: `!choose option | option 2 | another option`
     """
-    print(options)
     options = [s for s in options.split('|') if s != '']
     if options:
         if len(options) == 1:
@@ -1518,19 +1520,16 @@ toggleable_commands = ['Compliment', 'DND', 'Currency System', 'KYS Protection',
 default_allowed_commands = ['Compliment', 'DND', 'Currency System', 'Lore']
 
 
-@commands.hybrid_command(name='enable', aliases=['allow'])
+@commands.hybrid_command(name='fix_bad_embeds', description='Toggles Fix Bad Embeds on or off', aliases=['fixbadembeds'])
 @app_commands.allowed_installs(guilds=True, users=False)
 @commands.check(is_admin)
-async def enable(ctx, *, command):
+async def fix_bad_embeds(ctx):
     """
-    Enables functionality of choice
+    Toggle Fix Bad Embeds in this server
 
-    - **Currency System**: commands like `!gamble`, `!balance`, `!dice`, `!give`, `!item`, `!daily` etc.
-    - **Lore**: commands like `!addlore`, `!lore`, `!lore2`, `!sl` etc.
-    - **Compliment**: the `!compliment` command
-    - **DND**: the `!dnd` command
-    - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
-    - **Fix Bad Embeds**: (will also sanitize the links if applicable. Manage Messages permission is recommended)
+    Will replace links sent in this server with ones that have better embeds. Will also sanitize the links if applicable
+
+    - Replaces the following:
       - x/twitter -> *fxtwitter*
       - reddit -> *rxddit*
       - pixiv -> *phixiv*
@@ -1540,7 +1539,48 @@ async def enable(ctx, *, command):
       - twitch clip -> *fxtwitch*
       - threads -> *fixthreads*
       - bsky -> *fxbsky*
-      - Add -n to a message to not fix its links
+
+    Add -n to a message to not fix its links
+
+    **Only usable by Administrators**
+    """
+    guild_id = '' if not ctx.guild else str(ctx.guild.id)
+    if not guild_id:
+        await ctx.reply("Can't use this in DMs!")
+        return
+    make_sure_server_settings_exist(guild_id)
+    command = "Fix Bad Embeds"
+
+    if command not in server_settings.get(guild_id).get('allowed_commands'):
+        server_settings.get(guild_id).get('allowed_commands').append(command)
+        save_settings()
+        if not ctx.channel.permissions_for(ctx.guild.me).manage_messages:
+            additional = '\nIMPORTANT: Consider giving me the "Manage Messages" permission, otherwise I won\'t be able to delete the original messages. Messages will be doubled'
+        else:
+            additional = ''
+        await log_channel.send(f'{wicked} {ctx.author.mention} enabled {command} ({ctx.guild.name} - {ctx.guild.id})')
+        await ctx.reply(f"{command} has been enabled. Use `!tcef` to disable it in specific channels{additional}")
+    else:
+        server_settings.get(guild_id).get('allowed_commands').remove(command)
+        save_settings()
+        await log_channel.send(f'{deadge} {ctx.author.mention} disabled {command} ({ctx.guild.name} - {ctx.guild.id})')
+        await ctx.reply(f"{command} has been disabled")
+
+
+@commands.hybrid_command(name='enable', aliases=['allow'])
+@app_commands.allowed_installs(guilds=True, users=False)
+@app_commands.allowed_contexts(dms=False, guilds=True, private_channels=False)
+@commands.check(is_admin)
+async def enable(ctx, *, command):
+    """
+    Enables functionality of choice
+
+    - **Currency System**: commands like `dig/mine/work/fish`, `!gamble`, `!balance`, `!give`, `!item`, `!daily` etc. (Use `!tcc` to disable specific channels)
+    - **Lore**: commands like `!addlore`, `!lore`, `!lore2`, `!sl` etc.
+    - **Compliment**: the `!compliment` command
+    - **DND**: the `!dnd` command
+    - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
+    - **Fix Bad Embeds**: read `!help fix_bad_embeds`
     
     **Only usable by Administrators**
     """
@@ -1591,27 +1631,18 @@ async def enable_autocomplete(ctx, current: str):
 
 @commands.hybrid_command(name='disable', aliases=['disallow', 'prevent'])
 @app_commands.allowed_installs(guilds=True, users=False)
+@app_commands.allowed_contexts(dms=False, guilds=True, private_channels=False)
 @commands.check(is_admin)
 async def disable(ctx, *, command):
     """
     Disables functionality of choice
 
-    - **Currency System**: commands like `!gamble`, `!balance`, `!dice`, `!give`, `!item`, `!daily` etc.
+    - **Currency System**: commands like `dig/mine/work/fish`, `!gamble`, `!balance`, `!give`, `!item`, `!daily` etc. (Use `!tcc` to disable specific channels)
     - **Lore**: commands like `!addlore`, `!lore`, `!lore2`, `!sl` etc.
     - **Compliment**: the `!compliment` command
     - **DND**: the `!dnd` command
     - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
-    - **Fix Bad Embeds**: (will also sanitize the links if applicable. Manage Messages permission is recommended)
-      - x/twitter -> *fxtwitter*
-      - reddit -> *rxddit*
-      - pixiv -> *phixiv*
-      - bilibili -> *vxbilibili*
-      - instagram -> *kkinstagram*
-      - tiktok -> *tnktok*
-      - twitch clip -> *fxtwitch*
-      - threads -> *fixthreads*
-      - bsky -> *fxbsky*
-      - Add -n to a message to not fix its links
+    - **Fix Bad Embeds**: read `!help fix_bad_embeds`
 
     **Only usable by Administrators**
     """
@@ -1656,27 +1687,20 @@ async def disable_autocomplete(ctx, current: str):
     return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
 
-@client.command(aliases=['config'])
+@client.hybrid_command(aliases=['config'], description='Shows current server settings')
+@app_commands.allowed_installs(guilds=True, users=False)
 async def settings(ctx):
     """
     Shows current server settings
 
-    - **Currency System**: commands like `!gamble`, `!balance`, `!dice`, `!give`, `!item`, `!daily` etc.
+    - **Currency System**: commands like `dig/mine/work/fish`, `!gamble`, `!balance`, `!give`, `!item`, `!daily` etc. (Use `!tcc` to disable specific channels)
     - **Lore**: commands like `!addlore`, `!lore`, `!lore2`, `!sl` etc.
     - **Compliment**: the `!compliment` command
     - **DND**: the `!dnd` command
     - **KYS Protection**: when enabled will reply with a video saying "never kill yourself" to any message containing "kys" or similar
-    - **Fix Bad Embeds**: (will also sanitize the links if applicable. Manage Messages permission is recommended)
-      - x/twitter -> *fxtwitter*
-      - reddit -> *rxddit*
-      - pixiv -> *phixiv*
-      - bilibili -> *vxbilibili*
-      - instagram -> *kkinstagram*
-      - tiktok -> *tnktok*
-      - twitch clip -> *fxtwitch*
-      - threads -> *fixthreads*
-      - bsky -> *fxbsky*
-      - Add -n to a message to not fix its links
+    - **Fix Bad Embeds**: read `!help fix_bad_embeds`
+
+    Settings can be changed via **Administrator-only** commands `!enable` and `!disable`
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
@@ -1703,7 +1727,7 @@ async def settings(ctx):
                    f"Fix Bad Embeds:   {allow_dict[embed_replacement]}"
                    '```\n'
                    'Use `!help settings` for more info on each option'
-                   f'{"\nRun `!enable` or `!disable` to enable/disable an option" if ctx.guild else ''}'
+                   f'{"\nRun `!enable` or `!disable` to enable/disable an option" if (ctx.guild and ctx.author.guild_permissions.administrator) else ''}'
     )
 
 
@@ -2129,6 +2153,7 @@ class CustomCommands(commands.Cog):
         Usage: `!custom <command_name> <response_text>`
 
         !!! Keep in mind that bots can send messages up to 2000 characters in length !!!
+        You can add up to 1000 custom commands per server
 
         Include the following for additional functionality:
         - `<user>       ` to take a user mention
@@ -2442,6 +2467,8 @@ class CustomCommands(commands.Cog):
     async def random_custom(self, ctx):
         """
         Sends a random custom command from the server!
+
+        You can change this command's cooldown using `!setcd`
         """
         await send_custom_command(ctx, None, 'random')
         apply_custom_cooldown(ctx, default_seconds=0)
@@ -4566,7 +4593,7 @@ only_prefix = {'disable', 'enable', 'settings', 'getlegacy'
 cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
                'balance': 'bal', 'coinflip': 'c', 'dice': '1d', 'twodice': '2d', 'giveaway_pool': 'pool',
                'info': 'i', 'profile': 'p', 'inventory': 'inv', 'stock_prices': 'sp',
-               'lore_compact': 'lore2', 'lore_remove': 'rmlore', 'lore_random': 'lore*', 'server_lore': 'sl',
+               'lore_compact': 'lore2', 'lore_remove': 'rmlore', 'lore_random': 'rl', 'server_lore': 'sl',
                'custom_inspect': 'ci', 'custom_list': 'cl', 'custom_list_dm': 'cldm', 'custom_remove': 'crm',
                'custom_role_inspect': 'cri', 'custom_role_list': 'crl', 'custom_role_remove': 'crr', 'check_cd': 'ccd',
                'toggle_channel_currency': 'tcc'
@@ -5701,6 +5728,8 @@ class Lore(commands.Cog):
     async def add_lore(self, ctx):
         """
         Adds a message to a user's server-specific lore by replying to it
+        Has a 5-minute cooldown
+
         You can change this command's cooldown using `!setcd`
         """
         if not ctx.guild:
@@ -5740,7 +5769,7 @@ class Lore(commands.Cog):
         lore_content = referenced_message.content
         lore_image_url = None
 
-        if lore_content.startswith('!tml') or lore_content.startswith('!toggle_message_lore'):
+        if lore_content.startswith('!tml') or lore_content.startswith('!toggle_message_lore') or lore_content.startswith('This message will no longer be addable to lore'):
             return await ctx.reply(stare)
 
         # Prioritize stickers, then attachments, then URLs
