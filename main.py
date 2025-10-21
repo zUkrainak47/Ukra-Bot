@@ -861,6 +861,7 @@ async def on_ready():
         client.add_command(check_cd)
         client.add_command(ukrabypass_command)
         client.add_command(fix_bad_embeds)
+        client.add_command(fix_embed)
         client.add_command(enable)
         client.add_command(disable)
         client.add_command(dnd)
@@ -914,7 +915,7 @@ async def on_ready():
             # print(f'Handling custom role command: {command_name} in guild {guild_id} ', end='')
             try:
                 guild = await client.fetch_guild(int(guild_id))
-                print(guild.name)
+                # print(guild.name)
             except discord.NotFound:
                 # Guild not found, clean up
                 if guild_id in distributed_custom_roles and command_name in distributed_custom_roles[guild_id]:
@@ -1116,6 +1117,38 @@ TWITCH_CLIP_PATTERN = re.compile(r'https?://(?:clips\.twitch\.tv|www\.twitch\.tv
 THREADS_PATTERN = re.compile(r'https?://(?:www\.)?threads\.(?:com|net)/([^?\s]+)(?:\?[^\s]*)?')
 
 
+def fix_links_in_message(msg_content):
+    if 'x.com' in msg_content or 'twitter.com' in msg_content:
+        msg_content = TWITTER_PATTERN.sub(r'https://fxtwitter.com/\2/status/\3', msg_content)
+
+    if 'reddit.com' in msg_content:
+        msg_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\1', msg_content)
+
+    if 'pixiv.net' in msg_content:
+        msg_content = PIXIV_PATTERN.sub(r'https://phixiv.net/artworks/\1\2', msg_content)
+
+    if 'instagram.com' in msg_content:
+        msg_content = INSTAGRAM_PATTERN.sub(r'https://kkinstagram.com/\1/\2', msg_content)
+
+    if 'bilibili.com' in msg_content:
+        msg_content = BILIBILI_LIVE_PATTERN.sub(r'https://live.vxbilibili.com/\1', msg_content)
+        msg_content = BILIBILI_PATTERN.sub(r'https://vxbilibili.com/video/\1', msg_content)
+
+    if 'bsky.app' in msg_content:
+        msg_content = BSKY_PATTERN.sub(r'https://fxbsky.app/profile/\1/post/\2', msg_content)
+
+    if 'tiktok.com' in msg_content:
+        msg_content = TIKTOK_PATTERN.sub(r'https://tnktok.com/\1', msg_content)
+
+    if 'twitch.tv' in msg_content:
+        msg_content = TWITCH_CLIP_PATTERN.sub(r'https://fxtwitch.seria.moe/clip/\1', msg_content)
+
+    if 'threads.com' in msg_content or 'threads.net' in msg_content:
+        msg_content = THREADS_PATTERN.sub(r'https://fixthreads.net/\1', msg_content)
+
+    return msg_content
+
+
 @client.event
 async def on_message(message: discord.Message):
     if message.author == client.user:
@@ -1136,41 +1169,12 @@ async def on_message(message: discord.Message):
     if (message.guild and ('Fix Bad Embeds' in server_settings.get(str(message.guild.id), {}).get('allowed_commands')) and (message.channel.id not in ignored_embed_channels) and (message.author.id not in ignored_embed_users)) or not message.guild:
         content = message.content
 
+        not_invoked = not content.startswith(('!fixlink', '!fixembed', '!fix_embed'))
         has_urls = 'http://' in content or 'https://' in content
         has_no_flag = '-n' not in content.split()
 
-        if has_urls and has_no_flag:
-            fixed_content = content
-
-            # Use pre-compiled patterns
-            if 'x.com' in fixed_content or 'twitter.com' in fixed_content:
-                fixed_content = TWITTER_PATTERN.sub(r'https://fxtwitter.com/\2/status/\3', fixed_content)
-
-            if 'reddit.com' in fixed_content:
-                fixed_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\1', fixed_content)
-
-            if 'pixiv.net' in fixed_content:
-                fixed_content = PIXIV_PATTERN.sub(r'https://phixiv.net/artworks/\1\2', fixed_content)
-
-            if 'instagram.com' in fixed_content:
-                fixed_content = INSTAGRAM_PATTERN.sub(r'https://kkinstagram.com/\1/\2', fixed_content)
-
-            if 'bilibili.com' in fixed_content:
-                fixed_content = BILIBILI_LIVE_PATTERN.sub(r'https://live.vxbilibili.com/\1', fixed_content)
-                fixed_content = BILIBILI_PATTERN.sub(r'https://vxbilibili.com/video/\1', fixed_content)
-
-            if 'bsky.app' in fixed_content:
-                fixed_content = BSKY_PATTERN.sub(r'https://fxbsky.app/profile/\1/post/\2', fixed_content)
-
-            if 'tiktok.com' in fixed_content:
-                fixed_content = TIKTOK_PATTERN.sub(r'https://tnktok.com/\1', fixed_content)
-
-            if 'twitch.tv' in fixed_content:
-                fixed_content = TWITCH_CLIP_PATTERN.sub(r'https://fxtwitch.seria.moe/clip/\1', fixed_content)
-
-            if 'threads.com' in fixed_content or 'threads.net' in fixed_content:
-                fixed_content = THREADS_PATTERN.sub(r'https://fixthreads.net/\1', fixed_content)
-
+        if not_invoked and has_urls and has_no_flag:
+            fixed_content = fix_links_in_message(content)
             if fixed_content != content:
                 try:
                     kwargs = {"content": f"{f"Sent by {message.author.mention}:\n" if message.guild else ''}{fixed_content}", "view": DeleteMessageView() if message.guild else None}
@@ -1192,6 +1196,45 @@ async def on_message(message: discord.Message):
                     pass
                 except Exception as e:
                     print(f"Error fixing embeds: {e}")
+
+
+@commands.hybrid_command(name='fix_embed', aliases=['fixembed', 'fixlink'], description='Fixes and sanitizes the link you provide')
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+@app_commands.describe(link='The link you want to fix')
+async def fix_embed(ctx: commands.Context, link: str):
+    """
+    Functionality of `!fix_bad_embeds` as a command
+    Usable anywhere as long as you add Ukra Bot to your Apps
+    """
+    if not (('http://' in link) or ('https://' in link)):
+        return await ctx.reply('Please provide a link'
+                               '\nSupported replacements are listed here: `!help fix_bad_embeds`', ephemeral=True)
+
+    fixed_link = fix_links_in_message(link)
+    if fixed_link == link:
+        return await ctx.reply('Your link seems good as is'
+                               '\nSupported replacements are listed here: `!help fix_bad_embeds`', ephemeral=True)
+
+    try:
+        if ctx.interaction is None:
+            kwargs = {
+                "content": f"{f"Sent by {ctx.author.mention}:\n" if ctx.guild else ''}{fixed_link}",
+                "view": DeleteMessageView() if ctx.guild else None}
+
+            if ctx.message.reference and ctx.message.reference.resolved:
+                replied_to_author = ctx.message.reference.resolved.author
+                kwargs["reference"] = ctx.message.reference
+                kwargs["mention_author"] = replied_to_author in ctx.message.mentions
+
+            await ctx.channel.send(**kwargs)
+            await ctx.message.delete()
+        else:
+            await ctx.reply(fixed_link)
+
+    except discord.Forbidden:
+        pass
+    except Exception as e:
+        print(f"Error fixing embeds: {e}")
 
 
 @client.hybrid_command(name="delete_bot_message", aliases=['delbotmsg'])
@@ -1452,7 +1495,8 @@ async def dnd(ctx, *, dice: str = ''):
 async def botafk(ctx):
     """
     Toggles currency commands globally
-    Only usable by bot developer
+
+    **Only usable by bot developer**
     """
     if ctx.author.id not in allowed_users:
         await ctx.send("You can't use this command, silly")
@@ -1475,7 +1519,8 @@ async def botafk(ctx):
 async def save(ctx):
     """
     Saves everything
-    Only usable by bot developer
+
+    **Only usable by bot developer**
     """
     if ctx.author.id not in allowed_users:
         # await ctx.send("You can't use this command, silly", ephemeral=True)
@@ -1490,7 +1535,8 @@ async def save(ctx):
 async def backup(ctx):
     """
     Backs up all data
-    Only usable by bot developer
+
+    **Only usable by bot developer**
     """
     if ctx.author.id not in allowed_users:
         # await ctx.send("You can't use this command, silly", ephemeral=True)
@@ -1618,9 +1664,10 @@ async def enable(ctx, *, command):
         server_settings.get(guild_id).get('allowed_commands').append(command)
         save_settings()
         if command == "Fix Bad Embeds" and not ctx.channel.permissions_for(ctx.guild.me).manage_messages:
-            additional = '\nIMPORTANT: Consider giving me the "Manage Messages" permission, otherwise I won\'t be able to delete the original messages. Messages will be doubled'
+            additional = ('. Use `!tcef` to disable it in specific channels'
+                          '\nIMPORTANT: Consider giving me the "Manage Messages" permission, otherwise I won\'t be able to delete the original messages. Messages will be doubled')
         else:
-            additional = ''
+            additional = '. Use `!tcef` to disable it in specific channels'
         await log_channel.send(f'{wicked} {ctx.author.mention} enabled {command} ({ctx.guild.name} - {ctx.guild.id})')
         await ctx.reply(f"{command} has been enabled{additional}")
     else:
@@ -2086,13 +2133,14 @@ async def tcc(ctx):
         await ctx.send("Currency System is disabled in your server already. This command won't do anything")
 
 
-@commands.hybrid_command(name="tuc", description="(Dev only) !tuc - Ban user from using the bot", aliases=['toggle_user_currency'])
+@commands.hybrid_command(name="tuc", description="(Dev only) !tuc - Ban user from using the Currency System", aliases=['toggle_user_currency'])
 @app_commands.allowed_installs(guilds=True, users=False)
 async def tuc(ctx, *, target: discord.User):
     """
-    Starts ignoring the mentioned user
-    If user is already ignored, will stop ignoring them
-    Only usable by bot developer
+    Bans the mentioned user from using the Currency System
+    If user is banned, unbans them
+
+    **Only usable by bot developer**
     """
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
@@ -4630,8 +4678,8 @@ class LottoView(discord.ui.View):
                 print("Failed to update the message on timeout:", e)
 
 
-only_prefix = {'disable', 'enable', 'getlegacy'
-               'coinflip', 'redeem', 'tml', 'bless', 'curse', 'sticker'
+only_prefix = {'getlegacy',
+               'coinflip', 'redeem', 'tml', 'bless', 'curse', 'sticker',
                'addlore', '!'}
 
 cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
@@ -4640,7 +4688,7 @@ cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
                'lore_compact': 'lore2', 'lore_remove': 'rmlore', 'lore_random': 'rl', 'server_lore': 'sl',
                'custom_inspect': 'ci', 'custom_list': 'cl', 'custom_list_dm': 'cldm', 'custom_remove': 'crm',
                'custom_role_inspect': 'cri', 'custom_role_list': 'crl', 'custom_role_remove': 'crr', 'check_cd': 'ccd',
-               'toggle_channel_currency': 'tcc'
+               'toggle_channel_currency': 'tcc', 'toggle_channel_embed_fix': 'tcef',
                }
 
 
@@ -4960,7 +5008,7 @@ class MyHelpCommand(commands.HelpCommand):
     # Optional: Override help for specific commands/cogs if needed
     async def send_command_help(self, command):
         title_ = self.get_command_signature(command).replace('*', r'\*') if command.name not in only_prefix else '!' + self.get_command_signature(command)[1:]
-        embed = discord.Embed(title=title_ if len(title_) <= 256 else f'!{command.name}',
+        embed = discord.Embed(title=title_ if len(title_) <= 256 else f'/{command.name}',
                               description=command.help or "No description provided.",
                               color=0xffd000)
         if self.context.interaction:
@@ -5696,9 +5744,9 @@ class Lore(commands.Cog):
         except discord.errors.NotFound:
             return None
 
-    @commands.hybrid_command(name="toggle_lore", description="Enables or disables lore functionality for you", aliases=['opt_out_of_lore'])
+    @commands.hybrid_command(name="toggle_my_lore", description="Enables or disables lore functionality for you in this server")
     @app_commands.allowed_installs(guilds=True, users=False)
-    async def toggle_lore(self, ctx):
+    async def toggle_my_lore(self, ctx):
         """
         If you have lore activated in this server, will deactivate it for you and vice versa
         Having lore deactivated means none of your messages can be added to your lore
@@ -5805,7 +5853,7 @@ class Lore(commands.Cog):
             return await ctx.reply("You can't add lore for yourself.")
 
         if subject_id in server_settings[guild_id].setdefault('not_lore_users', []):
-            return await ctx.reply("This user has lore disabled.\n-# (!help toggle_lore)")
+            return await ctx.reply("This user has lore disabled.\n-# (!help toggle_my_lore)")
 
         if msg_id in server_settings[guild_id].setdefault('not_lore_messages', []):
             return await ctx.reply("You can't add this message to lore.\n-# (!help tml)")
@@ -7215,7 +7263,9 @@ class Currency(commands.Cog):
     @app_commands.describe(user="Who the title is for", title="The title you want to add")
     async def add_title(self, ctx, user: discord.User, *, title: str):
         """
-        Adds title to user. Only usable by bot developer
+        Adds title to user
+
+        **Only usable by bot developer**
         """
         # try:
         global fetched_users
@@ -9146,7 +9196,8 @@ class Currency(commands.Cog):
         """
         Starts a giveaway using coins from the giveaway pool (!pool)
         Usage: `!aga <amount> <time>`
-        Only usable by bot developer
+
+        **Only usable by bot developer**
         """
         await self.run_giveaway(ctx, amount, duration, admin=True)
 
