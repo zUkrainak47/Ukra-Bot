@@ -73,6 +73,7 @@ global_command_cooldowns = {  # command: (number_of_uses, seconds)
     "custom_list_dm": (1, 120),
     "calc": (1, 3),
     "banner": (1, 15),
+    "toggle_my_embed_fix": (4, 600),
     "stock": (2, 10),
     "dig": (1, 20),
     "mine": (1, 120),
@@ -1106,7 +1107,7 @@ class DeleteMessageView(discord.ui.View):
 kms = {"kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing myself', 'killing yourself'}
 
 TWITTER_PATTERN = re.compile(r'https?://(?:www\.)?(twitter\.com|x\.com)/([^/\s]+)/status/(\d+)([^\s]*)')
-REDDIT_PATTERN = re.compile(r'https?://(?:www\.|old\.|new\.)?reddit\.com/(?:r/[^/\s]+/)?(comments/[^?\s]+)(?:\?[^\s]*)?')
+REDDIT_PATTERN = re.compile(r'https?://(?:www\.|old\.|new\.)?reddit\.com/(r/[^/\s]+/)?(comments/|s/)([^?\s]+)(?:\?[^\s]*)?')
 PIXIV_PATTERN = re.compile(r'https?://(?:www\.)?pixiv\.net/(?:en/)?artworks/(\d+)([^\s]*)')
 INSTAGRAM_PATTERN = re.compile(r'https?://(?:www\.)?instagram\.com/(p|reel|reels)/([^/?\s]+)([^\s]*)')
 BILIBILI_LIVE_PATTERN = re.compile(r'https?://live\.bilibili\.com/([^/?\s]+)([^\s]*)')
@@ -1122,7 +1123,10 @@ def fix_links_in_message(msg_content):
         msg_content = TWITTER_PATTERN.sub(r'https://fxtwitter.com/\2/status/\3', msg_content)
 
     if 'reddit.com' in msg_content:
-        msg_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\1', msg_content)
+        if '/s/' in msg_content:
+            msg_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\1\2\3', msg_content)
+        else:
+            msg_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\2\3', msg_content)
 
     if 'pixiv.net' in msg_content:
         msg_content = PIXIV_PATTERN.sub(r'https://phixiv.net/artworks/\1\2', msg_content)
@@ -2054,12 +2058,14 @@ async def ukrabypass_command(ctx):
 
 
 @commands.hybrid_command(name="toggle_my_embed_fix", description=f"Makes {bot_name} not fix your links anywhere except DMs with the bot")
+@commands.cooldown(rate=4, per=600)
 @app_commands.allowed_installs(guilds=True, users=False)
 async def toggle_my_embed_fix(ctx):
     """
     Disables Fix Bad Embeds for your links everywhere (`!help fix_bad_embeds`)
     You can use Fix Bad Embeds in DMs with Ukra Bot regardless of this setting
 
+    You can use this command 4 times within 10 minutes
     This setting is global
     """
     if ctx.author.id in ignored_embed_users:
