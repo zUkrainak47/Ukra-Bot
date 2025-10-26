@@ -149,6 +149,7 @@ feelsstrongman = '<:FeelsStrongMan:1406639193722982481>'
 LO = '<:LO:1425226419734188153>'
 madgeclap = '<a:madgeclap:1322719157241905242>'
 pupperrun = '<a:pupperrun:1336403935291773029>'
+dinkdonk = '<a:dinkdonk:1432094110935683243>'
 
 coin = "<:fishingecoin:1324905329657643179>"
 
@@ -1155,12 +1156,42 @@ def fix_links_in_message(msg_content):
 
 @client.event
 async def on_message(message: discord.Message):
-    if message.author == client.user:
+    if message.author.bot:
         return
 
     await client.process_commands(message)
 
-    if message.guild and 'KYS Protection' in server_settings.get(str(message.guild.id), {}).get('allowed_commands'):
+    guild_id = str(message.guild.id) if message.guild else None
+    channel_id = str(message.channel.id) if message.channel else None
+
+    if message.guild and channel_id in server_settings.get(guild_id, {}).get('landmines', {}):
+        landmine_info = server_settings[guild_id]['landmines'][channel_id]
+        if landmine_info['amount'] < 1:
+            del server_settings[guild_id]['landmines'][channel_id]
+            save_settings()
+        elif random.random() * 100 <= landmine_info['chance'] and message.author.top_role < message.guild.me.top_role and message.author.id != message.guild.owner_id:
+            try:
+                await message.author.timeout(discord.utils.utcnow() + timedelta(seconds=landmine_info['timeout']), reason='Landmine')
+                await message.reply(f"💥 **{message.author}** stepped on a landmine and has been timed out for **{landmine_info['timeout']} second{'s' if landmine_info['timeout'] != 1 else ''}**!\n"
+                                    f"-# {landmine_info['amount'] - 1} Landmine{'s' if landmine_info['amount'] != 2 else ''} remain{'' if landmine_info['amount'] != 2 else 's'}")
+                if landmine_info['amount'] == 1:
+                    server_settings[guild_id]['landmines'].pop(channel_id, None)
+                else:
+                    landmine_info['amount'] -= 1
+                save_settings()
+
+            except discord.Forbidden:
+                await message.reply(f"💥 {message.author} stepped on a landmine but I don't have the necessary permissions to time them out. Give me the Timeout Members permission!! {dinkdonk}")
+                if landmine_info['amount'] == 1:
+                    server_settings[guild_id]['landmines'].pop(channel_id, None)
+                else:
+                    landmine_info['amount'] -= 1
+                save_settings()
+
+            except Exception as e:
+                await message.reply(f"An unexpected error occurred. Contact <@{allowed_users[0]}> :3")
+
+    if message.guild and 'KYS Protection' in server_settings.get(guild_id, {}).get('allowed_commands', []):
         content = message.content.lower()
         if any(x in content for x in kms):
             try:
@@ -1170,7 +1201,7 @@ async def on_message(message: discord.Message):
             except Exception as e:
                 print(f"Error kys protecting reply: {e}")
 
-    if (message.guild and ('Fix Bad Embeds' in server_settings.get(str(message.guild.id), {}).get('allowed_commands')) and (message.channel.id not in ignored_embed_channels) and (message.author.id not in ignored_embed_users)) or not message.guild:
+    if (message.guild and ('Fix Bad Embeds' in server_settings.get(guild_id, {}).get('allowed_commands', [])) and (message.channel.id not in ignored_embed_channels) and (message.author.id not in ignored_embed_users)) or not message.guild:
         content = message.content
 
         not_invoked = not content.startswith(('!fixlink', '!fixembed', '!fix_embed'))
@@ -1243,7 +1274,6 @@ async def fix_embed(ctx: commands.Context, link: str):
 
 @client.hybrid_command(name="delete_bot_message", aliases=['delbotmsg'])
 @app_commands.allowed_installs(guilds=True, users=False)
-# @commands.has_permissions(manage_messages=True) # Alternative: check Discord perms
 async def delete_bot_message(ctx: commands.Context, message_id: str):
     """Deletes a specific message sent by the bot in the current channel."""
 
@@ -1313,6 +1343,154 @@ async def delete_bot_message_error(ctx, error):
     else:
         print(f"Unhandled error in delete_bot_message: {error}") # Log other errors
         await ctx.reply("An unexpected error occurred.", ephemeral=True, delete_after=10)
+
+
+@client.hybrid_command(name="landmine")
+@app_commands.allowed_installs(guilds=True, users=False)
+@commands.check(is_manager)
+@app_commands.describe(trigger_chance='(%) The chance for each message to trigger a landmine', amount='The amount of landmines to set in this channel', timeout_duration='(seconds) Duration of the timeout')
+async def landmine(ctx: commands.Context, trigger_chance: str = '1', amount: int = 1, timeout_duration: int = 10):
+    """
+    Sets landmines in a channel of choice
+    A landmine has a set chance (default: 1%) to "explode" on each message sent in this channel
+    An "explosion" gives the victim a timeout of a set duration (default: 10s)
+    Landmines can exist in a maximum of 10 channels at any time
+
+    **Only usable by Moderators**
+    """
+    try:
+        if not ctx.guild:
+            return await ctx.reply("You can only set landmines in servers")
+        if not ctx.channel.permissions_for(ctx.guild.me).moderate_members:
+            return await ctx.reply("Please make sure I have the necessary permissions (Timeout Members)")
+
+        chance = float(trigger_chance.replace(',', '.'))
+        if chance <= 0:
+            return await ctx.reply("Trigger chance must be positive")
+        if chance > 100:
+            return await ctx.reply("Trigger chance can't exceed 100%")
+
+        if amount < 1:
+            return await ctx.reply("Set at least 1 landmine wyd")
+        if amount > 1000:
+            return await ctx.reply("Pls no more than 1000 landmines")
+
+        if timeout_duration <= 0:
+            return await ctx.reply("You have to set a timeout")
+        if timeout_duration > 604800:
+            return await ctx.reply("No more than a week please")
+
+        guild_id = str(ctx.guild.id)
+        channel_id = str(ctx.channel.id)
+        landmines_data = server_settings[guild_id].setdefault('landmines', {})
+        if len(landmines_data) >= 10:
+            return await ctx.reply("You can have landmines in a maximum of 10 channels at a time")
+
+        if channel_id in landmines_data:
+            view = ConfirmView(ctx.author, timeout=60.0)
+            message = await ctx.reply(
+                f"There are already landmines set in this channel. Do you want to override them?",
+                view=view
+            )
+            view.message = message
+            await view.wait()
+
+            if view.value is True:
+                pass
+
+            elif view.value is False:
+                return await ctx.reply(f"Landmines stay intact")
+
+            else:
+                return await ctx.reply("Timed out. No changes made")
+
+        landmines_data[channel_id] = {'amount': amount, 'chance': chance, 'timeout': timeout_duration}
+        save_settings()
+
+        return await ctx.reply(f"**{amount} Landmine{'s' if amount != 1 else ''}** for this channel {'have' if amount != 1 else 'has'} been set\n**{chance if not chance.is_integer() else int(chance)}%** to detonate on each message\n**{timeout_duration}s** timeout on detonation")
+
+    except ValueError:
+        await ctx.reply(f"Can't convert {trigger_chance} to float. Try again", ephemeral=True, delete_after=10)
+    except Exception as e:
+        print(f"Error in landmine command: {e}")
+        await ctx.reply(f"An unexpected error occurred. Contact <@{allowed_users[0]}> :3")
+
+
+@client.hybrid_command(name="landmine_clear")
+@app_commands.allowed_installs(guilds=True, users=False)
+@commands.check(is_manager)
+async def landmine_clear(ctx: commands.Context):
+    """
+    Clears landmines in this channel
+
+    **Only usable by Moderators**
+    """
+    if not ctx.guild:
+        return await ctx.reply("You can only set landmines in servers")
+    guild_id = str(ctx.guild.id)
+    channel_id = str(ctx.channel.id)
+    landmines_data = server_settings[guild_id].setdefault('landmines', {})
+
+    if channel_id in landmines_data:
+        d = landmines_data[channel_id]
+        view = ConfirmView(ctx.author, timeout=60.0)
+        c = d['chance']
+        message = await ctx.reply(
+            f"Do you want to remove all landmines in this channel?\n({d['amount']} left, {c if not c.is_integer() else int(c)}% chance, {d['timeout']}s timeout)",
+            view=view
+        )
+        view.message = message
+        await view.wait()
+
+        if view.value is True:
+            del server_settings[guild_id]['landmines'][channel_id]
+            save_settings()
+            await ctx.reply(f"✅ Cleared landmines for this channel")
+
+        elif view.value is False:
+            return await ctx.reply(f"Landmines stay intact")
+
+        else:
+            return await ctx.reply("Timed out. No changes made")
+
+    else:
+        return await ctx.reply("There are no landmines in this channel yet! Use `/landmine` to set some")
+
+
+@landmine_clear.error
+@landmine.error
+async def landmine_error(ctx, error):
+    if isinstance(error, commands.CheckFailure):
+        await ctx.reply("Only Moderators can use this command, silly")
+
+
+@client.hybrid_command(name="landmine_check")
+@app_commands.allowed_installs(guilds=True, users=False)
+async def landmine_check(ctx: commands.Context):
+    """
+    Gives info on all landmines in this server
+
+    You can use this command 3 times within 2 minutes
+    """
+    if not ctx.guild:
+        return await ctx.reply("You can only check landmines in servers")
+    guild_id = str(ctx.guild.id)
+    landmines_data = server_settings[guild_id].setdefault('landmines', {})
+
+    if landmines_data:
+        server_landmines = f'## Landmines in {ctx.guild.name}\n'
+        for k, v in landmines_data.items():
+            c = v['chance']
+            server_landmines += f'<#{k}>: {v['amount']}x - {c if not c.is_integer() else int(c)}% - {v['timeout']}s\n'
+        return await ctx.reply(server_landmines)
+    else:
+        return await ctx.reply(f"There are no landmines in this server yet! {"Moderators" if not await is_manager(ctx) else "You"} can use `/landmine` to set some")
+
+
+@landmine_check.error
+async def landmine_check_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await print_reset_time(int(error.retry_after), ctx, f"You can use this command 3 times every 2 minutes! ")
 
 
 @commands.hybrid_command(name="ping", description="Pong")
@@ -2192,7 +2370,7 @@ async def add_custom_command(ctx, name: str, response: str, mode):
     guild_id = str(ctx.guild.id)
     command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
     if ' ' in command_name:
-        return await ctx.reply('Custom command names can only contain one word silly')
+        return await ctx.reply('Custom command names can only contain one word, silly')
     if response[0] == response[-1] == '"':
         response = response[1:-1]
 
@@ -2631,7 +2809,7 @@ class CustomCommands(commands.Cog):
         guild_id = str(ctx.guild.id)
         command_name = name.lower().lstrip('!')
         if ' ' in command_name:
-            return await ctx.reply('Custom role command names can only contain one word silly')
+            return await ctx.reply('Custom role command names can only contain one word, silly')
 
         make_sure_server_settings_exist(guild_id)
         custom_commands = server_settings[guild_id].setdefault('custom_commands', {})
