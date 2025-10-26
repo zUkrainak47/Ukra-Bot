@@ -1106,49 +1106,49 @@ class DeleteMessageView(discord.ui.View):
 
 kms = {"kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing myself', 'killing yourself'}
 
-TWITTER_PATTERN = re.compile(r'https?://(?:www\.)?(twitter\.com|x\.com)/([^/\s]+)/status/(\d+)([^\s]*)')
-REDDIT_PATTERN = re.compile(r'https?://(?:www\.|old\.|new\.)?reddit\.com/(r/[^/\s]+/)?(comments/|s/)([^?\s]+)(?:\?[^\s]*)?')
-PIXIV_PATTERN = re.compile(r'https?://(?:www\.)?pixiv\.net/(?:en/)?artworks/(\d+)([^\s]*)')
-INSTAGRAM_PATTERN = re.compile(r'https?://(?:www\.)?instagram\.com/(p|reel|reels)/([^/?\s]+)([^\s]*)')
-BILIBILI_LIVE_PATTERN = re.compile(r'https?://live\.bilibili\.com/([^/?\s]+)([^\s]*)')
-BILIBILI_PATTERN = re.compile(r'https?://(?:www\.|m\.)?bilibili\.com(?:/video)?/([^/?\s]+)([^\s]*)')
-BSKY_PATTERN = re.compile(r'https?://bsky\.app/profile/([^/\s]+)/post/([^\s]+)')
-TIKTOK_PATTERN = re.compile(r'https?://(?:vm\.|www\.)?tiktok\.com/([^?\s]+)(?:\?[^\s]*)?')
-TWITCH_CLIP_PATTERN = re.compile(r'https?://(?:clips\.twitch\.tv|www\.twitch\.tv/[^/]+/clip)/([^\s?]+)(?:\?[^\s]*)?')
-THREADS_PATTERN = re.compile(r'https?://(?:www\.)?threads\.(?:com|net)/([^?\s]+)(?:\?[^\s]*)?')
+TWITTER_PATTERN = re.compile(r'([*~|<]*)https?://(?:www\.)?(twitter\.com|x\.com)/([^/\s*~|>]+)/status/(\d+)(?:\?[^\s*~|>]+)?([*~|>]*)')
+REDDIT_PATTERN = re.compile(r'([*~|<]*)https?://(?:www\.|old\.|new\.)?reddit\.com/(r/[^/\s*~|>]+/)?(comments/|s/)([^?\s*~|>]+)(?:\?[^\s*~|>]+)?([*~|>]*)')
+PIXIV_PATTERN = re.compile(r'([*~|<]*)https?://(?:www\.)?pixiv\.net/(?:en/)?artworks/(\d+)(?:\?[^\s*~|>]+)?([*~|>]*)')
+INSTAGRAM_PATTERN = re.compile(r'([*~|<]*)https?://(?:www\.)?instagram\.com/(p|reel|reels)/([^/?\s*~|>]+)(?:/?\?[^\s*~|>]+)?([*~|>]*)')
+BILIBILI_LIVE_PATTERN = re.compile(r'([*~|<]*)https?://live\.bilibili\.com/([^/?\s*~|>]+)(?:\?[^\s*~|>]+)?([*~|>]*)')
+BILIBILI_PATTERN = re.compile(r'([*~|<]*)https?://(?:www\.|m\.)?bilibili\.com(?:/video)?/([^/?\s*~|>]+)(?:\?[^\s*~|>]+)?([*~|>]*)')
+BSKY_PATTERN = re.compile(r'([*~|<]*)https?://bsky\.app/profile/([^/\s*~|>]+)/post/([^?\s*~|>]+)(?:\?[^\s*~|>]+)?([*~|>]*)')
+TIKTOK_PATTERN = re.compile(r'([*~|<]*)https?://(?:vm\.|www\.)?tiktok\.com/([^?\s*~|>]+)(?:\?[^\s*~|>]+)?([*~|>]*)')
+TWITCH_CLIP_PATTERN = re.compile(r'([*~|<]*)https?://(?:clips\.twitch\.tv|www\.twitch\.tv/[^/]+/clip)/([^\s?*~|>]+)(?:\?[^\s*~|>]+)?([*~|>]*)')
+THREADS_PATTERN = re.compile(r'([*~|<]*)https?://(?:www\.)?threads\.(?:com|net)/([^?\s*~|>]+)(?:\?[^\s*~|>]+)?([*~|>]*)')
 
 
 def fix_links_in_message(msg_content):
     if 'x.com' in msg_content or 'twitter.com' in msg_content:
-        msg_content = TWITTER_PATTERN.sub(r'https://fxtwitter.com/\2/status/\3', msg_content)
+        msg_content = TWITTER_PATTERN.sub(r'\1https://fxtwitter.com/\3/status/\4\5', msg_content)
 
     if 'reddit.com' in msg_content:
         if '/s/' in msg_content:
-            msg_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\1\2\3', msg_content)
+            msg_content = REDDIT_PATTERN.sub(r'\1https://vxreddit.com/\2\3\4\5', msg_content)
         else:
-            msg_content = REDDIT_PATTERN.sub(r'https://rxddit.com/\2\3', msg_content)
+            msg_content = REDDIT_PATTERN.sub(r'\1https://vxreddit.com/\3\4\5', msg_content)
 
     if 'pixiv.net' in msg_content:
-        msg_content = PIXIV_PATTERN.sub(r'https://phixiv.net/artworks/\1\2', msg_content)
+        msg_content = PIXIV_PATTERN.sub(r'\1https://phixiv.net/artworks/\2\3', msg_content)
 
     if 'instagram.com' in msg_content:
-        msg_content = INSTAGRAM_PATTERN.sub(r'https://kkinstagram.com/\1/\2', msg_content)
+        msg_content = INSTAGRAM_PATTERN.sub(r'\1https://kkinstagram.com/\2/\3\4', msg_content)
 
     if 'bilibili.com' in msg_content:
-        msg_content = BILIBILI_LIVE_PATTERN.sub(r'https://live.vxbilibili.com/\1', msg_content)
-        msg_content = BILIBILI_PATTERN.sub(r'https://vxbilibili.com/video/\1', msg_content)
+        msg_content = BILIBILI_LIVE_PATTERN.sub(r'\1https://live.vxbilibili.com/\2\3', msg_content)
+        msg_content = BILIBILI_PATTERN.sub(r'\1https://vxbilibili.com/video/\2\3', msg_content)
 
     if 'bsky.app' in msg_content:
-        msg_content = BSKY_PATTERN.sub(r'https://fxbsky.app/profile/\1/post/\2', msg_content)
+        msg_content = BSKY_PATTERN.sub(r'\1https://fxbsky.app/profile/\2/post/\3\4', msg_content)
 
     if 'tiktok.com' in msg_content:
-        msg_content = TIKTOK_PATTERN.sub(r'https://tnktok.com/\1', msg_content)
+        msg_content = TIKTOK_PATTERN.sub(r'\1https://tnktok.com/\2\3', msg_content)
 
     if 'twitch.tv' in msg_content:
-        msg_content = TWITCH_CLIP_PATTERN.sub(r'https://fxtwitch.seria.moe/clip/\1', msg_content)
+        msg_content = TWITCH_CLIP_PATTERN.sub(r'\1https://fxtwitch.seria.moe/clip/\2\3', msg_content)
 
     if 'threads.com' in msg_content or 'threads.net' in msg_content:
-        msg_content = THREADS_PATTERN.sub(r'https://fixthreads.net/\1', msg_content)
+        msg_content = THREADS_PATTERN.sub(r'\1https://fixthreads.net/\2\3', msg_content)
 
     return msg_content
 
@@ -1597,7 +1597,7 @@ async def fix_bad_embeds(ctx):
 
     - Replaces the following:
       - x/twitter -> *fxtwitter*
-      - reddit -> *rxddit*
+      - reddit -> *vxreddit*
       - pixiv -> *phixiv*
       - bilibili -> *vxbilibili*
       - instagram -> *kkinstagram*
