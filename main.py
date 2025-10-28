@@ -33,7 +33,7 @@ from dotenv import load_dotenv
 from rapidfuzz import process
 from stockdex import Ticker
 import multiprocessing as mp
-import queue
+from decimal import Decimal
 try:
     import psutil
 except ImportError:
@@ -1345,6 +1345,10 @@ async def delete_bot_message_error(ctx, error):
         await ctx.reply("An unexpected error occurred.", ephemeral=True, delete_after=10)
 
 
+def float_to_str(number):
+    return format(Decimal(str(number)), 'f')
+
+
 @client.hybrid_command(name="landmine")
 @app_commands.allowed_installs(guilds=True, users=False)
 @commands.check(is_manager)
@@ -1355,6 +1359,8 @@ async def landmine(ctx: commands.Context, trigger_chance: str = '1', amount: int
     A landmine has a set chance (default: 1%) to "explode" on each message sent in this channel
     An "explosion" gives the victim a timeout of a set duration (default: 10s)
     Landmines can exist in a maximum of 10 channels at any time
+
+    Users with a role higher than mine can't explode. The server owner can't explode no matter what
 
     **Only usable by Moderators**
     """
@@ -1407,7 +1413,7 @@ async def landmine(ctx: commands.Context, trigger_chance: str = '1', amount: int
         landmines_data[channel_id] = {'amount': amount, 'chance': chance, 'timeout': timeout_duration}
         save_settings()
 
-        return await ctx.reply(f"**{amount} Landmine{'s' if amount != 1 else ''}** for this channel {'have' if amount != 1 else 'has'} been set\n**{chance if not chance.is_integer() else int(chance)}%** to detonate on each message\n**{timeout_duration}s** timeout on detonation")
+        return await ctx.reply(f"**{amount} Landmine{'s' if amount != 1 else ''}** for this channel {'have' if amount != 1 else 'has'} been set\n**{float_to_str(chance) if not chance.is_integer() else int(chance)}%** to detonate on each message\n**{timeout_duration}s** timeout on detonation")
 
     except ValueError:
         await ctx.reply(f"Can't convert {trigger_chance} to float. Try again", ephemeral=True, delete_after=10)
@@ -1436,7 +1442,7 @@ async def landmine_clear(ctx: commands.Context):
         view = ConfirmView(ctx.author, timeout=60.0)
         c = d['chance']
         message = await ctx.reply(
-            f"Do you want to remove all landmines in this channel?\n({d['amount']} left, {c if not c.is_integer() else int(c)}% chance, {d['timeout']}s timeout)",
+            f"Do you want to remove all landmines in this channel?\n({d['amount']} left, {float_to_str(c) if not c.is_integer() else int(c)}% chance, {d['timeout']}s timeout)",
             view=view
         )
         view.message = message
@@ -1481,7 +1487,7 @@ async def landmine_check(ctx: commands.Context):
         server_landmines = f'## Landmines in {ctx.guild.name}\n'
         for k, v in landmines_data.items():
             c = v['chance']
-            server_landmines += f'<#{k}>: {v['amount']}x - {c if not c.is_integer() else int(c)}% - {v['timeout']}s\n'
+            server_landmines += f'<#{k}>: {v['amount']}x - {float_to_str(c) if not c.is_integer() else int(c)}% - {v['timeout']}s\n'
         return await ctx.reply(server_landmines)
     else:
         return await ctx.reply(f"There are no landmines in this server yet! {"Moderators" if not await is_manager(ctx) else "You"} can use `/landmine` to set some")
