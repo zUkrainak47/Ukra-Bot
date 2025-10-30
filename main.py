@@ -1108,7 +1108,7 @@ class DeleteMessageView(discord.ui.View):
 kms = {"kys", "kms", "kill yourself", "killyourself", 'kill myself', 'killing myself', 'killing yourself'}
 
 TWITTER_PATTERN = re.compile(r'([*~|<]*)https?://(?:www\.)?(twitter\.com|x\.com)/([^/\s*~|>]+)/status/(\d+)(?:\?[^\s*~|>]+)?([*~|>]*)')
-REDDIT_PATTERN = re.compile(r'([*~|<]*)https?://(?:www\.|old\.|new\.)?reddit\.com/(r/[^/\s*~|>]+/)?(comments/|s/)([^?\s*~|>]+)(?:\?[^\s*~|>]+)?([*~|>]*)')
+# REDDIT_PATTERN = re.compile(r'([*~|<]*)https?://(?:www\.|old\.|new\.)?reddit\.com/(r/[^/\s*~|>]+/)?(comments/|s/)([^?\s*~|>]+)(?:\?[^\s*~|>]+)?([*~|>]*)')
 PIXIV_PATTERN = re.compile(r'([*~|<]*)https?://(?:www\.)?pixiv\.net/(?:en/)?artworks/(\d+)(?:\?[^\s*~|>]+)?([*~|>]*)')
 INSTAGRAM_PATTERN = re.compile(r'([*~|<]*)https?://(?:www\.)?instagram\.com/(p|reel|reels)/([^/?\s*~|>]+)(?:/?\?[^\s*~|>]+)?([*~|>]*)')
 BILIBILI_LIVE_PATTERN = re.compile(r'([*~|<]*)https?://live\.bilibili\.com/([^/?\s*~|>]+)(?:\?[^\s*~|>]+)?([*~|>]*)')
@@ -1123,11 +1123,11 @@ def fix_links_in_message(msg_content):
     if 'x.com' in msg_content or 'twitter.com' in msg_content:
         msg_content = TWITTER_PATTERN.sub(r'\1https://fxtwitter.com/\3/status/\4\5', msg_content)
 
-    if 'reddit.com' in msg_content:
-        if '/s/' in msg_content:
-            msg_content = REDDIT_PATTERN.sub(r'\1https://vxreddit.com/\2\3\4\5', msg_content)
-        else:
-            msg_content = REDDIT_PATTERN.sub(r'\1https://vxreddit.com/\3\4\5', msg_content)
+    # if 'reddit.com' in msg_content:
+    #     if '/s/' in msg_content:
+    #         msg_content = REDDIT_PATTERN.sub(r'\1https://vxreddit.com/\2\3\4\5', msg_content)
+    #     else:
+    #         msg_content = REDDIT_PATTERN.sub(r'\1https://vxreddit.com/\3\4\5', msg_content)
 
     if 'pixiv.net' in msg_content:
         msg_content = PIXIV_PATTERN.sub(r'\1https://phixiv.net/artworks/\2\3', msg_content)
@@ -1156,6 +1156,10 @@ def fix_links_in_message(msg_content):
 
 @client.event
 async def on_message(message: discord.Message):
+    # hardcoded jsm log cleanup lo
+    if (message.channel.id == 1140327809139609821) and ("📄**Reason:** Landmine" in message.embeds[0].description) and ("Ukra Bot#3418 (ID 1322197604297085020)" in message.embeds[0].author.name):
+        await message.delete()
+
     if message.author.bot:
         return
 
@@ -1781,7 +1785,6 @@ async def fix_bad_embeds(ctx):
 
     - Replaces the following:
       - x/twitter -> *fxtwitter*
-      - reddit -> *vxreddit*
       - pixiv -> *phixiv*
       - bilibili -> *vxbilibili*
       - instagram -> *kkinstagram*
