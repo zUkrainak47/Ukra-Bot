@@ -1157,7 +1157,7 @@ def fix_links_in_message(msg_content):
 @client.event
 async def on_message(message: discord.Message):
     # hardcoded jsm log cleanup lo
-    if (message.channel.id == 1140327809139609821) and ("📄**Reason:** Landmine" in message.embeds[0].description) and ("Ukra Bot#3418 (ID 1322197604297085020)" in message.embeds[0].author.name):
+    if (message.channel.id == 1140327809139609821) and message.embeds and ("📄**Reason:** Landmine" in message.embeds[0].description) and ("Ukra Bot#3418 (ID 1322197604297085020)" in message.embeds[0].author.name):
         await message.delete()
 
     if message.author.bot:
