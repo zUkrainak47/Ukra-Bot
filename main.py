@@ -6365,15 +6365,15 @@ class Lore(commands.Cog):
         if isinstance(error, commands.CommandOnCooldown):
             await print_reset_time(int(error.retry_after), ctx, f"You're viewing lore too quickly! ")
 
-    @commands.hybrid_command(name="lore_remove", description="!rmlore - Removes a lore entry by its message ID (or a link to the message)",
+    @commands.hybrid_command(name="lore_remove", description="!rmlore - Removes a lore entry by its Message ID (or lore entry number or a link to the message)",
                              aliases=['rmlore', 'removelore', 'dellore', 'deletelore'])
     @app_commands.allowed_installs(guilds=True, users=False)
     async def lore_remove(self, ctx, message_id_to_remove=None):
         """
-        Removes a lore entry by its message ID, a link to the message, or by replying to it
+        Removes a lore entry by its Message ID, your lore entry number, a link to the message, or by replying to it
         You can remove your own lore, as well as lore you've created
         Administrators can remove any lore
-        Usage: `!rmlore <Message ID>`
+        Usage: `!rmlore <Message ID / Lore entry number / Message link>`
         """
         if not ctx.guild:
             return await ctx.reply("Lore can only be managed in a server.")
@@ -6387,31 +6387,39 @@ class Lore(commands.Cog):
             if ctx.message.reference:
                 message_id_to_remove = str(ctx.message.reference.message_id)
             else:
-                return await ctx.reply(f"Usage: `!rmlore <Message ID>`")
+                return await ctx.reply(f"Usage: `!rmlore <Message ID / Lore entry number / Message link>`")
         if message_id_to_remove.startswith("https://discord.com/channels/") and message_id_to_remove.split("/")[-1].isdigit():
             message_id_to_remove = message_id_to_remove.split("/")[-1]
-        if not message_id_to_remove.isdigit():
-            return await ctx.reply("Please provide a Message ID or a link to the message.")
+        if not message_id_to_remove.isdigit() or int(message_id_to_remove) < 1:
+            return await ctx.reply("Please provide a Message ID, a link to the message or the number of your lore entry.")
         guild_lore = lore_data.setdefault(guild_id, {})
 
         found_entry = None
         subject_id_of_found_entry = None
-
+        additional_msg = ''
         # Search for the message ID across all users in the guild
-        for user_id, entries in guild_lore.items():
-            for entry in entries:
-                if entry['message_id'] == str(message_id_to_remove):
-                    found_entry = entry
-                    subject_id_of_found_entry = user_id
+        if int(message_id_to_remove) >= 1420070400000:
+            for user_id, entries in guild_lore.items():
+                for entry in entries:
+                    if entry['message_id'] == str(message_id_to_remove):
+                        found_entry = entry
+                        subject_id_of_found_entry = user_id
+                        break
+                if found_entry:
                     break
-            if found_entry:
-                break
 
-        if not found_entry:
-            return await ctx.reply(f"Could not find a lore entry with the ID `{message_id_to_remove}`.")
+            if not found_entry:
+                return await ctx.reply(f"Could not find a lore entry with the ID `{message_id_to_remove}`")
+        else:
+            user_lore = guild_lore.get(str(ctx.author.id), {})
+            if len(user_lore) < int(message_id_to_remove):
+                return await ctx.reply(f"You don't have a lore entry #{message_id_to_remove} (you have {len(user_lore)} total)\n"
+                                       f"`{message_id_to_remove}` is also not a valid Message ID")
+            found_entry = user_lore[-int(message_id_to_remove)]
+            subject_id_of_found_entry = str(ctx.author.id)
+            additional_msg = "\n-# *KEEP IN MIND THAT OTHER ENTRIES NOW CHANGED THEIR NUMBERS! CHECK BEFORE RUNNING THE COMMAND AGAIN*"
 
         # Permission Check
-        is_admin_ = ctx.author.guild_permissions.manage_guild
         is_adder = str(ctx.author.id) == found_entry['adder_id']
         is_subject = str(ctx.author.id) == subject_id_of_found_entry
 
@@ -6428,7 +6436,7 @@ class Lore(commands.Cog):
         save_lore()
 
         lore_subject = await self.get_user(int(subject_id_of_found_entry), ctx)
-        await ctx.reply(f"✅ Successfully removed a lore entry for **{lore_subject.display_name}**.")
+        await ctx.reply(f"✅ Successfully removed a lore entry for **{lore_subject.display_name}**{additional_msg}")
 
     # @lore_remove.error
     # async def lore_remove_error(self, ctx, error):
