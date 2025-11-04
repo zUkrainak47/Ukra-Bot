@@ -20,6 +20,8 @@ from itertools import zip_longest
 from pathlib import Path
 import aiohttp
 import discord
+from discord import Intents, app_commands
+from discord.ext import commands, tasks
 import finnhub
 import matplotlib.pyplot as plt
 import mplfinance as mpf  # For candlestick charts
@@ -27,8 +29,6 @@ import pandas as pd
 import pytz
 from apnggif import apnggif
 from asteval import Interpreter
-from discord import Intents, app_commands
-from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from rapidfuzz import process
 from stockdex import Ticker
@@ -1193,6 +1193,7 @@ async def on_message(message: discord.Message):
                 save_settings()
 
             except Exception as e:
+                traceback.print_exc()
                 await message.reply(f"An unexpected error occurred. Contact <@{allowed_users[0]}> :3")
 
     if message.guild and 'KYS Protection' in server_settings.get(guild_id, {}).get('allowed_commands', []):
@@ -3246,9 +3247,14 @@ async def calc(ctx: commands.Context, *, expression: str):
     if se:
         return await ctx.reply(f"Error: Use of forbidden keyword (`{se.group(0)}`)")
 
-    if expression.strip() in ('9 + 10', '9+10', '9+ 10', '9 +10'):
-        await ctx.reply(f"```\n{expression.strip()}\n= 21```")
-        return
+    if expression.replace(' ', '') == '9+10':
+        return await ctx.reply(f"```\n{expression.strip()}\n= 21```")
+
+    if expression.strip() == '67':
+        return await ctx.reply('https://tenor.com/view/scp-067-67-6-7-six-seven-sixty-seven-gif-13940852437921483111')
+
+    if 'mizuki2' in expression:
+        return await ctx.reply('https://tenor.com/view/genshin-impact-freaky-mizuki-gif-13878801844491664765')
 
     safe_expression = (
         expression
