@@ -1173,7 +1173,10 @@ async def on_message(message: discord.Message):
         if landmine_info['amount'] < 1:
             del server_settings[guild_id]['landmines'][channel_id]
             save_settings()
-        elif random.random() * 100 <= landmine_info['chance'] and message.author.top_role < message.guild.me.top_role and message.author.id != message.guild.owner_id:
+        elif (random.random() * 100 <= landmine_info['chance'] and
+              message.author.top_role < message.guild.me.top_role and
+              message.author.id != message.guild.owner_id and
+              not message.author.guild_permissions.administrator):
             try:
                 await message.author.timeout(discord.utils.utcnow() + timedelta(seconds=landmine_info['timeout']), reason='Landmine')
                 await message.reply(f"💥 **{message.author}** stepped on a landmine and has been timed out for **{landmine_info['timeout']} second{'s' if landmine_info['timeout'] != 1 else ''}**!\n"
@@ -1357,7 +1360,7 @@ def float_to_str(number):
 @client.hybrid_command(name="landmine")
 @app_commands.allowed_installs(guilds=True, users=False)
 @commands.check(is_manager)
-@app_commands.describe(trigger_chance='(%) The chance for each message to trigger a landmine', amount='The amount of landmines to set in this channel', timeout_duration='(seconds) Duration of the timeout')
+@app_commands.describe(trigger_chance='(%) Chance for each message to trigger a landmine', amount='The amount of landmines to set in this channel', timeout_duration='(seconds) Duration of the timeout')
 async def landmine(ctx: commands.Context, trigger_chance: str = '1', amount: int = 1, timeout_duration: int = 10):
     """
     Sets landmines in a channel of choice
@@ -1365,7 +1368,9 @@ async def landmine(ctx: commands.Context, trigger_chance: str = '1', amount: int
     An "explosion" gives the victim a timeout of a set duration (default: 10s)
     Landmines can exist in a maximum of 10 channels at any time
 
-    Users with a role higher than mine can't explode. The server owner can't explode no matter what
+    Users with a role higher than mine can't explode
+    Administrators can't explode
+    The server owner can't explode
 
     **Only usable by Moderators**
     """
@@ -1422,6 +1427,7 @@ async def landmine(ctx: commands.Context, trigger_chance: str = '1', amount: int
 
     except ValueError:
         await ctx.reply(f"Can't convert {trigger_chance} to float. Try again", ephemeral=True, delete_after=10)
+
     except Exception as e:
         print(f"Error in landmine command: {e}")
         await ctx.reply(f"An unexpected error occurred. Contact <@{allowed_users[0]}> :3")
@@ -2763,10 +2769,10 @@ class CustomCommands(commands.Cog):
     @app_commands.describe(
         name='Command name',
         role='Role to distribute (mention or ID)',
-        duration='Duration in seconds',
-        cooldown='Cooldown in seconds (default: 0)',
-        backfire_rate='Chance to backfire 0-100 (default: 0, integer)',
-        backfire_duration='Backfire duration in seconds (default: 2x duration)',
+        duration='(seconds) Duration',
+        cooldown='(seconds) Cooldown (default: 0)',
+        backfire_rate='(%) Chance to backfire 0-100 (default: 0%, integer)',
+        backfire_duration='(seconds) Backfire duration (default: 2x duration)',
         backfire_role='Role to be given on backfire (default: same as victim role)',
         victims_can_use='Whether to allow users with this role to use the command on others (default: True)',
         success_msg='Message on success (default: <author> used {command} on <user>)',
@@ -3256,6 +3262,9 @@ async def calc(ctx: commands.Context, *, expression: str):
     if 'mizuki2' in expression:
         return await ctx.reply('https://tenor.com/view/genshin-impact-freaky-mizuki-gif-13878801844491664765')
 
+    if 'skibidi' in expression:
+        return await ctx.reply('https://media.discordapp.net/attachments/1203446736803069973/1280545848069193821/-1784917132386261731.mp4?ex=66d878c1&is=66d72741&hm=6b641c8e7e909993f79c6007e412bdee18f540fdbd684b6c73699abe837a4d8e&')
+
     safe_expression = (
         expression
         .replace('^', '**')
@@ -3275,6 +3284,8 @@ async def calc(ctx: commands.Context, *, expression: str):
         result_str = f"{result:,}" if isinstance(result, (int, float)) else str(result)
         if len(result_str) > 1800:
             result_str = result_str[:1800] + "...\n(Output truncated)"
+        if result_str in ('67', '67.0'):
+            return await ctx.reply('https://tenor.com/view/scp-067-67-6-7-six-seven-sixty-seven-gif-13940852437921483111')
 
         await ctx.reply(f"```\n{expression.replace('**', '^')}\n= {result_str}\n```")
 
@@ -4357,7 +4368,7 @@ class PaginationView(discord.ui.View):
                             await self.ctx.send(f"{user.mention}, you've unlocked the *Reached #1* Title!\nRun `!title` to change it!")
                         save_profiles()
 
-                    display_name = user.mention if user and user.id == self.ctx.author.id else (user.global_name or user.name) if user else f"Unknown User ({user_id})"
+                    display_name = user.mention if user and user.id == self.ctx.author.id else (user.display_name or user.name) if user else f"Unknown User ({user_id})"
 
                     number_dict = {1: '🥇', 2: '🥈', 3: '🥉'}
                     rank_display = number_dict.get(rank, f"**#{rank}**")
@@ -9818,7 +9829,7 @@ class Marriage(commands.Cog):
                     try:
                         await partner.send(
                             f"## 💔 You've been divorced\n"
-                            f"**{ctx.author.name}** has divorced you after being married for **{duration_str}**"
+                            f"**{ctx.author.display_name}** has divorced you after being married for **{duration_str}**"
                         )
                     except:
                         pass  # Partner has DMs disabled
