@@ -47,6 +47,7 @@ start = time.perf_counter()
 
 bot_name = 'Ukra Bot'
 bot_down = True
+free_daily = True
 bot_ready = asyncio.Event()
 reason = f'{bot_name} is starting up'
 
@@ -8185,7 +8186,7 @@ class Currency(commands.Cog):
             if last_used.date() == now.date():
                 await ctx.reply(f"You can use `daily` again <t:{get_daily_reset_timestamp()}:R>\nYour current streak is **{user_streak:,}**")
                 return
-            if last_used.date() == (now - timedelta(days=1)).date():
+            if free_daily or last_used.date() == (now - timedelta(days=1)).date():
                 user_last_used[author_id] = now
                 save_last_used()
                 daily_streaks[author_id] += 1
