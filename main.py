@@ -68,7 +68,7 @@ the_users = allowed_users + dev_mode_users
 # the_users = []
 ukra_bypass = True
 all_bot_commands = []
-no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse', 'getlegacy', 'ukrabypass'}
+no_help_commands = {'help', 'backup', 'botafk', 'delete_bot_message', 'ignore', 'save', 'tuc', 'add_title', 'admin_giveaway', 'bless', 'curse', 'getlegacy', 'ukrabypass', 'ping_all'}
 global_command_cooldowns = {  # command: (number_of_uses, seconds)
     "custom_list": (1, 5),
     "custom_list_dm": (1, 120),
@@ -975,17 +975,17 @@ async def on_ready():
             try:
                 channel_id, guild_id, author_id, amount, end_time, remind, admin, t = active_giveaways[message_id]
                 guild = await client.fetch_guild(guild_id)
-                print('guild fetched - resume', guild.id, guild.name)
+                # print('guild fetched - resume', guild.id, guild.name)
                 if not guild:
                     print(f"Error finalizing giveaway {message_id}: guild not found")
                     return
                 now = datetime.now(UTC)
                 duration = end_time - int(now.timestamp())
-                print(end_time)
-                print(int(now.timestamp()))
-                print('duration', duration)
+                # print(end_time)
+                # print(int(now.timestamp()))
+                # print('duration', duration)
                 if duration <= 0:
-                    print('duration is negative, finalizing')
+                    # print('duration is negative, finalizing')
                     await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin, t, too_late=True)
                     return
 
@@ -993,27 +993,27 @@ async def on_ready():
                 if not channel:
                     print(f"Error finalizing giveaway {message_id}: channel not found")
                     return
-                print('channel fetched - resume', channel.id, channel.name)
+                # print('channel fetched - resume', channel.id, channel.name)
 
                 message = await channel.fetch_message(int(message_id))
                 if not message:
                     print(f"Error finalizing giveaway {message_id}: message not found")
                     return
-                print('message fetched - resume', message.id)
+                # print('message fetched - resume', message.id)
                 reaction = discord.utils.get(message.reactions, emoji="🎉")
 
                 participants = [user async for user in reaction.users(limit=None) if not user.bot] if reaction else []
-                print('participants - resuming', [p.name for p in participants])
+                # print('participants - resuming', [p.name for p in participants])
                 if remind:
                     reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
                     reminder_interval = duration // reminders_to_send
                     remind_intervals = [reminder_interval for _ in range(1, reminders_to_send + 1)]
-                    print('have reminders - will not sleep - creating reminder task')
+                    # print('have reminders - will not sleep - creating reminder task')
                     await asyncio.create_task(schedule_reminders(message, amount, duration, remind_intervals))
                 else:
-                    print('have no reminders - getting ready to sleep', duration)
+                    # print('have no reminders - getting ready to sleep', duration)
                     await asyncio.sleep(duration)
-                print('finalizing giveaway', message.id)
+                # print('finalizing giveaway', message.id)
                 await finalize_giveaway(message_id, channel_id, str(guild_id), str(author_id), amount, admin, t)
             except Exception as e:
                 print(f"Error resuming giveaway {message_id}: {e}")
@@ -1053,11 +1053,12 @@ async def on_ready():
         elapsed = time.time() - start_time
         print(f"✅ Fully ready in {elapsed:.2f}s")
 
-        try:
-            print("✅ Resuming giveaways")
-            await resume_giveaways()
-        except Exception as e:
-            traceback.print_exc()
+        if active_giveaways:
+            try:
+                print("✅ Resuming giveaways")
+                await resume_giveaways()
+            except Exception as e:
+                traceback.print_exc()
 
     except Exception as e:
         await client.change_presence(
@@ -1744,6 +1745,15 @@ async def backup(ctx):
     else:
         perform_backup('backup command call', destination='dev_backup')
         await ctx.send("Backup complete", ephemeral=True)
+
+
+@commands.check(is_dev)
+@client.command(name='ping_all')
+async def ping_all(ctx):
+    if not ctx.guild:
+        return
+    for member in ctx.guild.members:
+        await ctx.send(member.mention)
 
 
 @commands.hybrid_command(name="compliment", description="Compliments user based on 3x100 most popular compliments")
@@ -4211,7 +4221,7 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
             add_coins_to_user(guild_id, author_id, amount)
             print(f"Error finalizing giveaway {message_id}: guild not found")
             return
-        print('guild fetched - finalize', guild.name)
+        # print('guild fetched - finalize', guild.name)
 
         author = await client.fetch_user(int(author_id))
         if not author:
@@ -4223,7 +4233,7 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
             add_coins_to_user(guild_id, author_id, amount)
             print(f"Error finalizing giveaway {message_id}: channel not found")
             return
-        print('channel fetched - finalize', channel.id, channel.name)
+        # print('channel fetched - finalize', channel.id, channel.name)
 
         message = await channel.fetch_message(int(message_id))
         if not message:
@@ -4239,7 +4249,7 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
         if participants:
             winner = random.choice(participants)
             winner_id = str(winner.id)
-            print('winner chosen', winner_id, 'paying out', amount, 'coins')
+            # print('winner chosen', winner_id, 'paying out', amount, 'coins')
             make_sure_user_has_currency(guild_id, winner_id)
             add_coins_to_user(guild_id, winner_id, amount)  # save file
             win_msg = (f"# 🎉 Congratulations {winner.mention}, you won **{amount:,}** {coin}!\n"
@@ -4252,16 +4262,16 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
                 win_channel = await guild.fetch_channel(1328994312934916146)
                 await win_channel.send(win_msg)
         else:
-            print('no participants, going to refund')
+            # print('no participants, going to refund')
             if not admin:
                 add_coins_to_user(guild_id, author_id, amount)
-            print('refunded', author, 'from', guild.name, amount, 'coins')
+            # print('refunded', author, 'from', guild.name, amount, 'coins')
             await message.reply(
                 f"No one participated in the giveaway{f', {author.mention} you have been refunded' * (not admin)} {pepela}")
 
         if message_id in active_giveaways:
             active_giveaways.pop(message_id)
-            print('removing giveaway', message_id)
+            # print('removing giveaway', message_id)
             save_active_giveaways()
         else:
             print(message_id, 'not in active_giveaways', type(message_id), active_giveaways)
