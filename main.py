@@ -1395,8 +1395,8 @@ async def landmine(ctx: commands.Context, trigger_chance: str = '1', amount: int
 
         if timeout_duration <= 0:
             return await ctx.reply("You have to set a timeout")
-        if timeout_duration > 604800:
-            return await ctx.reply("No more than a week please")
+        if timeout_duration > 3600:
+            return await ctx.reply("No more than an hour please")
 
         guild_id = str(ctx.guild.id)
         channel_id = str(ctx.channel.id)
