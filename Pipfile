@@ -14,6 +14,7 @@ mplfinance = "*"
 psutil = "*"
 discord = "*"
 finnhub-python = "*"
+dateparser = "*"
 
 [dev-packages]
 

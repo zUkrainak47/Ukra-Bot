@@ -34,6 +34,7 @@ from rapidfuzz import process
 from stockdex import Ticker
 import multiprocessing as mp
 from decimal import Decimal
+from dateparser.search import search_dates
 try:
     import psutil
 except ImportError:
@@ -865,6 +866,7 @@ async def on_ready():
         client.add_command(ukrabypass_command)
         client.add_command(fix_bad_embeds)
         client.add_command(fix_embed)
+        client.add_command(time_cmd)
         client.add_command(enable)
         client.add_command(disable)
         client.add_command(dnd)
@@ -1241,6 +1243,29 @@ async def on_message(message: discord.Message):
                     pass
                 except Exception as e:
                     print(f"Error fixing embeds: {e}")
+
+
+@commands.hybrid_command(name='time', description='Returns a discord timestamp for the time you provide')
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+@app_commands.describe(time='The time you want to convert to a discord timestamp')
+async def time_cmd(ctx: commands.Context, *, time: str):
+    """
+    Returns a discord timestamp for the time you provide
+    Examples: `in 30 minutes`, `tomorrow at 3pm`, `friday at noon GMT+9`, `august 13th 2030`
+    
+    Replace :R with :F, :D, :T, :t, :d to change the format
+    
+    Thanks to godlander on discord <:murmheart:1339935292739686400>
+    """
+    dates = search_dates(time, languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
+    if not dates:
+        return await ctx.reply("I couldn't parse that time. Please try again with a different format", ephemeral=True)
+    st, dt = dates[0]
+    timestamp = int(dt.timestamp())
+    # await ctx.reply(f"## {st.capitalize()}\n"
+    #                 f"<t:{timestamp}:R> - `<t:{timestamp}:R>`\n\n"
+    #                 f"-# <t:{timestamp}>")
+    return await ctx.reply(f"<t:{timestamp}:R>")
 
 
 @commands.hybrid_command(name='fix_embed', aliases=['fixembed', 'fixlink'], description='Fixes and sanitizes the link you provide')
@@ -3265,7 +3290,7 @@ async def calc(ctx: commands.Context, *, expression: str):
         return await ctx.reply(f"Error: Use of forbidden keyword (`{se.group(0)}`)")
 
     if expression.replace(' ', '') == '9+10':
-        return await ctx.reply(f"```\n{expression.strip()}\n= 21```")
+        return await ctx.reply(f"```fix\n{expression.strip()}\n= 21```")
 
     if expression.strip() == '67':
         return await ctx.reply('https://tenor.com/view/scp-067-67-6-7-six-seven-sixty-seven-gif-13940852437921483111')
@@ -3298,13 +3323,13 @@ async def calc(ctx: commands.Context, *, expression: str):
         if result_str in ('67', '67.0'):
             return await ctx.reply('https://tenor.com/view/scp-067-67-6-7-six-seven-sixty-seven-gif-13940852437921483111')
 
-        await ctx.reply(f"```\n{expression.replace('**', '^')}\n= {result_str}\n```")
+        await ctx.reply(f"```fix\n{expression.replace('**', '^')}\n= {result_str}\n```")
 
     except asyncio.TimeoutError:
         await ctx.reply(f"Error: Evaluation timed out (> {OUTER_TIMEOUT} seconds) and was terminated")
     except Exception as e:
         error_snippet = str(e).split('\n')[-1][:300]
-        await ctx.reply(f"Error evaluating expression: ```\n{error_snippet}\n```")
+        await ctx.reply(f"Error evaluating expression: ```fix\n{error_snippet}\n```")
         print(f"Error in !calc: Expression='{safe_expression}', Error='{e}'")
 
 
