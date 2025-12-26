@@ -6689,16 +6689,18 @@ class Currency(commands.Cog):
                     now = datetime.now()
                     last_used = user_last_used.setdefault(target_id_, datetime.today() - timedelta(days=3))
                     # print((now - timedelta(days=1)).date())
-                    if last_used.date() == now.date():
-                        d_msg = f"{user_streak:,}"
-                    elif last_used.date() == (now - timedelta(days=1)).date():
-                        d_msg = f"{user_streak:,} (not claimed today)"
-                    elif last_used.date() == (now - timedelta(days=2)).date():
-                        d_msg = f"{user_streak:,} (not claimed yesterday!!!)"
-                    else:
-                        daily_streaks[target_id_] = 0
-                        save_daily()
-                        d_msg = 0
+                    # if last_used.date() == now.date():
+                    #     d_msg = f"{user_streak:,}"
+                    # elif last_used.date() == (now - timedelta(days=1)).date():
+                    #     d_msg = f"{user_streak:,} (not claimed today)"
+                    # elif last_used.date() == (now - timedelta(days=2)).date():
+                    #     d_msg = f"{user_streak:,} (not claimed yesterday!!!)"
+                    # else:
+                    #     daily_streaks[target_id_] = 0
+                    #     save_daily()
+                    #     d_msg = 0
+                    
+                    d_msg = f"{user_streak:,}"
 
                     target_profile = get_profile(target_id_)
 
