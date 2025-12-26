@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 import mplfinance as mpf  # For candlestick charts
 import pandas as pd
 import pytz
-from apnggif import apnggif
+# from apnggif import apnggif
 from asteval import Interpreter
 from dotenv import load_dotenv
 from rapidfuzz import process
@@ -3447,17 +3447,16 @@ async def sticker(ctx: commands.Context):
 
     if sticker.format == discord.StickerFormatType.apng:
         # Convert APNG to GIF
-        if ctx.channel.id != 1327080626641178764:
-            return await ctx.reply("Animated stickers are not yet supported.")
-        extension = f'_{ctx.message.id}'
-        with open(f'temp_sticker{extension}.png', 'wb') as f:
-            f.write(sticker_data)
-        apnggif(f'temp_sticker{extension}.png', f'sticker{extension}.gif')
-        file = discord.File(f'sticker{extension}.gif', filename=f'sticker{extension}.gif')
-        embed.set_image(url=f"attachment://sticker{extension}.gif")
-        await ctx.reply(file=file, embed=embed)
-        os.remove(f"temp_sticker{extension}.png")
-        os.remove(f"sticker{extension}.gif")
+        return await ctx.reply("Animated stickers are not yet supported.")
+        # extension = f'_{ctx.message.id}'
+        # with open(f'temp_sticker{extension}.png', 'wb') as f:
+        #     f.write(sticker_data)
+        # apnggif(f'temp_sticker{extension}.png', f'sticker{extension}.gif')
+        # file = discord.File(f'sticker{extension}.gif', filename=f'sticker{extension}.gif')
+        # embed.set_image(url=f"attachment://sticker{extension}.gif")
+        # await ctx.reply(file=file, embed=embed)
+        # os.remove(f"temp_sticker{extension}.png")
+        # os.remove(f"sticker{extension}.gif")
 
     # elif sticker.format == discord.StickerFormatType.lottie:
     #     return await ctx.reply("Lottie stickers are not yet supported.")

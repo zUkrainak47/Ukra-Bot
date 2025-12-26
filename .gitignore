@@ -5,3 +5,4 @@
 /stocks/
 .env
 martingale.py
+split_lore.py
