@@ -867,6 +867,7 @@ async def on_ready():
         client.add_command(fix_bad_embeds)
         client.add_command(fix_embed)
         client.add_command(time_cmd)
+        client.add_command(remind)
         client.add_command(enable)
         client.add_command(disable)
         client.add_command(dnd)
@@ -1321,6 +1322,64 @@ async def time_autocomplete(interaction: discord.Interaction, current: str):
         dt = int(stamp[0][1].timestamp())
         return [app_commands.Choice(name=f"<t:{dt}:R>", value=str(stamp[0][1]))]
     return []
+
+@commands.hybrid_command(name='remind', description='Lets you set a reminder', aliases=['reminder', 'remindme'])
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+@app_commands.describe(time='When you want to be reminded. (Accepts natural language)', reminder_text='What you want to be reminded about')
+async def remind(ctx: commands.Context, *, time: str, reminder_text: str = ''):
+    """
+    *Currently in development*
+    
+    Lets you set a reminder!
+    Will try to send a DM, otherwise will reply in the same channel you send the command in.
+    
+    Examples: !remind me to go to the store in 2 hours
+    """
+    async def schedule_reminder(user, set_time, sleep_time, about, reminder_text, ctx):
+        await asyncio.sleep(sleep_time)
+        link = f"\n-# https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id}" if ctx.guild else ""
+        try:
+            await user.send(f"## ⏰ Reminder {"about " if about else 'to '}**{reminder_text}**\nThis reminder was set on <t:{set_time}>{link}")
+        except:
+            try:
+                await ctx.reply(f"## ⏰ Reminder for {ctx.author.mention}\nOn <t:{set_time}> you asked me to remind you {"about " if about else 'to '}**{reminder_text}**")
+            except:
+                await ctx.send(f"## ⏰ Reminder for {ctx.author.mention}\nOn <t:{set_time}> you asked me to remind you {"about " if about else 'to '}**{reminder_text}**{link}")
+
+    def capitalize_timezones(user_input: str) -> str:
+        timezones = [
+            "est", "edt", "cst", "cdt", "mst", "mdt", "pst", "pdt",
+            "akst", "akdt", "hst", "hdt", "utc", "gmt", "z",
+            "cet", "cest", "eet", "eest", "wet", "west"
+        ]
+        pattern = r"\b(" + "|".join(timezones) + r")\b"
+        return re.sub(pattern, lambda m: m.group(0).upper(), user_input, flags=re.IGNORECASE)
+    
+    dates = search_dates(capitalize_timezones(time), languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
+    added = dates is None
+    if added:
+        dates = search_dates(f"at {capitalize_timezones(time)}", languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
+        if not dates:
+            return await ctx.reply("I couldn't parse that time. Please try again with a different format", ephemeral=True)
+    st, dt = dates[0]
+    timestamp = int(dt.timestamp())
+    now = int(datetime.now().timestamp())
+    delta = timestamp - now
+    if delta < 1:
+        return await ctx.reply(f"<t:{timestamp}> is in the past! Please provide a future time.", ephemeral=True)
+    if not reminder_text:
+        temp = time.replace(st, '') if not added else time.replace(''.join(st.split()[1:]), '')
+        reminder_text = temp if temp else 'something'
+    reminder_text = reminder_text.strip()
+    if reminder_text.lower().startswith('me '):
+        reminder_text = reminder_text[3:]
+    if reminder_text.lower().startswith('about '):
+        reminder_text = reminder_text[6:]
+    about = not reminder_text.lower().startswith('to ')
+    if not about:
+        reminder_text = reminder_text[3:]
+    await ctx.reply(f"✅ Alright {ctx.author.mention}, I'll remind you {"about " if about else 'to '}**{reminder_text}** {get_timestamp(delta)}!")
+    await schedule_reminder(ctx.author, now, delta, about, reminder_text, ctx)
 
 @commands.hybrid_command(name='fix_embed', aliases=['fixembed', 'fixlink'], description='Fixes and sanitizes the link you provide')
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
