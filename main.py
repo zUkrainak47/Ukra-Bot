@@ -1247,26 +1247,80 @@ async def on_message(message: discord.Message):
 
 @commands.hybrid_command(name='time', description='Returns a discord timestamp for the time you provide')
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
-@app_commands.describe(time='The time you want to convert to a discord timestamp')
-async def time_cmd(ctx: commands.Context, *, time: str):
+@app_commands.describe(time='The time you want to convert to a discord timestamp', format='The format you want the timestamp in')
+async def time_cmd(ctx: commands.Context, *, time: str, format: str = 'Relative'):
     """
     Returns a discord timestamp for the time you provide
-    Examples: `in 30 minutes`, `tomorrow at 3pm`, `friday at noon GMT+9`, `august 13th 2030`
+    Examples: `in 30 minutes`, `tomorrow 3pm EST`, `friday at noon GMT+9`, `august 13th 2030`
     
-    Replace :R with :F, :D, :T, :t, :d to change the format
-    
-    Thanks to godlander on discord <:murmheart:1339935292739686400>
+    Thanks to godlander on discord for the idea <:murmheart:1339935292739686400>
     """
-    dates = search_dates(time, languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
+    await time_func(ctx, time, format)
+    
+async def time_func(ctx: commands.Context, time: str, format: str = 'Relative'):
+    def capitalize_timezones(user_input: str) -> str:
+        timezones = [
+            "est", "edt", "cst", "cdt", "mst", "mdt", "pst", "pdt",
+            "akst", "akdt", "hst", "hdt", "utc", "gmt", "z",
+            "cet", "cest", "eet", "eest", "wet", "west"
+        ]
+        pattern = r"\b(" + "|".join(timezones) + r")\b"
+        return re.sub(pattern, lambda m: m.group(0).upper(), user_input, flags=re.IGNORECASE)
+    
+    dates = search_dates(f"at {capitalize_timezones(time)}", languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
     if not dates:
         return await ctx.reply("I couldn't parse that time. Please try again with a different format", ephemeral=True)
+    
+    formats = {'Relative (in xyz time)': 'R',
+               'Date/Time': 'f',
+               'Short Date (DD.MM.YY)': 'd',
+               'Long Date (DD. Month YYYY)': 'D',
+               'Short Time (HH:MM)': 't',
+               'Long Time (HH:MM:SS)': 'T',
+               'Weekday/Date/Time': 'F',
+               }
+    if format in formats:
+        format_code = formats[format]
+    elif format in formats.values():
+        format_code = format
+    else:
+        format_code = 'R'
     st, dt = dates[0]
     timestamp = int(dt.timestamp())
+    
     # await ctx.reply(f"## {st.capitalize()}\n"
     #                 f"<t:{timestamp}:R> - `<t:{timestamp}:R>`\n\n"
     #                 f"-# <t:{timestamp}>")
-    return await ctx.reply(f"<t:{timestamp}:R>")
+    return await ctx.reply(f"<t:{timestamp}:{format_code}>")
 
+@time_cmd.error
+async def time_cmd_error(interaction: discord.Interaction, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        return await time_func(interaction, 'now', 'f')
+
+@time_cmd.autocomplete('format')
+async def format_autocomplete(interaction: discord.Interaction, current: str):
+    formats = {'Relative': 'R',
+               'Date/Time': 'f',
+               'Short Date (DD.MM.YY)': 'd',
+               'Long Date (DD. Month YYYY)': 'D',
+               'Short Time (HH:MM)': 't',
+               'Long Time (HH:MM:SS)': 'T',
+               'Weekday/Date/Time': 'F',
+               }
+    return [
+        app_commands.Choice(name=name, value=name)
+        for name in formats.keys()
+        if current.lower() in name.lower() or current == formats[name]
+    ]
+
+@time_cmd.autocomplete('time')
+async def time_autocomplete(interaction: discord.Interaction, current: str):
+    stamp = search_dates(current, languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
+    if stamp:
+        dt = int(stamp[0][1].timestamp())
+        return [app_commands.Choice(name=f"<t:{dt}:R>", value=str(stamp[0][1]))]
+    return []
 
 @commands.hybrid_command(name='fix_embed', aliases=['fixembed', 'fixlink'], description='Fixes and sanitizes the link you provide')
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
