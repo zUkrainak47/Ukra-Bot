@@ -94,7 +94,7 @@ bot_id = 1322197604297085020
 official_server_id = 696311992973131796
 MAX_INITIAL_RESPONSE_LENGTH = 1950
 MAX_TOTAL_RESPONSE_LENGTH = 10000
-fetched_users = {}
+# fetched_users = {}
 stock_cache = {}
 market_closed_message = ""
 allow_dict = {True:  "Enabled ",
@@ -276,6 +276,14 @@ if os.path.exists(ACTIVE_GIVEAWAYS):
 else:
     active_giveaways = {}
 
+_reminder_tasks: dict[str, asyncio.Task] = {}  # Track tasks for cancellation
+ACTIVE_REMINDERS = Path("dev", "active_reminders.json")
+if os.path.exists(ACTIVE_REMINDERS):
+    with open(ACTIVE_REMINDERS, "r") as file:
+        active_reminders = json.load(file)
+else:
+    active_reminders = {}
+
 
 IGNORED_EMBED_CHANNELS = Path("dev", "ignored_embed_channels.json")
 if os.path.exists(IGNORED_EMBED_CHANNELS):
@@ -379,6 +387,11 @@ def save_distributed_custom_roles():
 def save_active_giveaways():
     with open(ACTIVE_GIVEAWAYS, "w") as file:
         json.dump(active_giveaways, file, indent=4)
+
+
+def save_active_reminders():
+    with open(ACTIVE_REMINDERS, "w") as file:
+        json.dump(active_reminders, file, indent=4)
 
 
 def save_ignored_embed_channels():
@@ -641,24 +654,27 @@ async def loan_payment(id_: str, payment: int, pay_loaner=True):
             del active_loans[id_]
             save_active_loans()
 
-            global fetched_users
-            if loaner_id in fetched_users:
-                loaner = fetched_users.get(loaner_id)
-            else:
-                try:
-                    loaner = await client.fetch_user(loaner_id)
-                    fetched_users[loaner_id] = loaner
-                except discord.errors.NotFound:
-                    loaner = None
+            # global fetched_users
+            # if loaner_id in fetched_users:
+            #     loaner = fetched_users.get(loaner_id)
+            # else:
+            #     try:
+            #         loaner = await client.fetch_user(loaner_id)
+            #         fetched_users[loaner_id] = loaner
+            #     except discord.errors.NotFound:
+            #         loaner = None
 
-            if loanee_id in fetched_users:
-                loanee = fetched_users.get(loanee_id)
-            else:
-                try:
-                    loanee = await client.fetch_user(loanee_id)
-                    fetched_users[loanee_id] = loanee
-                except discord.errors.NotFound:
-                    loanee = None
+            loaner = get_user(loaner_id)
+            loanee = get_user(loanee_id)
+
+            # if loanee_id in fetched_users:
+            #     loanee = fetched_users.get(loanee_id)
+            # else:
+            #     try:
+            #         loanee = await client.fetch_user(loanee_id)
+            #         fetched_users[loanee_id] = loanee
+            #     except discord.errors.NotFound:
+            #         loanee = None
 
             if loaner and loanee and loaner.id != bot_id:
                 # await loaner.send(f'## Loan `#{id_}` of {amount:,} {coin} from {loanee.name} (<@{loanee_id}>) has been repaid!\nBalance: {get_user_balance('', str(loaner_id)):,} {coin}')
@@ -909,13 +925,6 @@ async def on_ready():
         await loop.run_in_executor(None, warm_pool)
         print("✅ Set up calculator")
 
-        await client.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.playing,
-                name="🧹 Cleaning up roles..."
-            )
-        )
-
         async def remove_custom_role_command_roles(guild_id, command_name):
             """Remove all roles for a specific custom role command"""
             # print(f'Handling custom role command: {command_name} in guild {guild_id} ', end='')
@@ -1027,6 +1036,13 @@ async def on_ready():
             for message_id in active_giveaways:
                 tasks.append(asyncio.create_task(resume_giveaway(message_id)))
             await asyncio.gather(*tasks)
+        
+        await client.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.playing,
+                name="🧹 Cleaning up roles..."
+            )
+        )
 
         try:
             for guild_id in list(distributed_custom_roles.keys()):
@@ -1037,6 +1053,16 @@ async def on_ready():
             print("✅ Roles cleaned")
         except Exception as e:
             traceback.print_exc()
+        
+        
+        await client.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.playing,
+                name="⏰ Restarting reminders..."
+            )
+        )
+
+        await restart_all_reminders()
 
         global all_bot_commands
         all_bot_commands = sorted([_.name for _ in client.commands])
@@ -1342,6 +1368,138 @@ async def time_autocomplete(interaction: discord.Interaction, current: str):
         return [app_commands.Choice(name=f"<t:{dt}:R>", value=str(stamp[0][1]))]
     return []
 
+async def schedule_reminder(user_id: str, reminder_id: str):
+    """Schedule a single reminder. Can be called on bot start or new reminder."""
+    reminders = active_reminders.get(user_id, {})
+    reminder = reminders.get(reminder_id)
+    
+    if not reminder:
+        return
+    
+    now = datetime.now().timestamp()
+    sleep_time = reminder["remind_at"] - now
+    
+    # Already due or overdue - send immediately (with tiny delay to prevent burst)
+    if sleep_time <= 0:
+        sleep_time = 0
+    
+    await asyncio.sleep(sleep_time)
+    
+    # Double-check it wasn't cancelled while sleeping
+    if reminder_id not in active_reminders.get(user_id, {}):
+        return
+    
+    await dispatch_reminder(user_id, reminder_id, reminder)
+
+
+async def dispatch_reminder(user_id: str, reminder_id: str, reminder: dict):
+    """Actually send the reminder."""
+    user = await get_user(int(user_id))
+    
+    text = reminder["reminder_text"]
+    prefix = "about " if reminder["is_about"] else "to "
+    
+    embed = discord.Embed(color=0xffd000)
+    if len(text) <= 230:
+        embed.title = f"⏰ Reminder {prefix}**{text}**"
+        embed.description = f"Set on <t:{reminder['created_at']}>"
+    else:
+        embed.title = "⏰ Reminder"
+        embed.description = f"{prefix}{text}\n\nSet on <t:{reminder['created_at']}>"
+    
+    if reminder.get("message_link"):
+        embed.description += f"\n{reminder['message_link']}"
+    
+    sent = False
+    dest = reminder["destination"]
+    
+    # Try DM
+    if dest in ("DM", "Both") and user:
+        try:
+            await user.send(embed=embed)
+            sent = True
+        except discord.Forbidden:
+            pass
+    
+    # Try channel
+    if dest in ("Channel", "Both") or (dest == "DM" and not sent):
+        channel_id = reminder.get("channel_id")
+        if channel_id:
+            channel = client.get_channel(channel_id)
+            if channel:
+                try:
+                    await channel.send(f"<@{user_id}>", embed=embed)
+                    sent = True
+                except discord.Forbidden:
+                    pass
+    
+    # Cleanup
+    remove_reminder(user_id, reminder_id)
+
+
+def remove_reminder(user_id: str, reminder_id: str):
+    """Remove a reminder from storage and cancel its task."""
+    if user_id in active_reminders:
+        active_reminders[user_id].pop(reminder_id, None)
+        if not active_reminders[user_id]:
+            del active_reminders[user_id]
+        save_active_reminders()
+    
+    task_key = f"{user_id}:{reminder_id}"
+    task = _reminder_tasks.pop(task_key, None)
+    if task and not task.done():
+        task.cancel()
+
+async def restart_all_reminders():
+    """Restart all reminders on bot startup, staggered to prevent rate limits."""
+    if not active_reminders:
+        return
+    print("Restarting all reminders...")
+    now = datetime.now().timestamp()
+    
+    all_reminders = []
+    for user_id, reminders in active_reminders.items():
+        for reminder_id, data in reminders.items():
+            all_reminders.append((user_id, reminder_id, data["remind_at"]))
+    
+    # Sort by due time - most urgent first
+    all_reminders.sort(key=lambda x: x[2])
+    
+    overdue = []
+    scheduled = []
+    
+    for user_id, reminder_id, remind_at in all_reminders:
+        if remind_at <= now:
+            overdue.append((user_id, reminder_id))
+        else:
+            scheduled.append((user_id, reminder_id))
+    
+    # Handle overdue reminders with stagger (rate limit protection)
+    if overdue:
+        print(f"Processing {len(overdue)} overdue reminders...")
+        for user_id, reminder_id in overdue:
+            create_reminder_task(user_id, reminder_id)
+            await asyncio.sleep(0.5)  # 500ms between overdue dispatches
+    
+    # Schedule future reminders (no stagger needed - they won't fire immediately)
+    for user_id, reminder_id in scheduled:
+        create_reminder_task(user_id, reminder_id)
+    
+    print(f"Restarted {len(all_reminders)} reminders")
+
+
+def create_reminder_task(user_id: str, reminder_id: str):
+    """Create and track a reminder task."""
+    task_key = f"{user_id}:{reminder_id}"
+    
+    # Cancel existing task if any
+    old_task = _reminder_tasks.get(task_key)
+    if old_task and not old_task.done():
+        old_task.cancel()
+    
+    task = asyncio.create_task(schedule_reminder(user_id, reminder_id))
+    _reminder_tasks[task_key] = task
+
 @commands.hybrid_command(name='remind', description='Lets you set a reminder', aliases=['reminder', 'remindme'])
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @app_commands.describe(time='When you want to be reminded. (Accepts natural language)', 
@@ -1355,29 +1513,42 @@ async def remind(ctx: commands.Context, *, time: str, reminder_text: str = '', w
     
     Example: `!remind me to go to the store in 2 hours`
     """
-    async def schedule_reminder(user, set_time, sleep_time, about, reminder_text, ctx, place):
-        await asyncio.sleep(sleep_time)
-        embed = discord.Embed(
-            title=f"⏰ Reminder {"about " if about else 'to '}**{reminder_text}**",
-            description=f"This reminder was set on <t:{set_time}>",
-            color=0xffd000
-        )
-        
-        if ctx.guild:
-            embed.description += f"\nhttps://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id}"
+    # async def schedule_reminder(id, user, set_time, sleep_time, about, reminder_text, link, place):
+    #     await asyncio.sleep(sleep_time)
+    #     if len(reminder_text) <= 230:
+    #         embed = discord.Embed(
+    #             title=f"⏰ Reminder {"about " if about else 'to '}**{reminder_text}**",
+    #             description=f"This reminder was set on <t:{set_time}>",
+    #             color=0xffd000
+    #         )
+    #     else:
+    #         embed = discord.Embed(
+    #             title=f"⏰ Reminder",
+    #             description=f"{"about " if about else 'to '}{reminder_text}\n\nThis reminder was set on <t:{set_time}>",
+    #             color=0xffd000
+    #         )
+                
+    #     if ctx.guild:
+    #         embed.description += link
             
-        if place in ('DM', 'Both'):
-            try:
-                await user.send(embed=embed)
-                success = True
-            except discord.Forbidden:
-                success = False
-        if place in ('Channel', 'Both') or not success:
-            try:
-                await ctx.reply(embed=embed)
-            except:
-                await ctx.send(embed=embed)
+    #     if place in ('DM', 'Both'):
+    #         try:
+    #             await user.send(embed=embed)
+    #             success = True
+    #         except discord.Forbidden:
+    #             success = False
+    #     if place in ('Channel', 'Both') or not success:
+    #         try:
+    #             await ctx.reply(embed=embed)
+    #         except:
+    #             await ctx.send(embed=embed)
+        
+    #     active_reminders[str(user.id)] = [r for r in active_reminders.get(str(user.id), []) if r['id'] != id]
+    #     save_active_reminders()
     
+    if not reminder_text and time.lower().startswith('me '):
+        time = time[3:]
+
     processed_time = preprocess_time(time)
     dates = search_dates(processed_time, languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
     added = dates is None
@@ -1385,15 +1556,25 @@ async def remind(ctx: commands.Context, *, time: str, reminder_text: str = '', w
         dates = search_dates(f"at {processed_time}", languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
         if not dates:
             return await ctx.reply("I couldn't parse that time. Please try again with a different format", ephemeral=True)
+    
     st, dt = dates[0]
-    timestamp = int(dt.timestamp())
+    remind_at = int(dt.timestamp())
     now = int(datetime.now().timestamp())
-    delta = timestamp - now
+    delta = remind_at - now
     if delta < 1:
-        return await ctx.reply(f"<t:{timestamp}> is in the past!\nPlease provide a future time", ephemeral=True)
+        return await ctx.reply(f"<t:{remind_at}> is in the past!\nPlease provide a future time", ephemeral=True)
+    
     if not reminder_text:
-        temp = processed_time.replace(st, '') if not added else processed_time.replace(' '.join(st.split()[1:]), '')
+        if not added:
+            if f" {st} " in processed_time:
+                temp = processed_time.replace(f" {st} ", ' ') 
+            else:
+                temp = processed_time.replace(st, '') 
+        else:
+            processed_time.replace(st[3:], '')
+            
         reminder_text = temp if temp else 'something'
+        
     place_dict = {'DM': 'in DMs', 'Channel': 'in this channel', 'Both': 'both in DMs and in this channel'}
     if (where not in place_dict) or (not ctx.guild):
         where = 'DM'
@@ -1405,8 +1586,33 @@ async def remind(ctx: commands.Context, *, time: str, reminder_text: str = '', w
     about = not reminder_text.lower().startswith('to ')
     if not about:
         reminder_text = reminder_text[3:]
+        
+    if len(reminder_text) > 1800:
+        reminder_text = reminder_text[:1800] + '...'
+        
+    reminder_id = str(ctx.message.id)
+    user_id = str(ctx.author.id)
+    
+    reminder_data = {
+        "remind_at": remind_at,
+        "created_at": now,
+        "reminder_text": reminder_text,
+        "is_about": about,
+        "destination": where,
+        "channel_id": ctx.channel.id,
+        "guild_id": ctx.guild.id if ctx.guild else None,
+        "message_link": f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id}" if ctx.guild else None
+    }
+    
+    active_reminders.setdefault(user_id, {})[reminder_id] = reminder_data
+    save_active_reminders()
+    create_reminder_task(user_id, reminder_id)
     await ctx.reply(f"✅ Alright {ctx.author.display_name}, I'll remind you {"about " if about else 'to '}**{reminder_text}** {get_timestamp(delta)} {place_dict[where]}!")
-    asyncio.create_task(schedule_reminder(ctx.author, now, delta, about, reminder_text, ctx, where))
+
+@remind.error
+async def remind_error(interaction: discord.Interaction, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        return await interaction.reply("Please provide the time for the reminder! You didn't tell me when to remind you!!\nYou can also tell me what to remind you about but that's optional", ephemeral=True)
 
 @remind.autocomplete('where')
 async def format_autocomplete(interaction: discord.Interaction, current: str):
@@ -2538,11 +2744,12 @@ async def tuc(ctx, *, target: discord.User):
     # if target_id != -1 and target_id in fetched_users:
     #     target = fetched_users.get(target_id)
     else:
-        try:
-            target = await client.fetch_user(target_id)
-            fetched_users[target_id] = target
-        except discord.errors.NotFound:
-            target = None
+        target = get_user(target_id)
+        # try:
+        #     target = await client.fetch_user(target_id)
+        #     fetched_users[target_id] = target
+        # except discord.errors.NotFound:
+        #     target = None
     if target is not None and target_id in ignored_users:
         ignored_users.remove(target_id)
         save_ignored_users()
@@ -3524,21 +3731,30 @@ async def avatar(ctx: commands.Context, user: typing.Optional[discord.User] = No
     await ctx.reply(embed=embed)
 
 
-async def get_user(id_: int, ctx=None, force_fetch=False):
-    if ctx is not None and ctx.guild and not force_fetch:
-        user = ctx.guild.get_member(id_)
+async def get_user(id_: int, ctx=None, force_fetch=False) -> discord.User | discord.Member | None:
+    if not force_fetch:
+        # 1. Try guild member cache (has roles, nick, etc.)
+        if ctx is not None and ctx.guild:
+            member = ctx.guild.get_member(id_)
+            if member:
+                return member
+        
+        # 2. Bot's internal user cache - NO API CALL
+        user = client.get_user(id_)
         if user:
             return user
-    global fetched_users
-    if id_ in fetched_users:
-        return fetched_users.get(id_)
+        
+        # 3. Search all guild member caches
+        for guild in client.guilds:
+            member = guild.get_member(id_)
+            if member:
+                return member
+    
+    # 4. Fetch as last resort (API call)
     try:
-        user = await client.fetch_user(id_)
-        fetched_users[id_] = user
-        return user
-    except discord.errors.NotFound:
+        return await client.fetch_user(id_)
+    except discord.NotFound:
         return None
-
 
 @commands.cooldown(1, 15, commands.BucketType.user)
 @commands.hybrid_command(name="banner", description="Displays a user's banner if they have one!")
@@ -3921,16 +4137,20 @@ async def send_custom_command(ctx, error, mode='normal'):
                         user_mention_to_use = match.group(0)
                         user_id = int(match.group(2))
                         remaining_args_list.pop(0)
-                        global fetched_users
-                        if user_id in fetched_users:
-                            user_obj = fetched_users.get(user_id)
-                        else:
-                            try:
-                                user_obj = await client.fetch_user(user_id)
-                                fetched_users[user_id] = user_obj
-                            except discord.errors.NotFound:
-                                await ctx.reply(f"`{user_id}` is not a valid user ID")
-                                return
+                        # global fetched_users
+                        user_obj = get_user(user_id)
+                        if user_obj is None:
+                            return await ctx.reply(f"`{user_id}` is not a valid user ID")
+
+                        # if user_id in fetched_users:
+                        #     user_obj = fetched_users.get(user_id)
+                        # else:
+                        #     try:
+                        #         user_obj = await client.fetch_user(user_id)
+                        #         fetched_users[user_id] = user_obj
+                        #     except discord.errors.NotFound:
+                        #         await ctx.reply(f"`{user_id}` is not a valid user ID")
+                        #         return
                     else:
                         await ctx.reply("This command requires a user mention as the first argument.")
                         return
@@ -6124,19 +6344,28 @@ class Lore(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def get_user(self, id_: int, ctx=None):
+    async def get_user(self, id_: int, ctx=None) -> discord.User | discord.Member | None:
+        # 1. Try guild member cache (has roles, nick, etc.)
         if ctx is not None and ctx.guild:
-            user = ctx.guild.get_member(id_)
-            if user:
-                return user
-        global fetched_users
-        if id_ in fetched_users:
-            return fetched_users.get(id_)
-        try:
-            user = await self.bot.fetch_user(id_)
-            fetched_users[id_] = user
+            member = ctx.guild.get_member(id_)
+            if member:
+                return member
+        
+        # 2. Bot's internal user cache - NO API CALL
+        user = self.bot.get_user(id_)
+        if user:
             return user
-        except discord.errors.NotFound:
+        
+        # 3. Search all guild member caches
+        for guild in self.bot.guilds:
+            member = guild.get_member(id_)
+            if member:
+                return member
+    
+        # 4. Fetch as last resort (API call)
+        try:
+            return await self.bot.fetch_user(id_)
+        except discord.NotFound:
             return None
 
     @commands.hybrid_command(name="toggle_my_lore", description="Enables or disables lore functionality for you in this server")
@@ -6814,26 +7043,35 @@ class Currency(commands.Cog):
         ]
         return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
 
-    async def get_user(self, id_: int, ctx=None):
+    async def get_user(self, id_: int, ctx=None) -> discord.User | discord.Member | None:
+        # 1. Try guild member cache (has roles, nick, etc.)
         if ctx is not None and ctx.guild:
-            user = ctx.guild.get_member(id_)
-            if user:
-                return user
-        global fetched_users
-        if id_ in fetched_users:
-            return fetched_users.get(id_)
-        try:
-            user = await self.bot.fetch_user(id_)
-            fetched_users[id_] = user
+            member = ctx.guild.get_member(id_)
+            if member:
+                return member
+        
+        # 2. Bot's internal user cache - NO API CALL
+        user = self.bot.get_user(id_)
+        if user:
             return user
-        except discord.errors.NotFound:
+        
+        # 3. Search all guild member caches
+        for guild in self.bot.guilds:
+            member = guild.get_member(id_)
+            if member:
+                return member
+    
+        # 4. Fetch as last resort (API call)
+        try:
+            return await self.bot.fetch_user(id_)
+        except discord.NotFound:
             return None
 
     async def get_user_profile(self, ctx, target, full_info=False):
         """
         Returns embed for profile or info
         """
-        global fetched_users
+        # global fetched_users
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             target_id = target.id
@@ -7673,7 +7911,7 @@ class Currency(commands.Cog):
         **Only usable by bot developer**
         """
         # try:
-        global fetched_users
+        # global fetched_users
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             if ctx.author.id not in allowed_users:
@@ -7730,7 +7968,7 @@ class Currency(commands.Cog):
         """
         Check your or someone else's balance
         """
-        global fetched_users
+        # global fetched_users
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             if user is None:
@@ -9719,20 +9957,28 @@ class Marriage(commands.Cog):
     def cog_unload(self):
         self.anniversary_check.cancel()  # Stop task when cog is unloaded
 
-    async def get_user(self, id_: int, ctx=None):
-        """Helper to get user object"""
+    async def get_user(self, id_: int, ctx=None) -> discord.User | discord.Member | None:
+        # 1. Try guild member cache (has roles, nick, etc.)
         if ctx is not None and ctx.guild:
-            user = ctx.guild.get_member(id_)
-            if user:
-                return user
-        global fetched_users
-        if id_ in fetched_users:
-            return fetched_users.get(id_)
-        try:
-            user = await self.bot.fetch_user(id_)
-            fetched_users[id_] = user
+            member = ctx.guild.get_member(id_)
+            if member:
+                return member
+        
+        # 2. Bot's internal user cache - NO API CALL
+        user = self.bot.get_user(id_)
+        if user:
             return user
-        except discord.errors.NotFound:
+        
+        # 3. Search all guild member caches
+        for guild in self.bot.guilds:
+            member = guild.get_member(id_)
+            if member:
+                return member
+    
+        # 4. Fetch as last resort (API call)
+        try:
+            return await self.bot.fetch_user(id_)
+        except discord.NotFound:
             return None
 
     def is_married(self, user_id: str) -> tuple:
