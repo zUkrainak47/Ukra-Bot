@@ -1249,7 +1249,8 @@ async def on_message(message: discord.Message):
 def preprocess_time(user_input: str) -> str:
     """Normalize time input for dateparser compatibility."""
     # Expand short time abbreviations (5m -> 5 minutes)
-    # Note: 'mo' must come before 'm' to avoid "5mo" -> "5 minuteso"
+    user_input = re.sub(r'\b(\d{1,2})\s*am\b', r'\1:00 am', user_input, flags=re.IGNORECASE)  # 5am -> 5:00 am  (dateparser quirk)
+    
     time_patterns = [
         (r'(\d+)s\b', r'\1 seconds'),
         (r'(\d+)m\b', r'\1 minutes'),
