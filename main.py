@@ -41,6 +41,7 @@ except ImportError:
     psutil = None
 
 start = time.perf_counter()
+start_timestamp = int(datetime.now().timestamp())
 
 # dict_1 - loans
 # list_1 - used codes
@@ -664,8 +665,8 @@ async def loan_payment(id_: str, payment: int, pay_loaner=True):
             #     except discord.errors.NotFound:
             #         loaner = None
 
-            loaner = get_user(loaner_id)
-            loanee = get_user(loanee_id)
+            loaner = await get_user(loaner_id)
+            loanee = await get_user(loanee_id)
 
             # if loanee_id in fetched_users:
             #     loanee = fetched_users.get(loanee_id)
@@ -884,6 +885,8 @@ async def on_ready():
         client.add_command(fix_embed)
         client.add_command(time_cmd)
         client.add_command(remind)
+        client.add_command(reminders)
+        client.add_command(reminder_cancel)
         client.add_command(enable)
         client.add_command(disable)
         client.add_command(dnd)
@@ -1407,8 +1410,7 @@ async def dispatch_reminder(user_id: str, reminder_id: str, reminder: dict):
         embed.title = "⏰ Reminder"
         embed.description = f"{prefix}{text}\n\nSet on <t:{reminder['created_at']}>"
     
-    if reminder.get("message_link"):
-        embed.description += f"\n{reminder['message_link']}"
+    embed.description += f"\n{reminder['message_link']}"
     
     sent = False
     dest = reminder["destination"]
@@ -1454,7 +1456,7 @@ async def restart_all_reminders():
     """Restart all reminders on bot startup, staggered to prevent rate limits."""
     if not active_reminders:
         return
-    print("Restarting all reminders...")
+    # print("Restarting all reminders...")
     now = datetime.now().timestamp()
     
     all_reminders = []
@@ -1485,7 +1487,7 @@ async def restart_all_reminders():
     for user_id, reminder_id in scheduled:
         create_reminder_task(user_id, reminder_id)
     
-    print(f"Restarted {len(all_reminders)} reminders")
+    print(f"✅ Restarted {len(all_reminders)} reminders")
 
 
 def create_reminder_task(user_id: str, reminder_id: str):
@@ -1500,51 +1502,23 @@ def create_reminder_task(user_id: str, reminder_id: str):
     task = asyncio.create_task(schedule_reminder(user_id, reminder_id))
     _reminder_tasks[task_key] = task
 
+
 @commands.hybrid_command(name='remind', description='Lets you set a reminder', aliases=['reminder', 'remindme'])
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @app_commands.describe(time='When you want to be reminded. (Accepts natural language)', 
                        reminder_text='What you want to be reminded about',
                        where='Where you want to be reminded (DM / Channel)')
 async def remind(ctx: commands.Context, *, time: str, reminder_text: str = '', where: str = 'DM'):
-    """
-    *Currently in development*
-    
+    """    
     Lets you set a reminder!
     
     Example: `!remind me to go to the store in 2 hours`
+    
+    Use `!reminders` to list your active reminders 
+    Use `!rc` to cancel a reminder
     """
-    # async def schedule_reminder(id, user, set_time, sleep_time, about, reminder_text, link, place):
-    #     await asyncio.sleep(sleep_time)
-    #     if len(reminder_text) <= 230:
-    #         embed = discord.Embed(
-    #             title=f"⏰ Reminder {"about " if about else 'to '}**{reminder_text}**",
-    #             description=f"This reminder was set on <t:{set_time}>",
-    #             color=0xffd000
-    #         )
-    #     else:
-    #         embed = discord.Embed(
-    #             title=f"⏰ Reminder",
-    #             description=f"{"about " if about else 'to '}{reminder_text}\n\nThis reminder was set on <t:{set_time}>",
-    #             color=0xffd000
-    #         )
-                
-    #     if ctx.guild:
-    #         embed.description += link
-            
-    #     if place in ('DM', 'Both'):
-    #         try:
-    #             await user.send(embed=embed)
-    #             success = True
-    #         except discord.Forbidden:
-    #             success = False
-    #     if place in ('Channel', 'Both') or not success:
-    #         try:
-    #             await ctx.reply(embed=embed)
-    #         except:
-    #             await ctx.send(embed=embed)
-        
-    #     active_reminders[str(user.id)] = [r for r in active_reminders.get(str(user.id), []) if r['id'] != id]
-    #     save_active_reminders()
+    if len(active_reminders.get(str(ctx.author.id), {})) >= 20:
+        return await ctx.reply("You have reached the maximum of 20 active reminders!")
     
     if not reminder_text and time.lower().startswith('me '):
         time = time[3:]
@@ -1563,7 +1537,8 @@ async def remind(ctx: commands.Context, *, time: str, reminder_text: str = '', w
     delta = remind_at - now
     if delta < 1:
         return await ctx.reply(f"<t:{remind_at}> is in the past!\nPlease provide a future time", ephemeral=True)
-    
+    if delta > 160704000:
+        return await ctx.reply("Let's keep reminders under 5 years please", ephemeral=True)
     if not reminder_text:
         if not added:
             if f" {st} " in processed_time:
@@ -1601,7 +1576,7 @@ async def remind(ctx: commands.Context, *, time: str, reminder_text: str = '', w
         "destination": where,
         "channel_id": ctx.channel.id,
         "guild_id": ctx.guild.id if ctx.guild else None,
-        "message_link": f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id}" if ctx.guild else None
+        "message_link": f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id}" if ctx.guild else f"https://discord.com/channels/@me/{ctx.channel.id}/{ctx.message.id}"
     }
     
     active_reminders.setdefault(user_id, {})[reminder_id] = reminder_data
@@ -1622,6 +1597,69 @@ async def format_autocomplete(interaction: discord.Interaction, current: str):
         if current.lower() in name.lower() and (interaction.guild is not None if name != 'DM' else True)
     ]
 
+@commands.hybrid_command(name='reminders', description='Lists your active reminders')
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+async def reminders(ctx: commands.Context):
+    """
+    Lists your active reminders
+    """
+    user_id = str(ctx.author.id)
+    reminders = active_reminders.get(user_id)
+    if not reminders:
+        return await ctx.reply("You have no active reminders!", ephemeral=True)
+    embed = discord.Embed(title="", color=0xffd000, description="")
+    embed.set_author(name=f"{ctx.author.display_name}'s Reminders", icon_url=get_pfp(ctx.author))
+    for reminder_id, data in enumerate(sorted(reminders.values(), key=lambda x: x['remind_at']), start=1):
+        remind_at = f"<t:{data['remind_at']}:R>"
+        prefix = "about " if data["is_about"] else "to "
+        text = f"{data['reminder_text']}"[:100] + ('...' if len(data['reminder_text']) > 100 else '')
+        embed.description += f"[#{reminder_id}]({data['message_link']}) - {prefix}**{text}** - {remind_at}\n"
+    await ctx.reply(embed=embed)
+
+@commands.hybrid_command(name='reminder_cancel', aliases=['rc'], description='Lets you cancel a specific reminder by its number')
+@app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+@app_commands.describe(number='The number of the reminder to cancel (see !reminders)')
+async def reminder_cancel(ctx: commands.Context, number: int):
+    """
+    Cancels a specific reminder by its number (see `!reminders`)
+    """
+    user_id = str(ctx.author.id)
+    reminders = active_reminders.get(user_id)
+    if not reminders:
+        return await ctx.reply("You have no active reminders!", ephemeral=True)
+    if number < 1 or number > len(reminders):
+        return await ctx.reply(f"Invalid reminder number! Please provide a number between 1 and {len(reminders)}", ephemeral=True)
+    sorted_reminder_ids = sorted(reminders.keys(), key=lambda x: reminders[x]['remind_at'])
+    reminder_id = sorted_reminder_ids[number - 1]
+
+    view = ConfirmView(ctx.author, timeout=60)
+    remind_at = f"<t:{reminders[reminder_id]['remind_at']}:R>"
+    prefix = "about " if reminders[reminder_id]["is_about"] else "to "
+    text = f"{reminders[reminder_id]['reminder_text']}"[:100] + ('...' if len(reminders[reminder_id]['reminder_text']) > 100 else '')
+
+    message = await ctx.reply(f"Are you sure you want to cancel your reminder {prefix}**{text}** due {remind_at}?", view=view, ephemeral=True)
+    view.message = message
+    await view.wait()
+    if not view.value:
+        return await ctx.reply("❌ Cancellation aborted.", ephemeral=True)
+    
+    remove_reminder(user_id, reminder_id)
+    await ctx.reply(f"✅ Successfully cancelled reminder **#{number}**")
+
+@reminder_cancel.autocomplete('number')
+async def reminder_cancel_autocomplete(interaction: discord.Interaction, current: str):
+    user_id = str(interaction.user.id)
+    reminders = active_reminders.get(user_id)
+    if not reminders:
+        return []
+    choices = []
+    for idx, data in enumerate(sorted(reminders.values(), key=lambda x: x['remind_at']), start=1):
+        prefix = "about " if data["is_about"] else "to "
+        text = f"{data['reminder_text']}"[:50] + ('...' if len(data['reminder_text']) > 50 else '')
+        choice_name = f"#{idx} - {prefix}{text}"
+        if current.lower() in choice_name.lower():
+            choices.append(app_commands.Choice(name=choice_name, value=idx))
+    return choices
 
 @commands.hybrid_command(name='fix_embed', aliases=['fixembed', 'fixlink'], description='Fixes and sanitizes the link you provide')
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
@@ -1916,10 +1954,12 @@ async def uptime(ctx):
     run_time = end - start
 
     days = int(run_time // 86400)
-    time_str = time.strftime("%Hh %Mm %Ss", time.gmtime(run_time % 86400))
-    decimals = f'{(run_time % 1):.3f}ms'
+    hours = int((run_time % 86400) // 3600)
+    minutes = int((run_time % 3600) // 60)
+    seconds = int(run_time % 60)
+    ans = f"{f'{days} day{'s' if days>1 else ''}, ' if days else ''}{f'{hours} hour{'s' if hours>1 else ''}, ' if hours else ''}{f'{minutes} minute{'s' if minutes>1 else ''}, ' if minutes else ''}{seconds} second{'s' if seconds!=1 else ''}"
 
-    msg = f'{bot_name} has been up for {days}d {time_str} {str(decimals)[2:]}'
+    msg = f'{bot_name} has been up since <t:{start_timestamp}:R>\n({ans})'
     await ctx.send(msg)
 
 
@@ -2744,7 +2784,7 @@ async def tuc(ctx, *, target: discord.User):
     # if target_id != -1 and target_id in fetched_users:
     #     target = fetched_users.get(target_id)
     else:
-        target = get_user(target_id)
+        target = await get_user(target_id)
         # try:
         #     target = await client.fetch_user(target_id)
         #     fetched_users[target_id] = target
@@ -4138,7 +4178,7 @@ async def send_custom_command(ctx, error, mode='normal'):
                         user_id = int(match.group(2))
                         remaining_args_list.pop(0)
                         # global fetched_users
-                        user_obj = get_user(user_id)
+                        user_obj = await get_user(user_id)
                         if user_obj is None:
                             return await ctx.reply(f"`{user_id}` is not a valid user ID")
 
@@ -9729,7 +9769,7 @@ class Currency(commands.Cog):
                     '### Current lottery:\n'
                     f'- **{len(active_lottery[today_date])}** participant{'s' if len(active_lottery[today_date]) != 1 else ''}\n'
                     f'- **{len(active_lottery[today_date]) * payout:,}** {coin} in pool\n'
-                    f'- Participation price: {entrance_price} {coin}\n'
+                    f'- Participation price: {entrance_price:,} {coin}\n'
                     f'- Ends <t:{get_daily_reset_timestamp()}:R>\n' +
                     # f'**If you want to participate, run** `!lottery enter`' * not_joined +
                     f"You've joined today's lottery {yay} {join_server_msg}" * (not not_joined), view=view)
