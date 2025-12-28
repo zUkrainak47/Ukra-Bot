@@ -1246,6 +1246,33 @@ async def on_message(message: discord.Message):
                     print(f"Error fixing embeds: {e}")
 
 
+def preprocess_time(user_input: str) -> str:
+    """Normalize time input for dateparser compatibility."""
+    # Expand short time abbreviations (5m -> 5 minutes)
+    # Note: 'mo' must come before 'm' to avoid "5mo" -> "5 minuteso"
+    time_patterns = [
+        (r'(\d+)s\b', r'\1 seconds'),
+        (r'(\d+)m\b', r'\1 minutes'),
+        (r'(\d+)h\b', r'\1 hours'),
+        (r'(\d+)d\b', r'\1 days'),
+        (r'(\d+)w\b', r'\1 weeks'),
+        (r'(\d+)y\b', r'\1 years'),
+    ]
+    for pattern, replacement in time_patterns:
+        user_input = re.sub(pattern, replacement, user_input, flags=re.IGNORECASE)
+    
+    # Capitalize timezone abbreviations
+    timezones = [
+        "est", "edt", "cst", "cdt", "mst", "mdt", "pst", "pdt",
+        "akst", "akdt", "hst", "hdt", "utc", "gmt", "z",
+        "cet", "cest", "eet", "eest", "wet", "west"
+    ]
+    tz_pattern = r"\b(" + "|".join(timezones) + r")\b"
+    user_input = re.sub(tz_pattern, lambda m: m.group(0).upper(), user_input, flags=re.IGNORECASE)
+    
+    return user_input
+
+
 @commands.hybrid_command(name='time', description='Returns a discord timestamp for the time you provide')
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @app_commands.describe(time='The time you want to convert to a discord timestamp', format='The format you want the timestamp in')
@@ -1258,17 +1285,8 @@ async def time_cmd(ctx: commands.Context, *, time: str, format: str = 'Relative'
     """
     await time_func(ctx, time, format)
     
-async def time_func(ctx: commands.Context, time: str, format: str = 'Relative'):
-    def capitalize_timezones(user_input: str) -> str:
-        timezones = [
-            "est", "edt", "cst", "cdt", "mst", "mdt", "pst", "pdt",
-            "akst", "akdt", "hst", "hdt", "utc", "gmt", "z",
-            "cet", "cest", "eet", "eest", "wet", "west"
-        ]
-        pattern = r"\b(" + "|".join(timezones) + r")\b"
-        return re.sub(pattern, lambda m: m.group(0).upper(), user_input, flags=re.IGNORECASE)
-    
-    dates = search_dates(f"at {capitalize_timezones(time)}", languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
+async def time_func(ctx: commands.Context, time: str, format: str = 'Relative'):    
+    dates = search_dates(f"at {preprocess_time(time)}", languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
     if not dates:
         return await ctx.reply("I couldn't parse that time. Please try again with a different format", ephemeral=True)
     
@@ -1325,17 +1343,18 @@ async def time_autocomplete(interaction: discord.Interaction, current: str):
 
 @commands.hybrid_command(name='remind', description='Lets you set a reminder', aliases=['reminder', 'remindme'])
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
-@app_commands.describe(time='When you want to be reminded. (Accepts natural language)', reminder_text='What you want to be reminded about')
-async def remind(ctx: commands.Context, *, time: str, reminder_text: str = ''):
+@app_commands.describe(time='When you want to be reminded. (Accepts natural language)', 
+                       reminder_text='What you want to be reminded about',
+                       where='Where you want to be reminded (DM / Channel)')
+async def remind(ctx: commands.Context, *, time: str, reminder_text: str = '', where: str = 'DM'):
     """
     *Currently in development*
     
     Lets you set a reminder!
-    Will try to send a DM, otherwise will reply in the same channel you send the command in.
     
-    Examples: !remind me to go to the store in 2 hours
+    Example: `!remind me to go to the store in 2 hours`
     """
-    async def schedule_reminder(user, set_time, sleep_time, about, reminder_text, ctx):
+    async def schedule_reminder(user, set_time, sleep_time, about, reminder_text, ctx, place):
         await asyncio.sleep(sleep_time)
         embed = discord.Embed(
             title=f"⏰ Reminder {"about " if about else 'to '}**{reminder_text}**",
@@ -1345,28 +1364,24 @@ async def remind(ctx: commands.Context, *, time: str, reminder_text: str = ''):
         
         if ctx.guild:
             embed.description += f"\nhttps://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id}"
-
-        try:
-            await user.send(embed=embed)
-        except:
+            
+        if place in ('DM', 'Both'):
+            try:
+                await user.send(embed=embed)
+                success = True
+            except discord.Forbidden:
+                success = False
+        if place in ('Channel', 'Both') or not success:
             try:
                 await ctx.reply(embed=embed)
             except:
                 await ctx.send(embed=embed)
-
-    def capitalize_timezones(user_input: str) -> str:
-        timezones = [
-            "est", "edt", "cst", "cdt", "mst", "mdt", "pst", "pdt",
-            "akst", "akdt", "hst", "hdt", "utc", "gmt", "z",
-            "cet", "cest", "eet", "eest", "wet", "west"
-        ]
-        pattern = r"\b(" + "|".join(timezones) + r")\b"
-        return re.sub(pattern, lambda m: m.group(0).upper(), user_input, flags=re.IGNORECASE)
     
-    dates = search_dates(capitalize_timezones(time), languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
+    processed_time = preprocess_time(time)
+    dates = search_dates(processed_time, languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
     added = dates is None
     if added:
-        dates = search_dates(f"at {capitalize_timezones(time)}", languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
+        dates = search_dates(f"at {processed_time}", languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
         if not dates:
             return await ctx.reply("I couldn't parse that time. Please try again with a different format", ephemeral=True)
     st, dt = dates[0]
@@ -1374,10 +1389,13 @@ async def remind(ctx: commands.Context, *, time: str, reminder_text: str = ''):
     now = int(datetime.now().timestamp())
     delta = timestamp - now
     if delta < 1:
-        return await ctx.reply(f"<t:{timestamp}> is in the past! Please provide a future time.", ephemeral=True)
+        return await ctx.reply(f"<t:{timestamp}> is in the past!\nPlease provide a future time", ephemeral=True)
     if not reminder_text:
-        temp = time.replace(st, '') if not added else time.replace(''.join(st.split()[1:]), '')
+        temp = processed_time.replace(st, '') if not added else processed_time.replace(' '.join(st.split()[1:]), '')
         reminder_text = temp if temp else 'something'
+    place_dict = {'DM': 'in DMs', 'Channel': 'in this channel', 'Both': 'both in DMs and in this channel'}
+    if (where not in place_dict) or (not ctx.guild):
+        where = 'DM'
     reminder_text = reminder_text.strip()
     if reminder_text.lower().startswith('me '):
         reminder_text = reminder_text[3:]
@@ -1386,8 +1404,17 @@ async def remind(ctx: commands.Context, *, time: str, reminder_text: str = ''):
     about = not reminder_text.lower().startswith('to ')
     if not about:
         reminder_text = reminder_text[3:]
-    await ctx.reply(f"✅ Alright {ctx.author.mention}, I'll remind you {"about " if about else 'to '}**{reminder_text}** {get_timestamp(delta)}!")
-    asyncio.create_task(schedule_reminder(ctx.author, now, delta, about, reminder_text, ctx))
+    await ctx.reply(f"✅ Alright {ctx.author.display_name}, I'll remind you {"about " if about else 'to '}**{reminder_text}** {get_timestamp(delta)} {place_dict[where]}!")
+    asyncio.create_task(schedule_reminder(ctx.author, now, delta, about, reminder_text, ctx, where))
+
+@remind.autocomplete('where')
+async def format_autocomplete(interaction: discord.Interaction, current: str):
+    return [
+        app_commands.Choice(name=name, value=name)
+        for name in ('DM', 'Channel', 'Both')
+        if current.lower() in name.lower() and (interaction.guild is not None if name != 'DM' else True)
+    ]
+
 
 @commands.hybrid_command(name='fix_embed', aliases=['fixembed', 'fixlink'], description='Fixes and sanitizes the link you provide')
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
