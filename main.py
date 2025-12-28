@@ -1337,14 +1337,22 @@ async def remind(ctx: commands.Context, *, time: str, reminder_text: str = ''):
     """
     async def schedule_reminder(user, set_time, sleep_time, about, reminder_text, ctx):
         await asyncio.sleep(sleep_time)
-        link = f"\n-# https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id}" if ctx.guild else ""
+        embed = discord.Embed(
+            title=f"⏰ Reminder {"about " if about else 'to '}**{reminder_text}**",
+            description=f"This reminder was set on <t:{set_time}>",
+            color=0xffd000
+        )
+        
+        if ctx.guild:
+            embed.description += f"\nhttps://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id}"
+
         try:
-            await user.send(f"## ⏰ Reminder {"about " if about else 'to '}**{reminder_text}**\nThis reminder was set on <t:{set_time}>{link}")
+            await user.send(embed=embed)
         except:
             try:
-                await ctx.reply(f"## ⏰ Reminder for {ctx.author.mention}\nOn <t:{set_time}> you asked me to remind you {"about " if about else 'to '}**{reminder_text}**")
+                await ctx.reply(embed=embed)
             except:
-                await ctx.send(f"## ⏰ Reminder for {ctx.author.mention}\nOn <t:{set_time}> you asked me to remind you {"about " if about else 'to '}**{reminder_text}**{link}")
+                await ctx.send(embed=embed)
 
     def capitalize_timezones(user_input: str) -> str:
         timezones = [
@@ -1379,7 +1387,7 @@ async def remind(ctx: commands.Context, *, time: str, reminder_text: str = ''):
     if not about:
         reminder_text = reminder_text[3:]
     await ctx.reply(f"✅ Alright {ctx.author.mention}, I'll remind you {"about " if about else 'to '}**{reminder_text}** {get_timestamp(delta)}!")
-    await schedule_reminder(ctx.author, now, delta, about, reminder_text, ctx)
+    asyncio.create_task(schedule_reminder(ctx.author, now, delta, about, reminder_text, ctx))
 
 @commands.hybrid_command(name='fix_embed', aliases=['fixembed', 'fixlink'], description='Fixes and sanitizes the link you provide')
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
