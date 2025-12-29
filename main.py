@@ -1587,7 +1587,7 @@ async def remind(ctx: commands.Context, *, time: str, reminder_text: str = '', w
 @remind.error
 async def remind_error(interaction: discord.Interaction, error):
     if isinstance(error, commands.MissingRequiredArgument):
-        return await interaction.reply("Please provide the time for the reminder! You didn't tell me when to remind you!!\nYou can also tell me what to remind you about but that's optional", ephemeral=True)
+        return await interaction.reply("You didn't tell me when to remind you!! I accept natural language so you can say \"in 2 hours\" or \"at 5pm GMT+1\"\nYou can also tell me what to remind you about but that's optional")
 
 @remind.autocomplete('where')
 async def format_autocomplete(interaction: discord.Interaction, current: str):
@@ -1632,19 +1632,23 @@ async def reminder_cancel(ctx: commands.Context, number: int):
     sorted_reminder_ids = sorted(reminders.keys(), key=lambda x: reminders[x]['remind_at'])
     reminder_id = sorted_reminder_ids[number - 1]
 
-    view = ConfirmView(ctx.author, timeout=60)
+    view = ConfirmView(ctx.author, timeout=60, type_=(f"✅ Alright {ctx.author.display_name}, reminder **#{number}** was cancelled", "❌ Cancellation aborted"))
     remind_at = f"<t:{reminders[reminder_id]['remind_at']}:R>"
     prefix = "about " if reminders[reminder_id]["is_about"] else "to "
     text = f"{reminders[reminder_id]['reminder_text']}"[:100] + ('...' if len(reminders[reminder_id]['reminder_text']) > 100 else '')
 
-    message = await ctx.reply(f"Are you sure you want to cancel your reminder {prefix}**{text}** due {remind_at}?", view=view, ephemeral=True)
+    message = await ctx.reply(f"Are you sure you want to cancel your reminder {prefix}**{text}** due {remind_at}?", view=view)
     view.message = message
     await view.wait()
     if not view.value:
-        return await ctx.reply("❌ Cancellation aborted.", ephemeral=True)
+        return
     
     remove_reminder(user_id, reminder_id)
-    await ctx.reply(f"✅ Successfully cancelled reminder **#{number}**")
+
+@reminder_cancel.error
+async def reminder_cancel_error(interaction: discord.Interaction, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        return await interaction.reply("Please provide the number of the reminder you want to cancel! You can see the numbers in `!reminders`")
 
 @reminder_cancel.autocomplete('number')
 async def reminder_cancel_autocomplete(interaction: discord.Interaction, current: str):
@@ -1870,7 +1874,7 @@ async def landmine_clear(ctx: commands.Context):
 
     if channel_id in landmines_data:
         d = landmines_data[channel_id]
-        view = ConfirmView(ctx.author, timeout=60.0)
+        view = ConfirmView(ctx.author, timeout=60.0, type_=(f"✅ Cleared landmines for this channel", "Landmines stay intact"))
         c = d['chance']
         message = await ctx.reply(
             f"Do you want to remove all landmines in this channel?\n({d['amount']} left, {float_to_str(c) if not c.is_integer() else int(c)}% chance, {d['timeout']}s timeout)",
@@ -1882,13 +1886,6 @@ async def landmine_clear(ctx: commands.Context):
         if view.value is True:
             del server_settings[guild_id]['landmines'][channel_id]
             save_settings()
-            await ctx.reply(f"✅ Cleared landmines for this channel")
-
-        elif view.value is False:
-            return await ctx.reply(f"Landmines stay intact")
-
-        else:
-            return await ctx.reply("Timed out. No changes made")
 
     else:
         return await ctx.reply("There are no landmines in this channel yet! Use `/landmine` to set some")
@@ -5193,7 +5190,7 @@ class PaginationView(discord.ui.View):
 
 
 class ConfirmView(discord.ui.View):
-    def __init__(self, author: discord.User, allowed_to_cancel=None, item=None, amount: int = 1, type_="", timeout: float = 30, stock=None):
+    def __init__(self, author: discord.User, allowed_to_cancel=None, item=None, amount: int = 1, type_: str | tuple = "", timeout: float = 30, stock=None):
         super().__init__(timeout=timeout)
         self.value = None  # This will store the user's decision
         self.author = author
@@ -5237,6 +5234,8 @@ class ConfirmView(discord.ui.View):
         if self.item or self.stock:
             # await interaction.response.edit_message(content=f"{self.author.display_name} confirmed the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
             await interaction.response.edit_message(content=f"{self.type_} confirmed", view=None)
+        elif self.type_ and isinstance(self.type_, tuple):
+            await interaction.response.edit_message(content=self.type_[0], view=None)
         else:
             await interaction.response.edit_message(view=None)
         self.stop()  # Stop waiting for more button clicks
@@ -5248,6 +5247,8 @@ class ConfirmView(discord.ui.View):
         if self.item or self.stock:
             # await interaction.response.edit_message(content=f"{self.author.display_name} canceled the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
             await interaction.response.edit_message(content=f"{self.type_} canceled", view=None)
+        elif self.type_ and isinstance(self.type_, tuple):
+            await interaction.response.edit_message(content=self.type_[1], view=None)
         else:
             await interaction.response.edit_message(view=None)
         self.stop()
@@ -6933,7 +6934,7 @@ class Lore(commands.Cog):
 
         try:
             # Create confirmation view
-            view = ConfirmView(ctx.author, timeout=120.0)
+            view = ConfirmView(ctx.author, timeout=120.0, type_=(f"✅ Successfully removed all lore entries of **{user.display_name}**", "Lore removal aborted"))
             message = await ctx.send(
                 f"Are you sure you want to remove ALL lore entries{f" of {user.display_name}" if user != ctx.author else ''}?",
                 view=view
@@ -6946,10 +6947,6 @@ class Lore(commands.Cog):
                 lore_data.setdefault(guild_id, {})[user_id] = []
                 del lore_data[guild_id][user_id]
                 save_lore()
-                await ctx.reply(f"✅ Successfully removed all lore entries of **{user.display_name}**.")
-
-            elif view.value is False:
-                await ctx.reply(f"Lore removal aborted.")
 
         except Exception as e:
             print(traceback.format_exc())
