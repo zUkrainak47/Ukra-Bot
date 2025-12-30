@@ -1597,7 +1597,7 @@ async def format_autocomplete(interaction: discord.Interaction, current: str):
         if current.lower() in name.lower() and (interaction.guild is not None if name != 'DM' else True)
     ]
 
-@commands.hybrid_command(name='reminders', description='Lists your active reminders')
+@commands.hybrid_command(name='reminders', description='(!rl) Lists your active reminders', aliases=['reminder_list', 'rl'])
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 async def reminders(ctx: commands.Context):
     """
@@ -1616,7 +1616,7 @@ async def reminders(ctx: commands.Context):
         embed.description += f"[#{reminder_id}]({data['message_link']}) - {prefix}**{text}** - {remind_at}\n"
     await ctx.reply(embed=embed)
 
-@commands.hybrid_command(name='reminder_cancel', aliases=['rc'], description='Lets you cancel a specific reminder by its number')
+@commands.hybrid_command(name='reminder_cancel', aliases=['rc'], description='(!rc) Lets you cancel a specific reminder by its number')
 @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
 @app_commands.describe(number='The number of the reminder to cancel (see !reminders)')
 async def reminder_cancel(ctx: commands.Context, number: int):
@@ -5344,7 +5344,7 @@ cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
                'lore_compact': 'lore2', 'lore_remove': 'rmlore', 'lore_random': 'rl', 'server_lore': 'sl',
                'custom_inspect': 'ci', 'custom_list': 'cl', 'custom_list_dm': 'cldm', 'custom_remove': 'crm',
                'custom_role_inspect': 'cri', 'custom_role_list': 'crl', 'custom_role_remove': 'crr', 'check_cd': 'ccd',
-               'toggle_channel_currency': 'tcc', 'toggle_channel_embed_fix': 'tcef',
+               'toggle_channel_currency': 'tcc', 'toggle_channel_embed_fix': 'tcef', 'reminder_cancel': 'rc', 'reminders': 'rl'
                }
 
 
