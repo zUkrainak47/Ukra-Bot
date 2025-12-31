@@ -10402,6 +10402,7 @@ class AREDL(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.aredl_data = {}
+        self.cached_levels = {}
         self.load_aredl_data.start()
 
     def cog_unload(self):
@@ -10412,7 +10413,14 @@ class AREDL(commands.Cog):
         async with aiohttp.ClientSession() as session:
             async with session.get('https://api.aredl.net/v2/api/aredl/levels') as resp:
                 if resp.status == 200:
-                    return await [level for level in resp.json() if not level['legacy']]
+                    return [level for level in await resp.json() if not level['legacy']]
+
+    async def fetch_level_data(self, level_id):
+        """Fetch the latest AREDL data from the API"""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f'https://api.aredl.net/v2/api/aredl/levels/{level_id}') as resp:
+                if resp.status == 200:
+                    return await resp.json()    
 
     @tasks.loop(minutes=5)
     async def load_aredl_data(self):
@@ -10427,17 +10435,17 @@ class AREDL(commands.Cog):
     async def aredl(self, ctx):
         """AREDL related commands"""
         
-    @aredl.command(name="size")
+    @aredl.command(name="size", aliases=['count'])
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     async def size(self, ctx):
         """Returns the total number of Extreme Demons"""
-        await ctx.reply(f'There are currently *{len(self.aredl_data)}* Extreme Demons')
+        await ctx.reply(f'There are currently *{len(self.aredl_data)} Extreme Demons*')
 
-    @aredl.command(name="list")
+    @aredl.command(name="list", aliases=['top'])
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     async def top(self, ctx, start: int = 1):
         """View the AREDL list"""
-        start = min(max(start, 1), len(self.aredl_data))
+        start = min(max(start, 1), len(self.aredl_data)-9)
         await ctx.reply('\n'.join([f"{entry['position']}. **{entry['name']}**"for entry in self.aredl_data[start-1:start+9]]))
     
     @top.error
@@ -10445,14 +10453,42 @@ class AREDL(commands.Cog):
         if isinstance(error, commands.BadArgument):
             await ctx.reply('\n'.join([f"{entry['position']}. **{entry['name']}**"for entry in self.aredl_data[:10]]))
 
+    def verify_publish(self, data):
+        publisher = data['publisher']['global_name']
+        verifier = data['verifications'][0]['submitted_by']['global_name']
+        link = data['verifications'][0]['video_url']
+        if publisher == verifier:
+            return f"Published and [verified by {publisher}]({link})"
+        else:
+            return f"Published by {publisher}, [verified by {verifier}]({link})"
+
     @aredl.command(name="level", aliases=['lvl'])
     @app_commands.describe(level_name="The name of the level")
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     async def level(self, ctx, *, level_name: str):
         """View a specific level in the AREDL list"""
+        found = None
+        if level_name.isdigit():
+            level_position = int(level_name)
+        else:
+            level_position = None
         for entry in self.aredl_data:
-            if entry['name'].lower() == level_name.lower():
-                return await ctx.reply(f"## {r"\#"}{entry['position']} - {entry['name']}\n{entry['description'] if entry['description'] else ''}")
+            if entry['name'].strip().lower() == level_name.strip().lower():
+                if entry['name'] in self.cached_levels:
+                    level_data = self.cached_levels[entry['name']]
+                else:
+                    level_data = await self.fetch_level_data(entry['level_id'])
+                    self.cached_levels[entry['name']] = level_data
+                return await ctx.reply(f"## {r"\#"}{entry['position']} - [{entry['name']}](<https://aredl.net/list/{entry['level_id']}>)\n{self.verify_publish(level_data)}\n\n{entry['description'] if entry['description'] else ''}")
+            if level_position and entry['position'] == level_position:
+                found = entry   
+        if found:
+            if found['name'] in self.cached_levels:
+                level_data = self.cached_levels[found['name']]
+            else:
+                level_data = await self.fetch_level_data(found['level_id'])
+                self.cached_levels[found['name']] = level_data
+            return await ctx.reply(f"## {r"\#"}{found['position']} - [{found['name']}](<https://aredl.net/list/{found['level_id']}>)\n{self.verify_publish(level_data)}\n\n{found['description'] if found['description'] else ''}")
         await ctx.reply("Level not found.")
     
     @level.autocomplete('level_name')
