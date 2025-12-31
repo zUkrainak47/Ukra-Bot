@@ -1068,7 +1068,16 @@ async def on_ready():
         await restart_all_reminders()
 
         global all_bot_commands
-        all_bot_commands = sorted([_.name for _ in client.commands])
+        # Build list of all commands including subcommands with qualified names
+        all_commands_list = []
+        for cmd in client.commands:
+            if isinstance(cmd, commands.Group):
+                # all_commands_list.append(cmd.name)
+                for subcmd in cmd.commands:
+                    all_commands_list.append(subcmd.qualified_name)
+            else:
+                all_commands_list.append(cmd.name)
+        all_bot_commands = sorted(all_commands_list)
         client.add_view(DeleteMessageView())  # Registers persistent view
 
         bot_ready.set()
@@ -2672,11 +2681,14 @@ async def check_cd(ctx: commands.Context, command_name: str):
 @check_cd.autocomplete("command_name")
 async def check_cd_autocomplete(ctx, current: str):
     choices = [
-        app_commands.Choice(name=f"{cmd_name} ({cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name, value=cmd_name)
+        app_commands.Choice(
+            name=f"{cmd_name} ({cmd_aliases[cmd_name.split()[0]]})" if cmd_name.split()[0] in cmd_aliases else cmd_name,
+            value=cmd_name)
         for cmd_name in all_bot_commands
-        if current.lower() in cmd_name.lower() or current.lower() in cmd_aliases.get(cmd_name, '') and cmd_name not in no_help_commands
+        if (current.lower() in cmd_name.lower() or current.lower() in cmd_aliases.get(cmd_name.split()[0], ''))
+           and cmd_name.split()[0] not in no_help_commands
     ]
-    return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+    return choices[:25]
 
 
 @check_cd.error
@@ -5362,343 +5374,224 @@ cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
                }
 
 
+# --- 1. The View ---
 class HelpView(discord.ui.View):
-
-    # Add filtered_mapping and categories to the parameters
     def __init__(self, help_command, filtered_mapping, categories, ctx, items_per_page=6, initial_category="No Category", timeout=120.0):
         super().__init__(timeout=timeout)
         self.help_command = help_command
-        # Store the pre-filtered mapping and categories directly
         self.filtered_mapping = filtered_mapping
         self.categories = categories
         self.ctx = ctx
         self.items_per_page = items_per_page
         self.current_page = 1
-        # Ensure initial_category is valid based on passed categories
-        self.current_category = initial_category if initial_category in self.categories else (self.categories[0] if self.categories else "No Category")
+        self.current_category = initial_category if initial_category in categories else (categories[0] if categories else "No Category")
         self.message = None
+        self._setup_dropdown()
 
-        # No need for the filtering loop here anymore
+    def _setup_dropdown(self):
+        """Add the category dropdown as the first item."""
+        if not self.categories:
+            return
+        options = [discord.SelectOption(label=cat, value=cat, default=(cat == self.current_category)) for cat in self.categories]
+        select = discord.ui.Select(placeholder="Select a category...", options=options, row=0)
+        select.callback = self._on_category_select
+        self.add_item(select)
+        self.category_select = select
 
-        # Create and add components
-        self._add_components()
+    async def _on_category_select(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        new_cat = interaction.data['values'][0]
+        if new_cat != self.current_category:
+            self.current_category = new_cat
+            self.current_page = 1
+            for opt in self.category_select.options:
+                opt.default = (opt.value == new_cat)
+            await self._update(interaction)
 
-    # Rest of the HelpView class remains the same...
-    # (Methods like _add_components, get_commands_for_category, total_pages, etc.
-    # will now correctly use self.filtered_mapping and self.categories)
+    def _total_pages(self):
+        cmds = self.filtered_mapping.get(self.current_category, [])
+        return max(1, math.ceil(len(cmds) / self.items_per_page))
 
-    def _add_components(self):
-        # --- Dropdown ---
-        # Now uses self.categories directly
-        select_options = [
-            discord.SelectOption(label=cat_name, value=cat_name, default=(cat_name == self.current_category))
-            for cat_name in self.categories # Already filtered/derived
-        ]
-        # Ensure the current category is selectable (important if initial_category was invalid and reset)
-        if not any(opt.default for opt in select_options) and self.current_category in self.categories:
-            for opt in select_options:
-                if opt.value == self.current_category:
-                    opt.default = True
-                    break
-
-        if select_options: # Only add dropdown if there are categories
-            self.category_select = discord.ui.Select(
-                placeholder="Select a category...",
-                options=select_options,
-                custom_id="help_category_select",
-                row=0
-            )
-            self.category_select.callback = self.select_callback
-            self.add_item(self.category_select)
-        else:
-            self.category_select = None # No categories to select
-
-        # --- Buttons (no changes needed here) ---
-        self.first_page_button = discord.ui.Button(label="|<", style=discord.ButtonStyle.green, row=1, custom_id="help_first")
-        self.first_page_button.callback = self.first_page_callback
-        self.add_item(self.first_page_button)
-
-        self.prev_button = discord.ui.Button(label="<", style=discord.ButtonStyle.primary, row=1, custom_id="help_prev")
-        self.prev_button.callback = self.prev_page_callback
-        self.add_item(self.prev_button)
-
-        self.next_button = discord.ui.Button(label=">", style=discord.ButtonStyle.primary, row=1, custom_id="help_next")
-        self.next_button.callback = self.next_page_callback
-        self.add_item(self.next_button)
-
-        self.last_page_button = discord.ui.Button(label=">|", style=discord.ButtonStyle.green, row=1, custom_id="help_last")
-        self.last_page_button.callback = self.last_page_callback
-        self.add_item(self.last_page_button)
-
-        self.update_buttons() # Update state initially
-
-    def get_commands_for_category(self, category_name):
-        return self.filtered_mapping.get(category_name, [])
-
-    def total_pages(self):
-        commands = self.get_commands_for_category(self.current_category)
-        if not commands:
-            return 1 # Need at least one page even if empty
-        return math.ceil(len(commands) / self.items_per_page)
-
-    def get_current_page_commands(self):
-        commands = self.get_commands_for_category(self.current_category)
-        if not commands:
-            return []
-        start_index = (self.current_page - 1) * self.items_per_page
-        end_index = start_index + self.items_per_page
-        return commands[start_index:end_index]
-
-    def update_buttons(self):
-        total = self.total_pages()
-        self.first_page_button.disabled = self.current_page == 1
-        self.prev_button.disabled = self.current_page == 1
-        self.next_button.disabled = self.current_page == total
-        self.last_page_button.disabled = self.current_page == total
-
-        # Disable pagination if only one page
-        if total <= 1:
-            self.first_page_button.disabled = True
-            self.prev_button.disabled = True
-            self.next_button.disabled = True
-            self.last_page_button.disabled = True
+    def _get_page_commands(self):
+        cmds = self.filtered_mapping.get(self.current_category, [])
+        start = (self.current_page - 1) * self.items_per_page
+        return cmds[start:start + self.items_per_page]
 
     async def create_embed(self):
-        embed = discord.Embed(
-            title=f"Help - {self.current_category}",
-            color=0xffd000
-        )
-        embed.set_footer(text=f"Page {self.current_page} / {self.total_pages()}")
-
-        commands_on_page = self.get_current_page_commands()
-
+        embed = discord.Embed(title=f"Help - {self.current_category}", color=0xffd000)
+        embed.set_footer(text=f"Page {self.current_page} / {self._total_pages()}")
+        
+        commands_on_page = self._get_page_commands()
         if not commands_on_page:
             embed.description = "No commands found in this category."
-        else:
-            description_lines = []
-            for command in commands_on_page:
-                # signature = self.help_command.get_command_signature(command)
-                # Try to get short_doc, fallback to help, then to "No description"
-                desc = command.short_doc or command.help or "No description provided."
-                # Use the first line of the help doc if short_doc is missing but help exists
-                if not command.short_doc and command.help:
-                    desc = desc.split('\n', 1)[0]
-                if command.name in only_prefix:
-                    cmd_called = command.name if command.name not in cmd_aliases else f"{cmd_aliases[command.name]} ({command.name})"
-                    signature_display = f"`!{cmd_called}`"
-                # elif isinstance(command, commands.HybridCommand):
-                #     signature_display = f"`{self.ctx.prefix}{command.name}`"
-                # elif isinstance(command, app_commands.Command):
-                #     signature_display = f"`/{command.name}`"
+            return embed
+
+        lines = []
+        is_slash = self.ctx.interaction is not None
+        prefix = "/" if is_slash else (self.ctx.prefix or "!")
+        
+        for cmd in commands_on_page:
+            desc = cmd.short_doc or (cmd.help.split('\n', 1)[0] if cmd.help else "No description provided.")
+            
+            if cmd.name in only_prefix:
+                # Prefix-only commands always use "!"
+                if is_slash:
+                    sig = f"`!{cmd.name}`"
                 else:
-                    signature_display = f"`{self.ctx.prefix}{command.name if self.ctx.prefix == '/' else command.name if command.name not in cmd_aliases else f"{cmd_aliases[command.name]} ({command.name})"}`"
-
-                # Use signature from get_command_signature for args formatting
-                # We replace the command name part to use our custom display above
-                # args_part = signature.replace(f"{prefix_to_show}{command.qualified_name}", "").strip()
-                description_lines.append(f"**{signature_display}**\n{desc}")
-
-            embed.description = "\n\n".join(description_lines)
-
+                    name = f"{cmd_aliases[cmd.name]} ({cmd.name})" if cmd.name in cmd_aliases else cmd.name
+                    sig = f"`!{name}`"
+            else:
+                # Hybrid/slash commands
+                if is_slash:
+                    sig = f"`/{cmd.qualified_name}`"
+                else:
+                    name = f"{cmd_aliases[cmd.name]} ({cmd.qualified_name})" if cmd.name in cmd_aliases else cmd.qualified_name
+                    sig = f"`{prefix}{name}`"
+            lines.append(f"**{sig}**\n{desc}")
+        
+        embed.description = "\n\n".join(lines)
         return embed
 
-    async def update_view(self, interaction: discord.Interaction):  # Keep interaction for deferring in callbacks
-        # print(f"Update view called. Current Category={self.current_category}, Page={self.current_page}")
-        self.update_buttons()
-        # print("Buttons updated.")
-        embed = await self.create_embed()
-        # print(f"Embed created for {self.current_category}, Page {self.current_page}.")
-
-        # Use the stored self.message object for editing
+    async def _update(self, interaction):
+        total = self._total_pages()
+        self.first_page.disabled = self.prev_page.disabled = (self.current_page <= 1)
+        self.next_page.disabled = self.last_page.disabled = (self.current_page >= total)
         if self.message:
             try:
-                # print("Trying self.message.edit")
-                await self.message.edit(embed=embed, view=self)  # Use self.message.edit
-                # print("Message edited via self.message.edit.")
-            except discord.NotFound:
-                print("HelpView: self.message not found for editing (maybe deleted?).")
+                await self.message.edit(embed=await self.create_embed(), view=self)
+            except:
                 self.stop()
-            except discord.HTTPException as e:
-                print(f"HelpView: Failed to edit self.message: {e}")
-                # Consider stopping self.stop() depending on error
-            except Exception as e:  # Catch broader errors
-                print(f"HelpView: Unexpected error during self.message.edit: {e}")
-        else:
-            print("HelpView: self.message is None, cannot edit.")
-            # Attempt fallback using interaction if needed, though less ideal
-            # try:
-            #     await interaction.response.edit_message(embed=embed, view=self)
-            # except: pass # Handle fallback error
 
-        # print('end of try-except block')
-
-    async def select_callback(self, interaction: discord.Interaction):
-        # Acknowledge interaction IMMEDIATELY
-        # print(f"Select callback triggered for {interaction.data['values'][0]}")
+    @discord.ui.button(label="|<", style=discord.ButtonStyle.green, row=1)
+    async def first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-
-        # Update internal state FIRST
-        new_category = interaction.data['values'][0]
-        if new_category == self.current_category:
-            return  # No change, do nothing further
-
-        self.current_category = new_category
-        self.current_page = 1  # Reset to page 1 for new category
-
-        # Update the visual state of the dropdown for future opens
-        if self.category_select:
-            for option in self.category_select.options:
-                option.default = (option.value == self.current_category)
-
-        # Now update the message content based on the new state
-        # print(f"State updated: Category={self.current_category}, Page={self.current_page}")
-        await self.update_view(interaction)
-        # print("Select callback finished.")
-
-    async def first_page_callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        if self.current_page == 1:
-            return
         self.current_page = 1
-        await self.update_view(interaction)
+        await self._update(interaction)
 
-    async def prev_page_callback(self, interaction: discord.Interaction):
+    @discord.ui.button(label="<", style=discord.ButtonStyle.primary, row=1)
+    async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        if self.current_page == 1:
-            return
-        self.current_page -= 1
-        await self.update_view(interaction)
+        if self.current_page > 1:
+            self.current_page -= 1
+        await self._update(interaction)
 
-    async def next_page_callback(self, interaction: discord.Interaction):
+    @discord.ui.button(label=">", style=discord.ButtonStyle.primary, row=1)
+    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
+        if self.current_page < self._total_pages():
+            self.current_page += 1
+        await self._update(interaction)
 
-        if self.current_page == self.total_pages():
-             return
-        self.current_page += 1
-        await self.update_view(interaction)
-
-    async def last_page_callback(self, interaction: discord.Interaction):
+    @discord.ui.button(label=">|", style=discord.ButtonStyle.green, row=1)
+    async def last_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        total = self.total_pages()
-        if self.current_page == total:
-            return
-        self.current_page = total
-        await self.update_view(interaction)
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.ctx.author.id:
-            await interaction.response.send_message("This isn't your help menu!", ephemeral=True)
-            return False
-        return True
+        self.current_page = self._total_pages()
+        await self._update(interaction)
 
     async def on_timeout(self):
         if self.message:
+            for item in self.children:
+                item.disabled = True
             try:
-                # Disable all components on timeout
-                for item in self.children:
-                    item.disabled = True
                 await self.message.edit(view=self)
-            except discord.NotFound:
-                pass # Message might have been deleted
-            except discord.HTTPException as e:
-                print(f"Failed to edit help message on timeout: {e}")
-        self.stop()
+            except:
+                pass
 
-
+# --- 2. The Help Command ---
 class MyHelpCommand(commands.HelpCommand):
-    # Make sure destination is the channel where command was invoked
+    def __init__(self, **options):
+        super().__init__(**options)
+        self.sort_order_map = {'dig': 1, 'mine': 2, 'work': 3, 'fish': 4, 'e': 5, 'marry': 6}
+
     def get_destination(self):
         return self.context.channel
 
-    # Override send_bot_help for the main view
+    async def _send(self, content=None, embed=None, view=None):
+        """Helper to send via interaction followup or channel."""
+        if self.context.interaction:
+            return await self.context.interaction.followup.send(content=content, embed=embed, view=view)
+        return await self.get_destination().send(content=content, embed=embed, view=view)
+
+    def _make_title(self, cmd):
+        """Helper to generate display title for a command."""
+        sig = self.get_command_signature(cmd)
+        if cmd.name not in only_prefix:
+            return sig.replace('*', r'\*')
+        return '!' + sig.split(" ", 1)[-1] if " " in sig else '!' + cmd.name
+
     async def send_bot_help(self, mapping):
-        # Filter commands asynchronously HERE
         filtered_mapping = {}
         categories = []
 
-        def custom_command_sort_key(command):
-            if command.name in sort_order_map:
-                return 0, sort_order_map[command.name]
-            else:
-                return 1, command.name
+        def sort_key(cmd):
+            return self.sort_order_map.get(cmd.name, 999), cmd.name
 
         for cog, cmds in mapping.items():
-            filtered_cmds = [cmd for cmd in await self.filter_commands(cmds, sort=True) if cmd.name not in no_help_commands]
-            sort_order_map = {
-                'dig': 1,
-                'mine': 2,
-                'work': 3,
-                'fish': 4,
-                'e': 5,
-                'marry': 6
-            }
+            filtered_cmds = await self.filter_commands(cmds, sort=True)
+            
+            # Flatten groups: add subcommands, skip parent
+            flattened = []
+            for cmd in filtered_cmds:
+                if isinstance(cmd, commands.Group):
+                    flattened.extend(await self.filter_commands(cmd.commands, sort=True))
+                else:
+                    flattened.append(cmd)
+            
+            # Filter exclusions and sort
+            filtered_cmds = [c for c in flattened if c.name not in no_help_commands]
+            filtered_cmds.sort(key=sort_key)
 
-            filtered_cmds = sorted(filtered_cmds, key=custom_command_sort_key)
-            if filtered_cmds:  # Only add if there are commands left after filtering
-                category_name = cog.qualified_name if cog else "No Category"
-                filtered_mapping[category_name] = filtered_cmds
-                if category_name not in categories:
-                    categories.append(category_name)
-        # Sort categories after collecting them
-        categories.sort(key=lambda x: (x != "Currency", x != "No Category", x))  # Puts Currency/No Category first
+            if filtered_cmds:
+                cat_name = cog.qualified_name if cog else "No Category"
+                filtered_mapping[cat_name] = filtered_cmds
+                if cat_name not in categories:
+                    categories.append(cat_name)
 
-        # Determine initial category based on the *filtered* results
-        initial_cat = "No Category"
-        if "No Category" not in filtered_mapping and categories:  # If "No Category" is empty or doesn't exist, pick the first available category
-            initial_cat = categories[0]
-        elif "No Category" not in categories and categories:  # Fallback if "No Category" somehow wasn't added but others exist
-            initial_cat = categories[0]
+        categories.sort(key=lambda x: (x != "Currency", x != "No Category", x == "AREDL", x))
 
-        # Now create the view, passing the ALREADY filtered data
-        # Ensure there's data to pass before creating the view
         if not filtered_mapping:
-            if self.context.interaction:
-                await self.context.interaction.followup.send("No commands available.")
-            else:
-                await self.get_destination().send("No commands available.")
-            return
+            return await self._send(content="No commands available.")
 
-        view = HelpView(
-            help_command=self,
-            filtered_mapping=filtered_mapping,  # Pass the filtered map
-            categories=categories,  # Pass the derived categories
-            ctx=self.context,
-            initial_category=initial_cat
-        )
+        initial_cat = categories[0] if categories else "No Category"
+        view = HelpView(self, filtered_mapping, categories, self.context, initial_category=initial_cat)
+        view.message = await self._send(embed=await view.create_embed(), view=view)
 
-        # Create initial embed using the view's method
-        embed = await view.create_embed()
-        if self.context.interaction:
-            message = await self.context.interaction.followup.send(embed=embed, view=view)
-        else:
-            destination = self.get_destination()
-            message = await destination.send(embed=embed, view=view)
-        view.message = message  # <-- Ensure this line is present and correct
-
-    # Optional: Override help for specific commands/cogs if needed
     async def send_command_help(self, command):
-        title_ = self.get_command_signature(command).replace('*', r'\*') if command.name not in only_prefix else '!' + self.get_command_signature(command)[1:]
-        embed = discord.Embed(title=title_ if len(title_) <= 256 else f'/{command.name}',
-                              description=command.help or "No description provided.",
-                              color=0xffd000)
-        if self.context.interaction:
-            await self.context.interaction.followup.send(embed=embed)
+        title = self._make_title(command)
+        embed = discord.Embed(
+            title=title if len(title) <= 256 else f'/{command.name}',
+            description=command.help or "No description provided.",
+            color=0xffd000
+        )
+        if command.aliases:
+            embed.add_field(name="Aliases", value=", ".join(command.aliases), inline=False)
+        await self._send(embed=embed)
+
+    async def send_group_help(self, group):
+        title = self._make_title(group)
+        embed = discord.Embed(
+            title=title if len(title) <= 256 else f'/{group.qualified_name}',
+            description=group.help or "No description provided.",
+            color=0xffd000
+        )
+        filtered = await self.filter_commands(group.commands, sort=True)
+        if filtered:
+            for cmd in filtered:
+                embed.add_field(name=f"{cmd.name} {cmd.signature}", value=cmd.short_doc or "No description provided.", inline=False)
         else:
-            await self.get_destination().send(embed=embed)
+            embed.add_field(name="Error", value="No accessible subcommands found.")
+        await self._send(embed=embed)
 
     async def command_not_found(self, string):
-        msg = f"Command `{string}` not found."
-        if self.context.interaction:
-            await self.context.interaction.followup.send(msg) # Or maybe ephemeral=True
-        else:
-            await self.get_destination().send(msg)
+        await self._send(content=f"Command `{string}` not found.")
 
     async def subcommand_not_found(self, command, string):
-        if isinstance(command, commands.Group) and len(command.all_commands) > 0:
-            return f"Subcommand `{string}` not found for command `{command.qualified_name}`."
-        return f"Command `{command.qualified_name}` has no subcommand named `{string}`."
-
-
+        if isinstance(command, commands.Group) and command.all_commands:
+            msg = f"Subcommand `{string}` not found for command `{command.qualified_name}`."
+        else:
+            msg = f"Command `{command.qualified_name}` has no subcommand named `{string}`."
+        await self._send(content=msg)
+                    
 async def confirm_item(reply_func, author: discord.User, item: Item, amount=1, additional_context=[], additional_msg='', interaction=None):
     """Sends a confirmation message with buttons and waits for the user's response."""
     # if item.real_name in ['rigged_potion']:
@@ -7087,12 +6980,13 @@ class Currency(commands.Cog):
     async def help_autocomplete(self, ctx, current: str):
         choices = [
             app_commands.Choice(
-                name=f"{cmd_name} ({cmd_aliases[cmd_name]})" if cmd_name in cmd_aliases else cmd_name,
+                name=f"{cmd_name} ({cmd_aliases[cmd_name.split()[0]]})" if cmd_name.split()[0] in cmd_aliases else cmd_name,
                 value=cmd_name)
             for cmd_name in all_bot_commands
-            if current.lower() in cmd_name.lower() or current.lower() in cmd_aliases.get(cmd_name, '') and cmd_name not in no_help_commands
+            if (current.lower() in cmd_name.lower() or current.lower() in cmd_aliases.get(cmd_name.split()[0], ''))
+               and cmd_name.split()[0] not in no_help_commands
         ]
-        return choices[:25]  # Discord supports a maximum of 25 autocomplete choices
+        return choices[:25]
 
     async def get_user(self, id_: int, ctx=None) -> discord.User | discord.Member | None:
         # 1. Try guild member cache (has roles, nick, etc.)
@@ -10502,6 +10396,69 @@ class Marriage(commands.Cog):
         )
         await pagination_view.send_embed()
 
+class AREDL(commands.Cog):
+    """Commands related to the All Rated Extreme Demon List (AREDL)"""
+    
+    def __init__(self, bot):
+        self.bot = bot
+        self.aredl_data = {}
+        self.load_aredl_data.start()
+
+    def cog_unload(self):
+        self.load_aredl_data.cancel()  # Stop task when cog is unloaded
+
+    async def fetch_aredl_data(self):
+        """Fetch the latest AREDL data from the API"""
+        async with aiohttp.ClientSession() as session:
+            async with session.get('https://api.aredl.net/v2/api/aredl/levels') as resp:
+                if resp.status == 200:
+                    return await [level for level in resp.json() if not level['legacy']]
+
+    @tasks.loop(minutes=5)
+    async def load_aredl_data(self):
+        self.aredl_data = await self.fetch_aredl_data()
+        
+    @load_aredl_data.before_loop
+    async def before_load_aredl_data(self):
+        await self.bot.wait_until_ready()
+
+    @commands.hybrid_group(name="aredl")
+    @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+    async def aredl(self, ctx):
+        """AREDL related commands"""
+        
+    @aredl.command(name="size")
+    @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+    async def size(self, ctx):
+        """Returns the total number of Extreme Demons"""
+        await ctx.reply(f'There are currently *{len(self.aredl_data)}* Extreme Demons')
+
+    @aredl.command(name="list")
+    @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+    async def top(self, ctx, start: int = 1):
+        """View the AREDL list"""
+        start = min(max(start, 1), len(self.aredl_data))
+        await ctx.reply('\n'.join([f"{entry['position']}. **{entry['name']}**"for entry in self.aredl_data[start-1:start+9]]))
+    
+    @top.error
+    async def top_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            await ctx.reply('\n'.join([f"{entry['position']}. **{entry['name']}**"for entry in self.aredl_data[:10]]))
+
+    @aredl.command(name="level", aliases=['lvl'])
+    @app_commands.describe(level_name="The name of the level")
+    @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+    async def level(self, ctx, *, level_name: str):
+        """View a specific level in the AREDL list"""
+        for entry in self.aredl_data:
+            if entry['name'].lower() == level_name.lower():
+                return await ctx.reply(f"## {r"\#"}{entry['position']} - {entry['name']}\n{entry['description'] if entry['description'] else ''}")
+        await ctx.reply("Level not found.")
+    
+    @level.autocomplete('level_name')
+    async def level_autocomplete(self, interaction: discord.Interaction, current: str):
+        suggestions = [(f"#{entry['position']} - {entry['name']}", entry['name']) for entry in self.aredl_data if current.lower() in entry['name'].lower() or current in f"#{entry['position']}"][:25]
+        return [app_commands.Choice(name=suggestion[0], value=suggestion[1]) for suggestion in suggestions]
 
 async def setup():
     await client.add_cog(Currency(client))
@@ -10509,6 +10466,7 @@ async def setup():
     await client.add_cog(Marriage(client))
     await client.add_cog(CustomCommands(client))
     await client.add_cog(Reminders(client))
+    await client.add_cog(AREDL(client))
 
 
 def log_shutdown():
