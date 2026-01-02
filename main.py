@@ -1850,7 +1850,7 @@ async def landmine(ctx: commands.Context, trigger_chance: str = '1', amount: int
             return await ctx.reply("You can have landmines in a maximum of 10 channels at a time")
 
         if channel_id in landmines_data:
-            view = ConfirmView(ctx.author, timeout=60.0)
+            view = ConfirmView(ctx.author, timeout=60.0, type_=(f"**{amount} Landmine{'s' if amount != 1 else ''}** for this channel {'have' if amount != 1 else 'has'} been set\n**{float_to_str(chance) if not chance.is_integer() else int(chance)}%** to detonate on each message\n**{timeout_duration}s** timeout on detonation", "Landmines stay intact"))
             message = await ctx.reply(
                 f"There are already landmines set in this channel. Do you want to override them?",
                 view=view
@@ -1858,19 +1858,11 @@ async def landmine(ctx: commands.Context, trigger_chance: str = '1', amount: int
             view.message = message
             await view.wait()
 
-            if view.value is True:
-                pass
-
-            elif view.value is False:
-                return await ctx.reply(f"Landmines stay intact")
-
-            else:
-                return await ctx.reply("Timed out. No changes made")
+            if view.value is False or view.value is None:
+                return 
 
         landmines_data[channel_id] = {'amount': amount, 'chance': chance, 'timeout': timeout_duration}
         save_settings()
-
-        return await ctx.reply(f"**{amount} Landmine{'s' if amount != 1 else ''}** for this channel {'have' if amount != 1 else 'has'} been set\n**{float_to_str(chance) if not chance.is_integer() else int(chance)}%** to detonate on each message\n**{timeout_duration}s** timeout on detonation")
 
     except ValueError:
         await ctx.reply(f"Can't convert {trigger_chance} to float. Try again", ephemeral=True, delete_after=10)
@@ -5216,7 +5208,7 @@ class PaginationView(discord.ui.View):
 
 
 class ConfirmView(discord.ui.View):
-    def __init__(self, author: discord.User, allowed_to_cancel=None, item=None, amount: int = 1, type_: str | tuple = "", timeout: float = 30, stock=None):
+    def __init__(self, author: discord.User, allowed_to_cancel=None, item=None, amount: int = 1, type_: str | tuple[str, str] = "", timeout: float = 30, stock=None):
         super().__init__(timeout=timeout)
         self.value = None  # This will store the user's decision
         self.author = author
@@ -5354,7 +5346,7 @@ class LottoView(discord.ui.View):
                     '### Current lottery:\n'
                     f'- **{self.misc+1}** participant{'s' if self.misc+1 != 1 else ''}\n'
                     f'- **{(self.misc+1) * self.payout:,}** {coin} in pool\n'
-                    f'- Participation price: {self.entrance_price} {coin}\n'
+                    f'- Participation price: {self.entrance_price:,} {coin}\n'
                     f'- Ends <t:{get_daily_reset_timestamp()}:R>\n', view=self)
             except Exception as e:
                 print("Failed to update the message on timeout:", e)
@@ -10404,6 +10396,26 @@ class AREDL(commands.Cog):
         self.aredl_data = {}
         self.cached_levels = {}
         self.load_aredl_data.start()
+        self.level_aliases = {
+            "ts2": "Thinking Space II",
+            "tsii": "Thinking Space II",
+            "ts": "Thinking Space",
+            "aod": "Abyss of Darkness",
+            "slh": "Slaughterhouse",
+            "eitw": "Eyes in the Water",
+            "swi": "Sonic Wave Infinity",
+            "sw": "Sonic Wave",
+            "swr": "Sonic Wave Rebirth",
+            "tg": "The Golden",
+            "bb": "Bloodbath",
+            "vw": "Void Wave",
+            "ffg": "FISH FISH GODMODE",
+            "bx20": "BBBBBBBBBBBBBBBBBBBB",
+            "osp2": "Ouroboros Startpos 2",
+            "yata": "Yatagarasu",
+            "boj": "Blade of Justice",
+            "spl": "super probably level"
+        }
 
     def cog_unload(self):
         self.load_aredl_data.cancel()  # Stop task when cog is unloaded
@@ -10430,11 +10442,20 @@ class AREDL(commands.Cog):
     async def before_load_aredl_data(self):
         await self.bot.wait_until_ready()
 
-    @commands.hybrid_group(name="aredl")
+    @commands.hybrid_group(name="aredl", invoke_without_command=True)
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
-    async def aredl(self, ctx):
-        """AREDL related commands"""
-        
+    async def aredl(self, ctx, *, level_name: str = None):
+        """
+        AREDL related commands:
+        - `/aredl list ` - View the Demonlist
+        - `/aredl level` - View a specific level
+        - `/aredl size ` - To see the current total number of Extreme Demons
+        """
+        if level_name:
+            await ctx.invoke(self.level, level_name=level_name)
+        elif ctx.invoked_subcommand is None:
+            await ctx.invoke(self.top)
+
     @aredl.command(name="size", aliases=['count'])
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     async def size(self, ctx):
@@ -10467,6 +10488,8 @@ class AREDL(commands.Cog):
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     async def level(self, ctx, *, level_name: str):
         """View a specific level in the AREDL list"""
+        if level_name in self.level_aliases:
+            level_name = self.level_aliases[level_name]
         found = None
         if level_name.isdigit():
             level_position = int(level_name)
