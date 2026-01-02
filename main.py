@@ -5509,9 +5509,17 @@ class MyHelpCommand(commands.HelpCommand):
 
     async def _send(self, content=None, embed=None, view=None):
         """Helper to send via interaction followup or channel."""
+        kwargs = {}
+        if content is not None:
+            kwargs['content'] = content
+        if embed is not None:
+            kwargs['embed'] = embed
+        if view is not None:
+            kwargs['view'] = view
+        
         if self.context.interaction:
-            return await self.context.interaction.followup.send(content=content, embed=embed, view=view)
-        return await self.get_destination().send(content=content, embed=embed, view=view)
+            return await self.context.interaction.followup.send(**kwargs)
+        return await self.get_destination().send(**kwargs)
 
     def _make_title(self, cmd):
         """Helper to generate display title for a command."""
@@ -5564,8 +5572,8 @@ class MyHelpCommand(commands.HelpCommand):
             description=command.help or "No description provided.",
             color=0xffd000
         )
-        if command.aliases:
-            embed.add_field(name="Aliases", value=", ".join(command.aliases), inline=False)
+        # if command.aliases:
+        #     embed.add_field(name="Aliases", value=", ".join(command.aliases), inline=False)
         await self._send(embed=embed)
 
     async def send_group_help(self, group):
