@@ -1562,12 +1562,18 @@ class Reminders(commands.Cog):
                     temp = processed_time.replace(st, '') 
             else:
                 processed_time.replace(st[3:], '')
+            
+            # If replying to a message and no text provided, use the message link
+            if ctx.message.reference and not temp:
+                ref = ctx.message.reference
+                temp = f"https://discord.com/channels/{ref.guild_id or '@me'}/{ref.channel_id}/{ref.message_id}"
                 
             reminder_text = temp if temp else 'something'
             
         place_dict = {'DM': 'in DMs', 'Channel': 'in this channel', 'Both': 'both in DMs and in this channel'}
         if (where not in place_dict) or (not ctx.guild):
             where = 'DM'
+
         reminder_text = reminder_text.strip()
         if reminder_text.lower().startswith('me '):
             reminder_text = reminder_text[3:]
@@ -1591,7 +1597,7 @@ class Reminders(commands.Cog):
             "destination": where,
             "channel_id": ctx.channel.id,
             "guild_id": ctx.guild.id if ctx.guild else None,
-            "message_link": f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id}" if ctx.guild else f"https://discord.com/channels/@me/{ctx.channel.id}/{ctx.message.id}"
+            "message_link": f"https://discord.com/channels/{ctx.guild.id if ctx.guild else '@me'}/{ctx.channel.id}/{ctx.message.id}"
         }
         
         active_reminders.setdefault(user_id, {})[reminder_id] = reminder_data
@@ -1860,6 +1866,9 @@ async def landmine(ctx: commands.Context, trigger_chance: str = '1', amount: int
 
             if view.value is False or view.value is None:
                 return 
+        
+        else:
+            await ctx.reply(f"**{amount} Landmine{'s' if amount != 1 else ''}** for this channel {'have' if amount != 1 else 'has'} been set\n**{float_to_str(chance) if not chance.is_integer() else int(chance)}%** to detonate on each message\n**{timeout_duration}s** timeout on detonation")
 
         landmines_data[channel_id] = {'amount': amount, 'chance': chance, 'timeout': timeout_duration}
         save_settings()
@@ -10447,9 +10456,10 @@ class AREDL(commands.Cog):
     async def aredl(self, ctx, *, level_name: str = None):
         """
         AREDL related commands:
-        - `/aredl list ` - View the Demonlist
-        - `/aredl level` - View a specific level
-        - `/aredl size ` - To see the current total number of Extreme Demons
+        - `/aredl list` - View the Demonlist
+        - `/aredl level` - View a specific Extreme Demon
+        - `/aredl random` - View a random Extreme Demon
+        - `/aredl size` - See how many Extreme Demons there are
         """
         if level_name:
             await ctx.invoke(self.level, level_name=level_name)
@@ -10459,13 +10469,13 @@ class AREDL(commands.Cog):
     @aredl.command(name="size", aliases=['count'])
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     async def size(self, ctx):
-        """Returns the total number of Extreme Demons"""
+        """See how many Extreme Demons there are"""
         await ctx.reply(f'There are currently *{len(self.aredl_data)} Extreme Demons*')
 
     @aredl.command(name="list", aliases=['top'])
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     async def top(self, ctx, start: int = 1):
-        """View the AREDL list"""
+        """View the Demonlist"""
         start = min(max(start, 1), len(self.aredl_data)-9)
         await ctx.reply('\n'.join([f"{entry['position']}. **{entry['name']}**"for entry in self.aredl_data[start-1:start+9]]))
     
@@ -10487,7 +10497,7 @@ class AREDL(commands.Cog):
     @app_commands.describe(level_name="The name of the level")
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     async def level(self, ctx, *, level_name: str):
-        """View a specific level in the AREDL list"""
+        """View a specific Extreme Demon"""
         if level_name in self.level_aliases:
             level_name = self.level_aliases[level_name]
         found = None
@@ -10518,6 +10528,20 @@ class AREDL(commands.Cog):
     async def level_autocomplete(self, interaction: discord.Interaction, current: str):
         suggestions = [(f"#{entry['position']} - {entry['name']}", entry['name']) for entry in self.aredl_data if current.lower() in entry['name'].lower() or current in f"#{entry['position']}"][:25]
         return [app_commands.Choice(name=suggestion[0], value=suggestion[1]) for suggestion in suggestions]
+
+    @aredl.command(name='random')
+    @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+    @app_commands.describe(highest_rank="The highest rank to include", lowest_rank="The lowest rank to include")
+    async def random(self, ctx, highest_rank: int|None = None, lowest_rank: int|None = None):
+        """View a random Extreme Demon"""
+        if lowest_rank is None or lowest_rank > len(self.aredl_data) or lowest_rank < 1:
+            lowest_rank = len(self.aredl_data)
+        if highest_rank is None or highest_rank < 1 or highest_rank > len(self.aredl_data):
+            highest_rank = 1
+        if highest_rank > lowest_rank:
+            highest_rank, lowest_rank = lowest_rank, highest_rank
+        level_name = random.choice(self.aredl_data[highest_rank-1:lowest_rank])['name']
+        await ctx.invoke(self.level, level_name=level_name)
 
 async def setup():
     await client.add_cog(Currency(client))
