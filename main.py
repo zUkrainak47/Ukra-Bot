@@ -457,8 +457,7 @@ async def is_admin(ctx):
         return True
 
     if ctx.guild:
-        if ctx.author.guild_permissions.administrator:
-            return True
+        return ctx.author.guild_permissions.administrator
 
     return False
 
@@ -3310,6 +3309,20 @@ class CustomCommands(commands.Cog):
         if remove_required_victim_role and required_victim_role is None:
             return await ctx.reply(f"So you set `remove_required_victim_role` to True and didn't set a `required_victim_role`.\nWell done. Now try again {LO}")
 
+        # Check role hierarchy - users can only set roles below their top role
+        author_top_role = ctx.author.top_role
+        role_params = {
+            'role': role,
+            'backfire_role': backfire_role,
+            'required_victim_role': required_victim_role,
+            'required_castor_role': required_castor_role,
+            'prohibited_victim_role': prohibited_victim_role,
+            'prohibited_castor_role': prohibited_castor_role
+        }
+        for param_name, role_value in role_params.items():
+            if role_value is not None and role_value >= author_top_role:
+                return await ctx.reply(f"You cannot use `@{role_value.name}` for the `{param_name}` parameter because it is at or above your top role (`@{author_top_role.name}`).\nYou can only select roles below your highest role.")
+
         # Check for conflicts
         if client.get_command(command_name):
             await ctx.reply(f"`{command_name}` conflicts with a built-in bot command!")
@@ -5523,6 +5536,13 @@ class MyHelpCommand(commands.HelpCommand):
 
     def _make_title(self, cmd):
         """Helper to generate display title for a command."""
+        is_slash = self.context.interaction is not None
+        
+        if is_slash:
+            # Slash command: just show the command name, no aliases
+            return f"/{cmd.qualified_name}"
+        
+        # Prefix command: use full signature with aliases
         sig = self.get_command_signature(cmd)
         if cmd.name not in only_prefix:
             return sig.replace('*', r'\*')
