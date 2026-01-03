@@ -1289,15 +1289,43 @@ def preprocess_time(user_input: str) -> str:
     user_input = re.sub(r'\b(\d{1,2})\s*am\b', r'\1:00 am', user_input, flags=re.IGNORECASE)  # 5am -> 5:00 am  (dateparser quirk)
     
     time_patterns = [
-        (r'(\d+)s\b', r'\1 seconds'),
-        (r'(\d+)m\b', r'\1 minutes'),
-        (r'(\d+)h\b', r'\1 hours'),
-        (r'(\d+)d\b', r'\1 days'),
-        (r'(\d+)w\b', r'\1 weeks'),
-        (r'(\d+)y\b', r'\1 years'),
+        (r'(\d+(?:\.\d+)?)\s*s\b', r'\1 seconds'),
+        (r'(\d+(?:\.\d+)?)\s*m\b', r'\1 minutes'),
+        (r'(\d+(?:\.\d+)?)\s*h\b', r'\1 hours'),
+        (r'(\d+(?:\.\d+)?)\s*d\b', r'\1 days'),
+        (r'(\d+(?:\.\d+)?)\s*w\b', r'\1 weeks'),
+        (r'(\d+(?:\.\d+)?)\s*y\b', r'\1 years'),
     ]
     for pattern, replacement in time_patterns:
         user_input = re.sub(pattern, replacement, user_input, flags=re.IGNORECASE)
+    
+    # Convert decimal time values to minutes for perfect precision
+    # (dateparser doesn't understand "1.5 hours" but handles "90 minutes" perfectly)
+    unit_to_minutes = {
+        'years': 525600,   # 365 days
+        'weeks': 10080,    # 7 days
+        'days': 1440,      # 24 hours
+        'hours': 60,
+        'minutes': 1,
+        'seconds': 1/60,
+    }
+    
+    def convert_decimal_to_minutes(match):
+        value = float(match.group(1))  # Captures the full decimal number (e.g., "1.5")
+        unit = match.group(2).lower().rstrip('s') + 's'  # Normalize to plural form
+        if unit == 'secondss':
+            unit = 'seconds'
+        
+        total_minutes = value * unit_to_minutes.get(unit, 1)
+        
+        # Use seconds if less than 1 minute, otherwise use minutes
+        if total_minutes < 1:
+            return f"{int(round(total_minutes * 60))} seconds"
+        return f"{int(round(total_minutes))} minutes"
+    
+    # Match decimal numbers followed by time units
+    decimal_time_pattern = r'(\d+\.\d+)\s*(years?|weeks?|days?|hours?|minutes?|seconds?)'
+    user_input = re.sub(decimal_time_pattern, convert_decimal_to_minutes, user_input, flags=re.IGNORECASE)
     
     # Capitalize timezone abbreviations
     timezones = [
@@ -1921,7 +1949,7 @@ async def landmine_error(ctx, error):
         await ctx.reply("Only Moderators can use this command, silly")
 
 
-@client.hybrid_command(name="landmine_check")
+@client.hybrid_command(name="landmine_check", aliases=['landmines'])
 @app_commands.allowed_installs(guilds=True, users=False)
 async def landmine_check(ctx: commands.Context):
     """
