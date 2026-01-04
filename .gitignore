@@ -1,8 +1,12 @@
 /.idea/
 /dev/
+/beta/
 /dev_backup/
+/beta_backup/
 /auto/
+/beta_auto/
 /stocks/
 .env
 martingale.py
 split_lore.py
+beta.py

@@ -54,6 +54,10 @@ bot_ready = asyncio.Event()
 reason = f'{bot_name} is starting up'
 
 load_dotenv()
+dev_folder = 'dev'
+Path.mkdir(dev_folder, exist_ok=True)
+backup_folder = 'dev_backup'
+auto_backup_folder = 'auto'
 TOKEN = os.getenv('DISCORD_TOKEN')
 FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
 ALPHAVANTAGE_API_KEY = os.getenv('ALPHAVANTAGE_API_KEY')
@@ -194,7 +198,7 @@ def should_have_titles(num: int) -> list:
     return ts
 
 
-SETTINGS_FILE = Path("dev", "server_settings.json")
+SETTINGS_FILE = Path(dev_folder, "server_settings.json")
 if os.path.exists(SETTINGS_FILE):
     with open(SETTINGS_FILE, "r") as file:
         server_settings = json.load(file)
@@ -202,7 +206,7 @@ else:
     server_settings = {}
 
 
-CURRENCY_FILE = Path("dev", "global_currency.json")
+CURRENCY_FILE = Path(dev_folder, "global_currency.json")
 if os.path.exists(CURRENCY_FILE):
     with open(CURRENCY_FILE, "r") as file:
         global_currency = json.load(file)
@@ -210,7 +214,7 @@ else:
     global_currency = {}
 
 
-PROFILES_FILE = Path("dev", "global_profiles.json")
+PROFILES_FILE = Path(dev_folder, "global_profiles.json")
 if os.path.exists(PROFILES_FILE):
     with open(PROFILES_FILE, "r") as file:
         global_profiles = json.load(file)
@@ -218,7 +222,7 @@ else:
     global_profiles = {}
 
 
-DAILY_FILE = Path("dev", "daily_streaks.json")
+DAILY_FILE = Path(dev_folder, "daily_streaks.json")
 if os.path.exists(DAILY_FILE):
     with open(DAILY_FILE, "r") as file:
         daily_streaks = json.load(file)
@@ -226,7 +230,7 @@ else:
     daily_streaks = {}
 
 
-LAST_USED_FILE = Path("dev", "last_used.json")
+LAST_USED_FILE = Path(dev_folder, "last_used.json")
 if os.path.exists(LAST_USED_FILE):
     with open(LAST_USED_FILE, "r") as file:
         data = json.load(file)
@@ -235,7 +239,7 @@ else:
     user_last_used = {}
 
 
-LAST_USED_W_FILE = Path("dev", "last_used_w.json")
+LAST_USED_W_FILE = Path(dev_folder, "last_used_w.json")
 if os.path.exists(LAST_USED_W_FILE):
     with open(LAST_USED_W_FILE, "r") as file:
         data = json.load(file)
@@ -244,7 +248,7 @@ else:
     user_last_used_w = {}
 
 
-DISTRIBUTED_CUSTOM_ROLES = Path("dev", "distributed_custom_roles.json")
+DISTRIBUTED_CUSTOM_ROLES = Path(dev_folder, "distributed_custom_roles.json")
 if os.path.exists(DISTRIBUTED_CUSTOM_ROLES):
     with open(DISTRIBUTED_CUSTOM_ROLES, "r") as file:
         distributed_custom_roles = json.load(file)
@@ -270,7 +274,7 @@ def check_custom_role_cooldown(guild_id, command_name, user_id, cooldown_seconds
     return 0
 
 
-ACTIVE_GIVEAWAYS = Path("dev", "active_giveaways.json")
+ACTIVE_GIVEAWAYS = Path(dev_folder, "active_giveaways.json")
 if os.path.exists(ACTIVE_GIVEAWAYS):
     with open(ACTIVE_GIVEAWAYS, "r") as file:
         active_giveaways = json.load(file)
@@ -278,7 +282,7 @@ else:
     active_giveaways = {}
 
 _reminder_tasks: dict[str, asyncio.Task] = {}  # Track tasks for cancellation
-ACTIVE_REMINDERS = Path("dev", "active_reminders.json")
+ACTIVE_REMINDERS = Path(dev_folder, "active_reminders.json")
 if os.path.exists(ACTIVE_REMINDERS):
     with open(ACTIVE_REMINDERS, "r") as file:
         active_reminders = json.load(file)
@@ -286,7 +290,7 @@ else:
     active_reminders = {}
 
 
-IGNORED_EMBED_CHANNELS = Path("dev", "ignored_embed_channels.json")
+IGNORED_EMBED_CHANNELS = Path(dev_folder, "ignored_embed_channels.json")
 if os.path.exists(IGNORED_EMBED_CHANNELS):
     with open(IGNORED_EMBED_CHANNELS, "r") as file:
         ignored_embed_channels = json.load(file)
@@ -294,7 +298,7 @@ else:
     ignored_embed_channels = []
 
 
-IGNORED_CHANNELS = Path("dev", "ignored_channels.json")
+IGNORED_CHANNELS = Path(dev_folder, "ignored_channels.json")
 if os.path.exists(IGNORED_CHANNELS):
     with open(IGNORED_CHANNELS, "r") as file:
         ignored_channels = json.load(file)
@@ -302,7 +306,7 @@ else:
     ignored_channels = []
 
 
-IGNORED_USERS = Path("dev", "ignored_users.json")
+IGNORED_USERS = Path(dev_folder, "ignored_users.json")
 if os.path.exists(IGNORED_USERS):
     with open(IGNORED_USERS, "r") as file:
         ignored_users = json.load(file)
@@ -310,7 +314,7 @@ else:
     ignored_users = []
 
 
-IGNORED_EMBED_USERS = Path("dev", "ignored_embed_users.json")
+IGNORED_EMBED_USERS = Path(dev_folder, "ignored_embed_users.json")
 if os.path.exists(IGNORED_EMBED_USERS):
     with open(IGNORED_EMBED_USERS, "r") as file:
         ignored_embed_users = json.load(file)
@@ -318,7 +322,7 @@ else:
     ignored_embed_users = []
 
 
-LOTTERY_FILE = Path("dev", "active_lottery.json")
+LOTTERY_FILE = Path(dev_folder, "active_lottery.json")
 if os.path.exists(LOTTERY_FILE):
     with open(LOTTERY_FILE, "r") as file:
         active_lottery = json.load(file)
@@ -326,7 +330,7 @@ else:
     active_lottery = {datetime.now().date().isoformat(): []}
 
 
-LOAN_FILE = Path("dev", "active_loans.json")
+LOAN_FILE = Path(dev_folder, "active_loans.json")
 if os.path.exists(LOAN_FILE):
     with open(LOAN_FILE, "r") as file:
         active_loans = json.load(file)
@@ -334,7 +338,7 @@ else:
     active_loans = {}
 
 
-LORE_FILE = Path("dev", "lore.json")
+LORE_FILE = Path(dev_folder, "lore.json")
 if os.path.exists(LORE_FILE):
     with open(LORE_FILE, "r") as file:
         lore_data = json.load(file)
@@ -485,9 +489,9 @@ async def custom_perms(ctx):
     return False
 
 
-def perform_backup(reason='no reason given', destination='auto'):
+def perform_backup(reason='no reason given', destination=auto_backup_folder):
     save_everything()
-    source = "dev"
+    source = dev_folder
 
     if not os.path.exists(source):
         raise FileNotFoundError(f"The source directory '{source}' does not exist.")
@@ -908,10 +912,11 @@ async def on_ready():
         #         print(s, client.get_guild(int(s)).name)
         global log_channel, up_channel, rare_channel, lottery_channel
         global bot_down, reason, distributed_custom_roles
-        log_channel = client.get_guild(696311992973131796).get_channel(1423717046927097911)
-        up_channel = client.get_guild(696311992973131796).get_channel(1339183561135357972)
-        rare_channel = client.get_guild(696311992973131796).get_channel(1326971578830819464)
-        lottery_channel = client.get_guild(696311992973131796).get_channel(1326949510336872458)
+        
+        log_channel = client.get_guild(official_server_id).get_channel(1423717046927097911)
+        up_channel = client.get_guild(official_server_id).get_channel(1339183561135357972)
+        rare_channel = client.get_guild(official_server_id).get_channel(1326971578830819464)
+        lottery_channel = client.get_guild(official_server_id).get_channel(1326949510336872458)
         print("Verifying settings for all guilds...")
         for guild in client.guilds:
             make_sure_server_settings_exist(str(guild.id))
@@ -2211,7 +2216,7 @@ async def backup(ctx):
         # await ctx.send("You can't use this command, silly", ephemeral=True)
         return
     else:
-        perform_backup('backup command call', destination='dev_backup')
+        perform_backup('backup command call', destination=backup_folder)
         await ctx.send("Backup complete", ephemeral=True)
 
 
@@ -2239,7 +2244,7 @@ async def comp(ctx, user: discord.User = None):
     guild_id = '' if not ctx.guild else str(ctx.guild.id)
     make_sure_server_settings_exist(guild_id)
     if 'Compliment' in server_settings.get(guild_id).get('allowed_commands'):
-        with open(Path('dev', 'compliments.txt')) as fp:
+        with open(Path(dev_folder, 'compliments.txt')) as fp:
             compliment_ = random.choice(fp.readlines())
             fp.close()
         if user:
@@ -2476,7 +2481,7 @@ async def settings(ctx):
 # CHATGPT 5 HIGH, SECTION I DIDNT BOTHER CHECKING THIS!! #
 ##########################################################
 
-COOLDOWN_FILE = Path("dev", "cooldowns.json")
+COOLDOWN_FILE = Path(dev_folder, "cooldowns.json")
 cooldown_state: typing.Dict[str, typing.Dict[str, typing.Dict[str, float]]] = {}  # guild -> command -> user -> next_allowed
 
 
@@ -2494,7 +2499,7 @@ load_cooldown_state()
 
 
 def save_cooldown_state():
-    tmp = Path("dev", "cooldowns.json.tmp")
+    tmp = Path(dev_folder, "cooldowns.json.tmp")
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(cooldown_state, f, ensure_ascii=False, indent=2)
     os.replace(tmp, COOLDOWN_FILE)
@@ -9682,7 +9687,7 @@ class Currency(commands.Cog):
                 else f"\n*Join the official {bot_name} Server for the results!* (`!server`)"
             if ctx.author.id not in active_lottery[today_date]:
                 if make_sure_user_has_currency(guild_id, author_id) < entrance_price:
-                    await ctx.reply(f"You don't own {entrance_price} {coin} {sadgebusiness}")
+                    await ctx.reply(f"You don't own {entrance_price:,} {coin} {sadgebusiness}")
                     return False
                 remove_coins_from_user(guild_id, author_id, entrance_price)
                 active_lottery[today_date].append(ctx.author.id)
@@ -10619,9 +10624,9 @@ def log_shutdown():
     decimals = f'{(run_time % 1):.3f}'
     msg = f'Runtime: {to_hours}:{str(decimals)[2:]}, end at {time.strftime('%Y-%m-%d %H:%M:%S')}'
     print(msg)
-    with open(Path('dev', 'shutdowns.txt'), 'r') as f:
+    with open(Path(dev_folder, 'shutdowns.txt'), 'r') as f:
         save = f.read()
-    with open(Path('dev', 'shutdowns.txt'), 'w') as f:
+    with open(Path(dev_folder, 'shutdowns.txt'), 'w') as f:
         f.write(msg + '\n' + save)
         f.close()
 
