@@ -3262,17 +3262,19 @@ class CustomCommands(commands.Cog):
     async def custom_alias(self, ctx, command: str, alias: str):
         """
         Creates or updates an alias for a command in this server
-
-        Examples:
-        - `/custom_alias command:landmine_clear alias:lc` - now `!lc` runs `!landmine_clear`
-
         Aliases work with:
         - Built-in bot commands
         - Custom commands (created with `!custom`)
         - Custom role commands (created with `/custom_role`)
 
+        Usage: `!alias <command_name> <alias>`
+
+        Use `!cai <command/alias>` to inspect one or `!cal` to view all
+
+        Example:
+        - `/custom_alias command:landmine_clear alias:lc` - now `!lc` runs `!landmine_clear`
+
         You can add up to 100 aliases per server
-        Use `!cal` to view all aliases
 
         **Only usable by Moderators as well as users with a role called "Custom Commands Manager"**
         """
@@ -3356,7 +3358,7 @@ class CustomCommands(commands.Cog):
 
     @commands.hybrid_command(name='custom_alias_remove', description='Remove a command alias', aliases=['car'])
     @app_commands.allowed_installs(guilds=True, users=False)
-    @app_commands.describe(alias='The alias to remove')
+    @app_commands.describe(alias='!car - The alias to remove')
     @commands.check(custom_perms)
     async def custom_alias_remove(self, ctx, alias: str):
         """
@@ -3379,7 +3381,7 @@ class CustomCommands(commands.Cog):
             save_settings()
             return await ctx.reply(f"Removed alias `!{alias_name}` (was pointing to `!{target}`).")
 
-        await ctx.reply(f"Alias `!{alias_name}` doesn't exist.\nUse `/custom_alias_list` to view all aliases.")
+        await ctx.reply(f"Alias `!{alias_name}` doesn't exist.\nUse `!cal` to view all aliases.")
 
     @custom_alias_remove.error
     async def custom_alias_remove_error(self, ctx, error):
@@ -3404,7 +3406,7 @@ class CustomCommands(commands.Cog):
         ]
         return choices[:25]
 
-    @commands.hybrid_command(name='custom_alias_list', description='View all command aliases for this server', aliases=['cal'])
+    @commands.hybrid_command(name='custom_alias_list', description='!cal - View all command aliases for this server', aliases=['cal'])
     @app_commands.allowed_installs(guilds=True, users=False)
     async def custom_alias_list(self, ctx):
         """
@@ -3421,7 +3423,7 @@ class CustomCommands(commands.Cog):
             return await ctx.reply("This server doesn't have any command aliases configured yet.\nUse `/custom_alias` to add some!")
 
         # Format aliases
-        alias_list = [f"`!{alias}` → `!{target}`" for alias, target in sorted(command_aliases.items())]
+        alias_list = [f"`!{alias}` → `!{target}`" for alias, target in sorted(command_aliases.items(), key=lambda item: item[1])]
         description = "\n".join(alias_list)
 
         if len(description) > 4000:
@@ -3436,12 +3438,12 @@ class CustomCommands(commands.Cog):
         embed.set_footer(text=f"{len(command_aliases)} alias{'es' if len(command_aliases) != 1 else ''}")
         await ctx.reply(embed=embed)
 
-    @commands.hybrid_command(name='custom_alias_inspect', description='Inspect what command an alias points to', aliases=['cai'])
+    @commands.hybrid_command(name='custom_alias_inspect', description='!cai - Inspect a command or alias', aliases=['cai'])
     @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(alias='The alias to inspect')
     async def custom_alias_inspect(self, ctx, alias: str):
         """
-        Shows what command an alias points to
+        Shows what command an alias points to, or all aliases pointing to a command
         """
         if not ctx.guild:
             return await ctx.reply("Aliases can only be viewed in servers.")
@@ -3462,7 +3464,7 @@ class CustomCommands(commands.Cog):
             alias_list = ', '.join(f"`!{a}`" for a in sorted(aliases_for_command))
             return await ctx.reply(f"Aliases for `!{alias_name}`: {alias_list}")
 
-        await ctx.reply(f"`{alias_name}` is neither an alias nor a command with aliases.\nUse `/custom_alias_list` to view all aliases.")
+        await ctx.reply(f"`{alias_name}` is neither an alias nor a command with aliases.\nUse `!cal` to view all aliases.")
 
     @custom_alias_inspect.autocomplete("alias")
     async def custom_alias_inspect_autocomplete(self, ctx, current: str):
