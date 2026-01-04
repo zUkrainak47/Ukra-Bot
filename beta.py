@@ -47,18 +47,18 @@ start_timestamp = int(datetime.now().timestamp())
 # list_1 - used codes
 # num_1 - total funded giveaways
 
-bot_name = 'Ukra Bot'
+bot_name = 'Ukra Bot BETA'
 bot_down = True
 free_daily = True
 bot_ready = asyncio.Event()
 reason = f'{bot_name} is starting up'
 
 load_dotenv()
-dev_folder = 'dev'
+dev_folder = 'beta'
 os.makedirs(dev_folder, exist_ok=True)
-backup_folder = 'dev_backup'
-auto_backup_folder = 'auto'
-TOKEN = os.getenv('DISCORD_TOKEN')
+backup_folder = 'beta_backup'
+auto_backup_folder = 'beta_auto'
+TOKEN = os.getenv('BETA_TOKEN')
 FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
 ALPHAVANTAGE_API_KEY = os.getenv('ALPHAVANTAGE_API_KEY')
 TENOR_API_KEY = os.getenv('TENOR_API_KEY')
@@ -95,8 +95,8 @@ global_command_cooldowns = {  # command: (number_of_uses, seconds)
     "twodice": (1, 1),
     "slots": (1, 1),
 }
-bot_id = 1322197604297085020
-official_server_id = 696311992973131796
+bot_id = 1457151898523271200
+official_server_id = 692070633177350235
 MAX_INITIAL_RESPONSE_LENGTH = 1950
 MAX_TOTAL_RESPONSE_LENGTH = 10000
 # fetched_users = {}
@@ -913,11 +913,10 @@ async def on_ready():
         #         print(s, client.get_guild(int(s)).name)
         global log_channel, up_channel, rare_channel, lottery_channel
         global bot_down, reason, distributed_custom_roles
-        
-        log_channel = client.get_guild(official_server_id).get_channel(1423717046927097911)
-        up_channel = client.get_guild(official_server_id).get_channel(1339183561135357972)
-        rare_channel = client.get_guild(official_server_id).get_channel(1326971578830819464)
-        lottery_channel = client.get_guild(official_server_id).get_channel(1326949510336872458)
+        log_channel = client.get_guild(official_server_id).get_channel(1323084740542070897)
+        up_channel = client.get_guild(official_server_id).get_channel(1323084740542070897)
+        rare_channel = client.get_guild(official_server_id).get_channel(1323084740542070897)
+        lottery_channel = client.get_guild(official_server_id).get_channel(1323084740542070897)
         print("Verifying settings for all guilds...")
         for guild in client.guilds:
             make_sure_server_settings_exist(str(guild.id))
@@ -3265,6 +3264,7 @@ class CustomCommands(commands.Cog):
 
         Examples:
         - `/custom_alias command:landmine_clear alias:lc` - now `!lc` runs `!landmine_clear`
+        - `/custom_alias command:silence alias:s` - now `!s` runs `!silence`
 
         Aliases work with:
         - Built-in bot commands
