@@ -3423,7 +3423,7 @@ class CustomCommands(commands.Cog):
             return await ctx.reply("This server doesn't have any command aliases configured yet.\nUse `/custom_alias` to add some!")
 
         # Format aliases
-        alias_list = [f"`!{alias}` → `!{target}`" for alias, target in sorted(command_aliases.items(), key=lambda item: item[1])]
+        alias_list = [f"`!{target}` = `!{alias}`" for alias, target in sorted(command_aliases.items(), key=lambda item: item[1])]
         description = "\n".join(alias_list)
 
         if len(description) > 4000:
@@ -5698,6 +5698,13 @@ class HelpView(discord.ui.View):
         self.current_category = initial_category if initial_category in categories else (categories[0] if categories else "No Category")
         self.message = None
         self._setup_dropdown()
+        self._update_buttons()
+
+    def _update_buttons(self):
+        """Update button disabled states based on current page."""
+        total = self._total_pages()
+        self.first_page.disabled = self.prev_page.disabled = (self.current_page <= 1)
+        self.next_page.disabled = self.last_page.disabled = (self.current_page >= total)
 
     def _setup_dropdown(self):
         """Add the category dropdown as the first item."""
@@ -5764,9 +5771,7 @@ class HelpView(discord.ui.View):
         return embed
 
     async def _update(self, interaction):
-        total = self._total_pages()
-        self.first_page.disabled = self.prev_page.disabled = (self.current_page <= 1)
-        self.next_page.disabled = self.last_page.disabled = (self.current_page >= total)
+        self._update_buttons()
         if self.message:
             try:
                 await self.message.edit(embed=await self.create_embed(), view=self)
@@ -5798,6 +5803,13 @@ class HelpView(discord.ui.View):
         await interaction.response.defer()
         self.current_page = self._total_pages()
         await self._update(interaction)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Only allow the original command invoker to interact with this view."""
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your help menu!", ephemeral=True)
+            return False
+        return True
 
     async def on_timeout(self):
         if self.message:
