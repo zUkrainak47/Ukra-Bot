@@ -5065,6 +5065,7 @@ class PaginationView(discord.ui.View):
         self.searched = searched_
         self.page_size = 1 if self.author.startswith('The Lore of') else \
                          10 if 'Leaderboard' in self.title else \
+                         10 if self.author == "AREDL" else \
                          5 if (self.footer and self.footer_icon) else \
                          50 if self.author == "Custom Commands" else \
                          8
@@ -5106,6 +5107,8 @@ class PaginationView(discord.ui.View):
         self.update_buttons()
         if self.author.startswith('The Lore of') or 'Leaderboard' in self.title:
             pass
+        elif self.author == "AREDL":
+            self.update_aredl_buttons()
         elif not (self.footer and self.footer_icon):
             self.update_item_buttons()
         else:
@@ -5172,6 +5175,18 @@ class PaginationView(discord.ui.View):
             return embed
 
         # --- NEW LOGIC BRANCH ---
+
+        # AREDL list view
+        if self.author == "AREDL":
+            embed = discord.Embed(
+                title=f"AREDL - Page {self.current_page} / {self.total_pages()}",
+                color=self.color,
+                description='\n'.join([f"{entry['position']}. **{entry['name']}**" for entry in data])
+            )
+            embed.set_footer(text=f"{len(self.data)} Extreme Demons")
+            return embed
+
+        # Lore view
         if self.author.startswith('The Lore of'):
             entry = data[0] if data else {}
             page_content = entry.get('item', "No lore on this page.")
@@ -5278,6 +5293,8 @@ class PaginationView(discord.ui.View):
         self.update_buttons()
         if self.author.startswith('The Lore of') or 'Leaderboard' in self.title:
             pass
+        elif self.author == "AREDL":
+            self.update_aredl_buttons()
         elif not (self.footer and self.footer_icon):
             self.update_item_buttons()
         else:
@@ -5412,6 +5429,44 @@ class PaginationView(discord.ui.View):
 
             reset_button.callback = reset_callback
             self.add_item(reset_button)
+
+    def update_aredl_buttons(self):
+        # Remove any previously added dynamic AREDL level buttons.
+        for child in list(self.children):
+            if getattr(child, "is_aredl_button", False):
+                self.remove_item(child)
+
+        # Add a button for each level on the current page
+        count = 0
+        for entry in self.get_current_page_data():
+            level_name = entry['name']
+            level_id = entry['level_id']
+            # Truncate label if too long (Discord button labels max 80 chars)
+            label = level_name if len(level_name) <= 30 else level_name[:27] + "..."
+            button = discord.ui.Button(
+                label=label,
+                style=discord.ButtonStyle.secondary,
+                row=1 + count // 5,
+                custom_id=f'aredl_button_{count}'
+            )
+            count += 1
+            button.is_aredl_button = True
+
+            # Define the callback function with captured level data
+            async def aredl_callback(interaction: discord.Interaction, *, entry_data=entry, lvl_id=level_id):
+                # Fetch level data
+                level_data = await self.cog.fetch_level_data(lvl_id)
+                if level_data:
+                    msg = f"## {r'\#'}{entry_data['position']} - [{entry_data['name']}](<https://aredl.net/list/{lvl_id}>)\n{self.cog.verify_publish(level_data)}\n\n{entry_data['description'] if entry_data['description'] else ''}"
+                else:
+                    msg = f"## {r'\#'}{entry_data['position']} - {entry_data['name']}\nFailed to fetch level data."
+                
+                # Ephemeral for non-callers, normal for the command caller
+                is_caller = interaction.user.id == self.ctx.author.id
+                await interaction.response.send_message(msg, ephemeral=not is_caller)
+
+            button.callback = aredl_callback
+            self.add_item(button)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         # Identify which button was pressed from its custom_id
@@ -10811,15 +10866,31 @@ class AREDL(commands.Cog):
 
     @aredl.command(name="list", aliases=['top'])
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
-    async def top(self, ctx, start: int = 1):
+    @app_commands.describe(page="The page number to view")
+    async def top(self, ctx, page: int = 1):
         """View the Demonlist"""
-        start = min(max(start, 1), len(self.aredl_data)-9)
-        await ctx.reply('\n'.join([f"{entry['position']}. **{entry['name']}**"for entry in self.aredl_data[start-1:start+9]]))
+        if not self.aredl_data:
+            return await ctx.reply("AREDL data is not loaded yet, please try again in a moment.")
+        
+        # Clamp page to valid range
+        max_page = math.ceil(len(self.aredl_data) / 10)
+        page = min(max(page, 1), max_page)
+        
+        pagination_view = PaginationView(
+            data_=self.aredl_data,
+            title_="AREDL",
+            color_=0x00ff00,  # Green color
+            author_="AREDL",
+            ctx_=ctx,
+            page_=page,
+            cog_=self
+        )
+        await pagination_view.send_embed()
     
     @top.error
     async def top_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
-            await ctx.reply('\n'.join([f"{entry['position']}. **{entry['name']}**"for entry in self.aredl_data[:10]]))
+            await ctx.invoke(self.top, page=1)
 
     def verify_publish(self, data):
         publisher = data['publisher']['global_name']
