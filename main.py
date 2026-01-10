@@ -1766,77 +1766,77 @@ async def fix_embed(ctx: commands.Context, link: str):
         print(f"Error fixing embeds: {e}")
 
 
-@client.hybrid_command(name="delete_bot_message", aliases=['delbotmsg'])
-@app_commands.allowed_installs(guilds=True, users=False)
-async def delete_bot_message(ctx: commands.Context, message_id: str):
-    """Deletes a specific message sent by the bot in the current channel."""
+# @client.hybrid_command(name="delete_bot_message", aliases=['delbotmsg'])
+# @app_commands.allowed_installs(guilds=True, users=False)
+# async def delete_bot_message(ctx: commands.Context, message_id: str):
+#     """Deletes a specific message sent by the bot in the current channel."""
 
-    # --- Optional: Permission Check ---
-    # Only allow specific users (like the bot owner) to use this command
-    if ctx.author.id not in allowed_users:
-        await ctx.reply("You do not have permission to use this command.", ephemeral=True, delete_after=10)
-        # Attempt to delete the command message if possible
-        try:
-            await ctx.message.delete()
-        except (discord.Forbidden, discord.NotFound):
-            pass
-        return
-    # --- End Permission Check ---
-    try:
-        message_id = int(message_id)
-    except ValueError:
-        await ctx.reply(f"`{message_id}` is not a valid message ID. Please provide a number.", ephemeral=True)
-        return
+#     # --- Optional: Permission Check ---
+#     # Only allow specific users (like the bot owner) to use this command
+#     if ctx.author.id not in allowed_users:
+#         await ctx.reply("You do not have permission to use this command.", ephemeral=True, delete_after=10)
+#         # Attempt to delete the command message if possible
+#         try:
+#             await ctx.message.delete()
+#         except (discord.Forbidden, discord.NotFound):
+#             pass
+#         return
+#     # --- End Permission Check ---
+#     try:
+#         message_id = int(message_id)
+#     except ValueError:
+#         await ctx.reply(f"`{message_id}` is not a valid message ID. Please provide a number.", ephemeral=True)
+#         return
 
-    try:
-        # Fetch the message object using the ID from the current channel
-        message_to_delete = await ctx.channel.fetch_message(message_id)
+#     try:
+#         # Fetch the message object using the ID from the current channel
+#         message_to_delete = await ctx.channel.fetch_message(message_id)
 
-        # --- Validation ---
-        # 1. Check if the message was actually sent by the bot
-        if message_to_delete.author != client.user: # Or ctx.bot.user
-            await ctx.reply(f"I can only delete my own messages. Message `{message_id}` was sent by {message_to_delete.author.mention}.", ephemeral=True, delete_after=15)
-            return
-        # --- End Validation ---
+#         # --- Validation ---
+#         # 1. Check if the message was actually sent by the bot
+#         if message_to_delete.author != client.user: # Or ctx.bot.user
+#             await ctx.reply(f"I can only delete my own messages. Message `{message_id}` was sent by {message_to_delete.author.mention}.", ephemeral=True, delete_after=15)
+#             return
+#         # --- End Validation ---
 
-        # Delete the bot's message
-        await message_to_delete.delete()
+#         # Delete the bot's message
+#         await message_to_delete.delete()
 
-        # Send a confirmation message (optional, could be ephemeral or delete after delay)
-        await ctx.send(f"Successfully deleted my message with ID: `{message_id}`", ephemeral=True, delete_after=10) # Deletes confirmation after 10s
+#         # Send a confirmation message (optional, could be ephemeral or delete after delay)
+#         await ctx.send(f"Successfully deleted my message with ID: `{message_id}`", ephemeral=True, delete_after=10) # Deletes confirmation after 10s
 
-        # Optionally delete the user's command message as well
-        try:
-            await ctx.message.delete()
-        except (discord.Forbidden, discord.NotFound):
-            pass # Ignore if we can't delete the user's message
+#         # Optionally delete the user's command message as well
+#         try:
+#             await ctx.message.delete()
+#         except (discord.Forbidden, discord.NotFound):
+#             pass # Ignore if we can't delete the user's message
 
-    except discord.NotFound:
-        await ctx.reply(f"Could not find a message with ID `{message_id}` in this channel.", ephemeral=True, delete_after=10)
-    except discord.Forbidden:
-        # This is less likely when deleting own messages, but good to handle
-        await ctx.reply(f"I don't have permission to delete messages in this channel.", ephemeral=True, delete_after=10)
-    except discord.HTTPException as e:
-        await ctx.reply(f"Failed to delete the message due to a network issue: {e}", ephemeral=True, delete_after=10)
-    except Exception as e:
-        print(f"Error in delete_bot_message command: {e}") # Log unexpected errors
-        await ctx.reply("An unexpected error occurred while trying to delete the message.", ephemeral=True, delete_after=10)
+#     except discord.NotFound:
+#         await ctx.reply(f"Could not find a message with ID `{message_id}` in this channel.", ephemeral=True, delete_after=10)
+#     except discord.Forbidden:
+#         # This is less likely when deleting own messages, but good to handle
+#         await ctx.reply(f"I don't have permission to delete messages in this channel.", ephemeral=True, delete_after=10)
+#     except discord.HTTPException as e:
+#         await ctx.reply(f"Failed to delete the message due to a network issue: {e}", ephemeral=True, delete_after=10)
+#     except Exception as e:
+#         print(f"Error in delete_bot_message command: {e}") # Log unexpected errors
+#         await ctx.reply("An unexpected error occurred while trying to delete the message.", ephemeral=True, delete_after=10)
 
 
-@delete_bot_message.error
-async def delete_bot_message_error(ctx, error):
-    """Handles errors for the delete_bot_message command."""
-    if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.reply("Please provide the ID of the message you want me to delete.\nUsage: `!delbotmsg <message_id>`", ephemeral=True, delete_after=10)
-    elif isinstance(error, commands.BadArgument):
-        # This catches if the message_id provided wasn't a valid integer
-        await ctx.reply("Invalid Message ID. Please provide a valid integer ID.", ephemeral=True, delete_after=10)
-    # Uncomment the following if using @commands.has_permissions() check instead of allowed_users
-    # elif isinstance(error, commands.CheckFailure):
-    #     await ctx.reply("You don't have the required permissions (Manage Messages) to use this command.", ephemeral=True, delete_after=10)
-    else:
-        print(f"Unhandled error in delete_bot_message: {error}") # Log other errors
-        await ctx.reply("An unexpected error occurred.", ephemeral=True, delete_after=10)
+# @delete_bot_message.error
+# async def delete_bot_message_error(ctx, error):
+#     """Handles errors for the delete_bot_message command."""
+#     if isinstance(error, commands.MissingRequiredArgument):
+#         await ctx.reply("Please provide the ID of the message you want me to delete.\nUsage: `!delbotmsg <message_id>`", ephemeral=True, delete_after=10)
+#     elif isinstance(error, commands.BadArgument):
+#         # This catches if the message_id provided wasn't a valid integer
+#         await ctx.reply("Invalid Message ID. Please provide a valid integer ID.", ephemeral=True, delete_after=10)
+#     # Uncomment the following if using @commands.has_permissions() check instead of allowed_users
+#     # elif isinstance(error, commands.CheckFailure):
+#     #     await ctx.reply("You don't have the required permissions (Manage Messages) to use this command.", ephemeral=True, delete_after=10)
+#     else:
+#         print(f"Unhandled error in delete_bot_message: {error}") # Log other errors
+#         await ctx.reply("An unexpected error occurred.", ephemeral=True, delete_after=10)
 
 
 def float_to_str(number):
@@ -2165,7 +2165,7 @@ async def dnd(ctx, *, dice: str = ''):
             await ctx.reply("Example usage: `dnd 2d6`")
 
 
-@commands.hybrid_command(name="botafk", description="(Dev only) Toggles currency commands globally", aliases=['botdown'])
+@commands.command(name="botafk", description="(Dev only) Toggles currency commands globally", aliases=['botdown'])
 @app_commands.allowed_installs(guilds=True, users=False)
 async def botafk(ctx):
     """
@@ -2221,13 +2221,13 @@ async def backup(ctx):
         await ctx.send("Backup complete", ephemeral=True)
 
 
-@commands.check(is_dev)
-@client.command(name='ping_all')
-async def ping_all(ctx):
-    if not ctx.guild:
-        return
-    for member in ctx.guild.members:
-        await ctx.send(member.mention)
+# @commands.check(is_dev)
+# @client.command(name='ping_all')
+# async def ping_all(ctx):
+#     if not ctx.guild:
+#         return
+#     for member in ctx.guild.members:
+#         await ctx.send(member.mention)
 
 
 @commands.hybrid_command(name="compliment", description="Compliments user based on 3x100 most popular compliments")
@@ -2822,7 +2822,7 @@ async def tcc(ctx):
         await ctx.send("Currency System is disabled in your server already. This command won't do anything")
 
 
-@commands.hybrid_command(name="tuc", description="(Dev only) !tuc - Ban user from using the Currency System", aliases=['toggle_user_currency'])
+@commands.command(name="tuc", description="(Dev only) !tuc - Ban user from using the Currency System", aliases=['toggle_user_currency'])
 @app_commands.allowed_installs(guilds=True, users=False)
 async def tuc(ctx, *, target: discord.User):
     """
@@ -5071,6 +5071,7 @@ class PaginationView(discord.ui.View):
                          8
         self.current_page = page_
         self.is_loading = False
+        self._lock = asyncio.Lock()  # Prevents race conditions with rapid button clicks
 
     def total_pages(self) -> int:
         """
@@ -5439,12 +5440,11 @@ class PaginationView(discord.ui.View):
         # Add a button for each level on the current page
         count = 0
         for entry in self.get_current_page_data():
-            level_name = entry['name']
+            level_position = entry['position']
             level_id = entry['level_id']
             # Truncate label if too long (Discord button labels max 80 chars)
-            label = level_name if len(level_name) <= 30 else level_name[:27] + "..."
             button = discord.ui.Button(
-                label=label,
+                label=str(level_position),
                 style=discord.ButtonStyle.secondary,
                 row=1 + count // 5,
                 custom_id=f'aredl_button_{count}'
@@ -5481,91 +5481,104 @@ class PaginationView(discord.ui.View):
 
     @discord.ui.button(label="|<", style=discord.ButtonStyle.green, row=0, custom_id='left_full')
     async def first_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.is_loading:
+        # Try to acquire lock without waiting - if busy, tell user to wait
+        if self._lock.locked():
             await interaction.response.send_message("Please wait for the current page to load.", ephemeral=True)
             return
-        self.is_loading = True
-        try:
-            await interaction.response.defer()
-
-            for child in self.children:
-                if isinstance(child, discord.ui.Button):
-                    child.disabled = True
-            await self.message.edit(view=self)
-
-            self.current_page = 1
-            if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
-                current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-                self.footer = f'Your current title is {'not set' if not current_title else current_title}'
-            await self.update_message(self.get_current_page_data())
-        finally:
-            self.is_loading = False
+        
+        async with self._lock:
+            try:
+                await interaction.response.defer()
+                self.current_page = 1
+                if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
+                    current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+                    self.footer = f'Your current title is {"not set" if not current_title else current_title}'
+                await self.update_message(self.get_current_page_data())
+            except Exception as e:
+                print(f"Pagination update failed: {e}")
+                traceback.print_exc()
+                self.update_buttons()
+                if self.author == "AREDL":
+                    self.update_aredl_buttons()
+                try:
+                    await self.message.edit(view=self)
+                except:
+                    pass
 
     @discord.ui.button(label="<", style=discord.ButtonStyle.primary, row=0, custom_id='left')
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.is_loading:
+        if self._lock.locked():
             await interaction.response.send_message("Please wait for the current page to load.", ephemeral=True)
             return
-        self.is_loading = True
-        try:
-            await interaction.response.defer()
-
-            for child in self.children:
-                if isinstance(child, discord.ui.Button):
-                    child.disabled = True
-            await self.message.edit(view=self)
-
-            self.current_page -= 1
-            if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
-                current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-                self.footer = f'Your current title is {'not set' if not current_title else current_title}'
-            await self.update_message(self.get_current_page_data())
-        finally:
-            self.is_loading = False
+        
+        async with self._lock:
+            try:
+                await interaction.response.defer()
+                self.current_page -= 1
+                if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
+                    current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+                    self.footer = f'Your current title is {"not set" if not current_title else current_title}'
+                await self.update_message(self.get_current_page_data())
+            except Exception as e:
+                print(f"Pagination update failed: {e}")
+                traceback.print_exc()
+                self.update_buttons()
+                if self.author == "AREDL":
+                    self.update_aredl_buttons()
+                try:
+                    await self.message.edit(view=self)
+                except:
+                    pass
 
     @discord.ui.button(label=">", style=discord.ButtonStyle.primary, row=0, custom_id='right')
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.is_loading:
+        if self._lock.locked():
             await interaction.response.send_message("Please wait for the current page to load.", ephemeral=True)
             return
-        self.is_loading = True
-        try:
-            await interaction.response.defer()
-
-            for child in self.children:
-                if isinstance(child, discord.ui.Button):
-                    child.disabled = True
-            await self.message.edit(view=self)
-
-            self.current_page += 1
-            if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
-                current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-                self.footer = f'Your current title is {'not set' if not current_title else current_title}'
-            await self.update_message(self.get_current_page_data())
-        finally:
-            self.is_loading = False
+        
+        async with self._lock:
+            try:
+                await interaction.response.defer()
+                self.current_page += 1
+                if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
+                    current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+                    self.footer = f'Your current title is {"not set" if not current_title else current_title}'
+                await self.update_message(self.get_current_page_data())
+            except Exception as e:
+                print(f"Pagination update failed: {e}")
+                traceback.print_exc()
+                self.update_buttons()
+                if self.author == "AREDL":
+                    self.update_aredl_buttons()
+                try:
+                    await self.message.edit(view=self)
+                except:
+                    pass
 
     @discord.ui.button(label=">|", style=discord.ButtonStyle.green, row=0, custom_id='right_full')
     async def last_page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.is_loading:
+        if self._lock.locked():
             await interaction.response.send_message("Please wait for the current page to load.", ephemeral=True)
             return
-        self.is_loading = True
-        try:
-            await interaction.response.defer()
-
-            for child in self.children:
-                if isinstance(child, discord.ui.Button):
-                    child.disabled = True
-            await self.message.edit(view=self)
-
-            self.current_page = self.total_pages()
-            if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
-                current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
-                self.footer = f'Your current title is {'not set' if not current_title else current_title}'
-            await self.update_message(self.get_current_page_data())
-        finally:
-            self.is_loading = False
+        
+        async with self._lock:
+            try:
+                await interaction.response.defer()
+                self.current_page = self.total_pages()
+                if self.footer and self.footer_icon and 'Leaderboard' not in self.title:
+                    current_title = global_profiles.get(str(interaction.user.id), {}).get('title', "not set")
+                    self.footer = f'Your current title is {"not set" if not current_title else current_title}'
+                await self.update_message(self.get_current_page_data())
+            except Exception as e:
+                print(f"Pagination update failed: {e}")
+                traceback.print_exc()
+                self.update_buttons()
+                if self.author == "AREDL":
+                    self.update_aredl_buttons()
+                try:
+                    await self.message.edit(view=self)
+                except:
+                    pass
 
     async def on_timeout(self):
         # Disable all buttons in the view.
@@ -10170,7 +10183,7 @@ class Currency(commands.Cog):
     #     """
     #     await self.run_giveaway(ctx, admin=False)
 
-    @commands.hybrid_command(name="admin_giveaway", description="(Dev only) Starts a giveaway using coins from the !pool", aliases=['aga'])
+    @commands.command(name="admin_giveaway", description="(Dev only) Starts a giveaway using coins from the !pool", aliases=['aga'])
     @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(amount="How much you're giving away", duration="How long the giveaway will last - in 1h30m45s format")
     async def admin_giveaway(self, ctx, amount: str, duration: str):
@@ -10815,7 +10828,12 @@ class AREDL(commands.Cog):
             "osp2": "Ouroboros Startpos 2",
             "yata": "Yatagarasu",
             "boj": "Blade of Justice",
-            "spl": "super probably level"
+            "spl": "super probably level",
+            "f08": "Freedom08",
+            "abp": "A Bizzare Phantasm",
+            "aa": "Artificial Ascent",
+            "dd": "Digital Descent",
+            "blbl": "Black Blizzard"
         }
 
     def cog_unload(self):
@@ -10868,7 +10886,7 @@ class AREDL(commands.Cog):
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     @app_commands.describe(page="The page number to view")
     async def top(self, ctx, page: int = 1):
-        """View the Demonlist"""
+        """(!aredl) View the Demonlist"""
         if not self.aredl_data:
             return await ctx.reply("AREDL data is not loaded yet, please try again in a moment.")
         
@@ -10905,7 +10923,7 @@ class AREDL(commands.Cog):
     @app_commands.describe(level_name="The name of the level")
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     async def level(self, ctx, *, level_name: str):
-        """View a specific Extreme Demon"""
+        """(!aredl <level name>) View a specific Extreme Demon"""
         if level_name in self.level_aliases:
             level_name = self.level_aliases[level_name]
         found = None
