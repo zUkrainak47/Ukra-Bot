@@ -3363,9 +3363,9 @@ class CustomCommands(commands.Cog):
         ]
         return choices[:25]
 
-    @commands.hybrid_command(name='custom_alias_remove', description='Remove a command alias', aliases=['car'])
+    @commands.hybrid_command(name='custom_alias_remove', description='!car - Remove a command alias', aliases=['car'])
     @app_commands.allowed_installs(guilds=True, users=False)
-    @app_commands.describe(alias='!car - The alias to remove')
+    @app_commands.describe(alias='The alias to remove')
     @commands.check(custom_perms)
     async def custom_alias_remove(self, ctx, alias: str):
         """
@@ -11060,11 +11060,29 @@ class Fun(commands.Cog):
             # Open overlay
             overlay = Image.open(overlay_path).convert('RGBA')
             
-            # Resize overlay to match base image
-            overlay = overlay.resize(base_img.size, Image.Resampling.LANCZOS)
+            # Resize overlay based on base image aspect ratio
+            base_aspect = base_img.width / base_img.height
+            overlay_aspect = overlay.width / overlay.height
             
-            # Composite images
-            result = Image.alpha_composite(base_img, overlay)
+            if base_aspect >= overlay_aspect:
+                # Base is wider (or same) - squish overlay vertically to fit
+                overlay = overlay.resize(base_img.size, Image.Resampling.LANCZOS)
+                # Composite directly
+                result = Image.alpha_composite(base_img, overlay)
+            else:
+                # Base is taller - scale overlay to match width, anchor to bottom
+                new_overlay_width = base_img.width
+                new_overlay_height = int(overlay.height * (base_img.width / overlay.width))
+                overlay = overlay.resize((new_overlay_width, new_overlay_height), Image.Resampling.LANCZOS)
+                
+                # Create transparent canvas same size as base
+                overlay_canvas = Image.new('RGBA', base_img.size, (0, 0, 0, 0))
+                # Paste overlay at the bottom
+                paste_y = base_img.height - overlay.height
+                overlay_canvas.paste(overlay, (0, paste_y))
+                
+                # Composite
+                result = Image.alpha_composite(base_img, overlay_canvas)
             
             # Save to BytesIO
             output = io.BytesIO()
@@ -11082,13 +11100,23 @@ class Fun(commands.Cog):
         """Sparxie react an image. Attach an image, provide a URL, or reply to a message with an image"""
         await ctx.typing()
         
+        # Track if this was a reply (for response behavior)
+        replied_message = None
+        if ctx.message.reference:
+            try:
+                replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+            except Exception:
+                pass
+        
         # Get image URL
         image_url = await self._get_image_url(ctx, url)
         if not image_url:
-            # No image provided - just send the sparkle overlay by itself
+            # No image provided - just send the sparxie overlay by itself
             overlay_path = self.assets_path / self.REACTIONS['sparxie']
             if overlay_path.exists():
-                return await ctx.reply(file=discord.File(overlay_path))
+                if replied_message:
+                    return await replied_message.reply(file=discord.File(overlay_path))
+                return await ctx.send(file=discord.File(overlay_path))
             return await ctx.reply("Sparxie image not found.")
         
         # Fetch the image
@@ -11106,9 +11134,12 @@ class Fun(commands.Cog):
         if not result:
             return await ctx.reply("Failed to process the image. The image format may not be supported.")
         
-        # Send result
+        # Send result - reply to original message if it was a reply, otherwise just send
         file = discord.File(result, filename='sparxie_react.png')
-        await ctx.reply(file=file)
+        if replied_message:
+            await replied_message.reply(file=file)
+        else:
+            await ctx.send(file=file)
 
 
 async def setup():
