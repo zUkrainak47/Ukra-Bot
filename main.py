@@ -2,6 +2,7 @@
 import asyncio
 import atexit
 import datetime
+import io
 import json
 import math
 import os
@@ -19,6 +20,7 @@ from datetime import time as datetime_time
 from itertools import zip_longest
 from pathlib import Path
 import aiohttp
+from PIL import Image
 import discord
 from discord import Intents, app_commands
 from discord.ext import commands, tasks
@@ -10974,6 +10976,141 @@ class AREDL(commands.Cog):
         level_name = random.choice(self.aredl_data[highest_rank-1:lowest_rank])['name']
         await ctx.invoke(self.level, level_name=level_name)
 
+
+class Fun(commands.Cog):
+    """Commands for overlaying reaction images onto user-submitted images"""
+    
+    # Available reaction overlays (can be expanded later)
+    REACTIONS = {
+        'sparxie': 'sparxie.png',
+    }
+    
+    def __init__(self, bot):
+        self.bot = bot
+        self.assets_path = Path(dev_folder, 'assets')
+        self.max_image_size = 8 * 1024 * 1024  # 8MB limit
+        self.max_dimension = 4096  # Max width/height
+    
+    async def _fetch_image(self, url: str) -> bytes | None:
+        """Fetch image from URL using aiohttp with streaming to enforce size limit"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status != 200:
+                        return None
+                    # Check Content-Length if available (early rejection)
+                    if resp.content_length and resp.content_length > self.max_image_size:
+                        return None
+                    # Stream download with hard byte limit (protects against missing/lying Content-Length)
+                    chunks = []
+                    total_bytes = 0
+                    async for chunk in resp.content.iter_chunked(8192):
+                        total_bytes += len(chunk)
+                        if total_bytes > self.max_image_size:
+                            return None  # Abort if we exceed limit
+                        chunks.append(chunk)
+                    return b''.join(chunks)
+        except Exception:
+            return None
+    
+    async def _get_image_url(self, ctx: commands.Context, url: str = None) -> str | None:
+        """Get image URL from: 1) attachment, 2) provided URL, 3) replied message"""
+        # Check for attachment first
+        if ctx.message.attachments:
+            attachment = ctx.message.attachments[0]
+            if attachment.content_type and attachment.content_type.startswith('image/'):
+                return attachment.url
+        
+        # Check for provided URL
+        if url:
+            return url
+        
+        # Check for reply
+        if ctx.message.reference:
+            try:
+                replied_msg = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+                if replied_msg.attachments:
+                    attachment = replied_msg.attachments[0]
+                    if attachment.content_type and attachment.content_type.startswith('image/'):
+                        return attachment.url
+                # Check for embeds with images
+                if replied_msg.embeds:
+                    for embed in replied_msg.embeds:
+                        if embed.image:
+                            return embed.image.url
+                        if embed.thumbnail:
+                            return embed.thumbnail.url
+            except Exception:
+                pass
+        
+        return None
+    
+    def _overlay_image(self, base_bytes: bytes, overlay_path: Path) -> io.BytesIO | None:
+        """Overlay an image on top of the base image (runs synchronously, call via asyncio.to_thread)"""
+        try:
+            # Open base image
+            base_img = Image.open(io.BytesIO(base_bytes)).convert('RGBA')
+            
+            # Enforce dimension limits
+            if base_img.width > self.max_dimension or base_img.height > self.max_dimension:
+                ratio = min(self.max_dimension / base_img.width, self.max_dimension / base_img.height)
+                new_size = (int(base_img.width * ratio), int(base_img.height * ratio))
+                base_img = base_img.resize(new_size, Image.Resampling.LANCZOS)
+            
+            # Open overlay
+            overlay = Image.open(overlay_path).convert('RGBA')
+            
+            # Resize overlay to match base image
+            overlay = overlay.resize(base_img.size, Image.Resampling.LANCZOS)
+            
+            # Composite images
+            result = Image.alpha_composite(base_img, overlay)
+            
+            # Save to BytesIO
+            output = io.BytesIO()
+            result.save(output, format='PNG')
+            output.seek(0)
+            return output
+        except Exception as e:
+            print(f"Image overlay error: {e}")
+            return None
+    
+    @commands.hybrid_command(name='sparklereact', aliases=['sparxie'])
+    @app_commands.describe(url="URL of an image to apply the sparkle react to")
+    @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+    async def sparklereact(self, ctx: commands.Context, url: str = None):
+        """Sparxie react an image. Attach an image, provide a URL, or reply to a message with an image"""
+        await ctx.typing()
+        
+        # Get image URL
+        image_url = await self._get_image_url(ctx, url)
+        if not image_url:
+            # No image provided - just send the sparkle overlay by itself
+            overlay_path = self.assets_path / self.REACTIONS['sparxie']
+            if overlay_path.exists():
+                return await ctx.reply(file=discord.File(overlay_path))
+            return await ctx.reply("Sparxie image not found.")
+        
+        # Fetch the image
+        image_bytes = await self._fetch_image(image_url)
+        if not image_bytes:
+            return await ctx.reply("Failed to fetch the image. Make sure the URL is valid and the image isn't too large (max 8MB).")
+        
+        # Get overlay path
+        overlay_path = self.assets_path / self.REACTIONS['sparxie']
+        if not overlay_path.exists():
+            return await ctx.reply("Sparxie react image not found. Please contact the bot developer.")
+        
+        # Process image in thread pool to avoid blocking the event loop
+        result = await asyncio.to_thread(self._overlay_image, image_bytes, overlay_path)
+        if not result:
+            return await ctx.reply("Failed to process the image. The image format may not be supported.")
+        
+        # Send result
+        file = discord.File(result, filename='sparxie_react.png')
+        await ctx.reply(file=file)
+
+
 async def setup():
     await client.add_cog(Currency(client))
     await client.add_cog(Lore(client))
@@ -10981,6 +11118,7 @@ async def setup():
     await client.add_cog(CustomCommands(client))
     await client.add_cog(Reminders(client))
     await client.add_cog(AREDL(client))
+    await client.add_cog(Fun(client))
 
 
 def log_shutdown():
