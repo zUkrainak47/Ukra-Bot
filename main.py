@@ -2068,7 +2068,6 @@ async def donate(ctx):
     make_sure_user_profile_exists('', str(ctx.author.id))
     await ctx.reply(f"## I accept donations! {sunfire2}\n"
                     f"**Current rate: $1 per 10k** {coin}\n"
-                    "Jar: <https://send.monobank.ua/jar/kqXuAdT1G>\n"
                     "Ko-fi: <https://ko-fi.com/zukrainak47>" +
                     f"\nThe first donation yields twice as many coins as the usual rate {murmheart}" * (not global_profiles[str(ctx.author.id)]['num_5']))
 
@@ -5149,7 +5148,7 @@ class PaginationView(discord.ui.View):
                     user = await self.cog.get_user(int(user_id), self.ctx)
                     make_sure_user_profile_exists(guild_id, user_id)
                     highest_rank = global_profiles[user_id]['highest_global_rank']
-                    if self.title == 'Global Leaderboard' and (rank < highest_rank or highest_rank == -1):
+                    if self.title == 'Global Leaderboard' and (rank < highest_rank or highest_rank < 0):
                         global_profiles[user_id]['highest_global_rank'] = rank
                         if rank == 1:
                             if 'Reached #1' not in global_profiles[user_id]['items'].setdefault('titles', []):
@@ -7476,7 +7475,7 @@ class Currency(commands.Cog):
 
                     if target_id not in ignored_users + dev_mode_users:
                         global_rank = get_net_leaderboard().index((target_id_, num)) + 1
-                        if target_profile['highest_global_rank'] > global_rank or target_profile['highest_global_rank'] == -1:
+                        if target_profile['highest_global_rank'] > global_rank or target_profile['highest_global_rank'] < 0:
                             target_profile['highest_global_rank'] = global_rank
                             if global_rank == 1:
                                 if 'Reached #1' not in global_profiles[target_id_]['items'].setdefault('titles', []):
@@ -7599,7 +7598,7 @@ class Currency(commands.Cog):
         known_data = ("```json\n"
                       f"{global_profiles[str(ctx.author.id)]}\n"
                       "```\n\n"
-                      "`dict_1` - loans, `dict_2` - family, `list_1` - used codes, `list_2` - dice win rate, `num_1` - total funded giveaways, `num_5` - total donated")
+                      "`dict_1` - loans, `dict_2` - family, `list_1` - used codes, `list_2` - dice win rate, `num_1` - total funded giveaways, `num_4` - number of times filed for bankruptcy, `num_5` - total donated")
         if guild_id:
             try:
                 await ctx.author.send(known_data)
@@ -9171,7 +9170,7 @@ class Currency(commands.Cog):
                     user_to_index = {user_id: index for index, (user_id, _) in enumerate(sorted_members)}
                     rank = user_to_index[str(ctx.author.id)] + 1
                     highest_rank = global_profiles[str(ctx.author.id)]['highest_global_rank']
-                    if t == 'global' and (rank < highest_rank or highest_rank == -1):
+                    if t == 'global' and (rank < highest_rank or highest_rank < 0):
                         global_profiles[str(ctx.author.id)]['highest_global_rank'] = rank
                         if rank == 1:
                             if 'Reached #1' not in global_profiles[author_id]['items'].setdefault('titles', []):
@@ -11045,13 +11044,25 @@ class Fun(commands.Cog):
         
         return None
     
-    def _overlay_image(self, base_bytes: bytes, overlay_path: Path) -> io.BytesIO | None:
-        """Overlay an image on top of the base image (runs synchronously, call via asyncio.to_thread)"""
+    def _overlay_image(self, base_bytes: bytes, overlay_path: Path, 
+                       size: float = 1.0, mirror: bool = False, 
+                       h_shift: float = 0.0, v_shift: float = 0.0) -> io.BytesIO | None:
+        """
+        Overlay an image on top of the base image (runs synchronously, call via asyncio.to_thread)
+        
+        Args:
+            size: Scale multiplier for BACKGROUND image (0.1 to 3.0)
+            mirror: If True, flip OVERLAY horizontally
+            h_shift: Horizontal shift of BACKGROUND (-1 to 1, positive = right)
+            v_shift: Vertical shift of BACKGROUND (-1 to 1, positive = up)
+        
+        The canvas expands to fit both images without cutoff.
+        """
         try:
             # Open base image
             base_img = Image.open(io.BytesIO(base_bytes)).convert('RGBA')
             
-            # Enforce dimension limits
+            # Enforce dimension limits on base before scaling
             if base_img.width > self.max_dimension or base_img.height > self.max_dimension:
                 ratio = min(self.max_dimension / base_img.width, self.max_dimension / base_img.height)
                 new_size = (int(base_img.width * ratio), int(base_img.height * ratio))
@@ -11060,29 +11071,97 @@ class Fun(commands.Cog):
             # Open overlay
             overlay = Image.open(overlay_path).convert('RGBA')
             
-            # Resize overlay based on base image aspect ratio
-            base_aspect = base_img.width / base_img.height
-            overlay_aspect = overlay.width / overlay.height
+            # Mirror overlay if requested
+            if mirror:
+                overlay = overlay.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+            
+            # Apply size to background image
+            scaled_base_width = int(base_img.width * size)
+            scaled_base_height = int(base_img.height * size)
+            if scaled_base_width > 0 and scaled_base_height > 0:
+                base_img = base_img.resize((scaled_base_width, scaled_base_height), Image.Resampling.LANCZOS)
+            
+            # Scale overlay to match the ORIGINAL base dimensions (before size scaling)
+            # This keeps the overlay at a consistent size relative to what would be "normal"
+            original_base_width = int(scaled_base_width / size) if size != 0 else scaled_base_width
+            original_base_height = int(scaled_base_height / size) if size != 0 else scaled_base_height
+            
+            # Calculate overlay dimensions based on original base aspect ratio
+            base_aspect = original_base_width / original_base_height if original_base_height > 0 else 1
+            overlay_aspect = overlay.width / overlay.height if overlay.height > 0 else 1
             
             if base_aspect >= overlay_aspect:
-                # Base is wider (or same) - squish overlay vertically to fit
-                overlay = overlay.resize(base_img.size, Image.Resampling.LANCZOS)
-                # Composite directly
-                result = Image.alpha_composite(base_img, overlay)
+                # Original base was wider - squish overlay to match original base dimensions
+                new_overlay_width = original_base_width
+                new_overlay_height = original_base_height
             else:
-                # Base is taller - scale overlay to match width, anchor to bottom
-                new_overlay_width = base_img.width
-                new_overlay_height = int(overlay.height * (base_img.width / overlay.width))
-                overlay = overlay.resize((new_overlay_width, new_overlay_height), Image.Resampling.LANCZOS)
-                
-                # Create transparent canvas same size as base
-                overlay_canvas = Image.new('RGBA', base_img.size, (0, 0, 0, 0))
-                # Paste overlay at the bottom
-                paste_y = base_img.height - overlay.height
-                overlay_canvas.paste(overlay, (0, paste_y))
-                
-                # Composite
-                result = Image.alpha_composite(base_img, overlay_canvas)
+                # Original base was taller - scale overlay to match width, maintain aspect
+                new_overlay_width = original_base_width
+                new_overlay_height = int(overlay.height * (original_base_width / overlay.width))
+            
+            overlay = overlay.resize((new_overlay_width, new_overlay_height), Image.Resampling.LANCZOS)
+            
+            # Overlay is centered horizontally and anchored to bottom at position (0,0) reference
+            # Base image is shifted relative to overlay
+            # First, calculate canvas size WITHOUT shift to use as shift basis
+            
+            # Overlay position (fixed at center-bottom of canvas)
+            overlay_x = 0
+            overlay_y = 0
+            
+            # Base image position WITHOUT shift (center horizontally, anchor to bottom)
+            base_x_no_shift = (overlay.width - base_img.width) // 2
+            base_y_no_shift = (overlay.height - base_img.height)
+            
+            # Calculate canvas bounds WITHOUT shift
+            min_x_no_shift = min(0, base_x_no_shift)
+            min_y_no_shift = min(0, base_y_no_shift)
+            max_x_no_shift = max(overlay.width, base_x_no_shift + base_img.width)
+            max_y_no_shift = max(overlay.height, base_y_no_shift + base_img.height)
+            
+            canvas_width_no_shift = max_x_no_shift - min_x_no_shift
+            canvas_height_no_shift = max_y_no_shift - min_y_no_shift
+            
+            # Calculate shifts based on the PRE-SHIFT canvas size
+            # This makes the shift consistent regardless of size parameter
+            shift_x = int(h_shift * canvas_width_no_shift)
+            shift_y = int(-v_shift * canvas_height_no_shift)  # Negative because y increases downward
+            
+            # Now apply shifts to base position
+            base_x = base_x_no_shift + shift_x
+            base_y = base_y_no_shift + shift_y
+            
+            # Calculate final canvas bounds WITH shift
+            min_x = min(0, base_x)
+            min_y = min(0, base_y)
+            max_x = max(overlay.width, base_x + base_img.width)
+            max_y = max(overlay.height, base_y + base_img.height)
+            
+            canvas_width = max_x - min_x
+            canvas_height = max_y - min_y
+            
+            # Adjust positions to be relative to canvas origin
+            base_x -= min_x
+            base_y -= min_y
+            overlay_x -= min_x
+            overlay_y -= min_y
+            
+            # Create canvas
+            canvas = Image.new('RGBA', (canvas_width, canvas_height), (0, 0, 0, 0))
+            
+            # Paste base first (background)
+            canvas.paste(base_img, (base_x, base_y))
+            
+            # Create overlay canvas and composite
+            overlay_canvas = Image.new('RGBA', (canvas_width, canvas_height), (0, 0, 0, 0))
+            overlay_canvas.paste(overlay, (overlay_x, overlay_y))
+            
+            result = Image.alpha_composite(canvas, overlay_canvas)
+            
+            # Enforce max dimension on final result
+            if result.width > self.max_dimension or result.height > self.max_dimension:
+                ratio = min(self.max_dimension / result.width, self.max_dimension / result.height)
+                result = result.resize((int(result.width * ratio), int(result.height * ratio)), Image.Resampling.LANCZOS)
             
             # Save to BytesIO
             output = io.BytesIO()
@@ -11093,12 +11172,129 @@ class Fun(commands.Cog):
             print(f"Image overlay error: {e}")
             return None
     
+    async def _extract_image_from_message_link(self, link: str) -> str | None:
+        """Extract image URL from a Discord message link"""
+        # Pattern: https://discord.com/channels/GUILD_ID/CHANNEL_ID/MESSAGE_ID
+        # or https://discordapp.com/channels/...
+        match = re.match(r'https?://(?:discord\.com|discordapp\.com)/channels/(\d+)/(\d+)/(\d+)', link)
+        if not match:
+            return None
+        
+        try:
+            guild_id, channel_id, message_id = match.groups()
+            channel = self.bot.get_channel(int(channel_id))
+            if not channel:
+                return None
+            message = await channel.fetch_message(int(message_id))
+            
+            # Check for attachments
+            if message.attachments:
+                attachment = message.attachments[0]
+                if attachment.content_type and attachment.content_type.startswith('image/'):
+                    return attachment.url
+            
+            # Check for embeds
+            if message.embeds:
+                for embed in message.embeds:
+                    if embed.image:
+                        return embed.image.url
+                    if embed.thumbnail:
+                        return embed.thumbnail.url
+            
+            return None
+        except Exception:
+            return None
+    
+    def _parse_sparxie_args(self, args: tuple) -> dict:
+        """
+        Parse flexible arguments for sparxie command.
+        Expected order: size, mirror, h_shift, v_shift, url
+        But URL can appear anywhere or be detected by format.
+        """
+        result = {'size': 1.0, 'mirror': False, 'h_shift': 0.0, 'v_shift': 0.0, 'url': None}
+        remaining_args = list(args)
+        
+        # First, extract any URL-like argument
+        for i, arg in enumerate(remaining_args):
+            if arg and (arg.startswith('http://') or arg.startswith('https://')):
+                result['url'] = arg
+                remaining_args.pop(i)
+                break
+        
+        # Now parse remaining args in order: h_shift, v_shift, mirror, size
+        arg_order = ['h_shift', 'v_shift', 'mirror', 'size']
+        
+        for i, arg in enumerate(remaining_args):
+            if i >= len(arg_order):
+                break
+            
+            arg_name = arg_order[i]
+            
+            if arg_name == 'mirror':
+                # Parse boolean
+                result['mirror'] = arg.lower() in ('true', '1', 'yes', 'y', 't')
+            else:
+                # Parse float
+                try:
+                    value = float(arg)
+                    if arg_name == 'size':
+                        result['size'] = max(0.1, min(3.0, value))
+                    else:  # h_shift or v_shift
+                        result[arg_name] = max(-1.0, min(1.0, value))
+                except ValueError:
+                    pass  # Keep default
+        
+        return result
+    
     @commands.hybrid_command(name='sparklereact', aliases=['sparxie'])
-    @app_commands.describe(url="URL of an image to apply the sparkle react to")
+    @app_commands.describe(
+        url="URL of an image or message link",
+        h_shift="Horizontal shift (-1 to 1, positive = right)",
+        v_shift="Vertical shift (-1 to 1, positive = up)",
+        mirror="Flip the overlay horizontally",
+        size="Size multiplier (0.1 to 3.0)"
+    )
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
-    async def sparklereact(self, ctx: commands.Context, url: str = None):
-        """Sparxie react an image. Attach an image, provide a URL, or reply to a message with an image"""
+    async def sparklereact(self, ctx: commands.Context, *,
+                           url: str = None,
+                           h_shift: float = None,
+                           v_shift: float = None,
+                           mirror: bool = None,
+                           size: float = None,
+                           ):
+        """
+        Sparxie react an image!
+        You can attach an image, provide a URL, or reply to a message with an image
+        
+        Parameters:
+        - h_shift: Horizontal shift (-1 to 1, positive = right)
+        - v_shift: Vertical shift (-1 to 1, positive = up)
+        - mirror: Flip the overlay horizontally
+        - size: Size multiplier (0.1 to 3.0)
+        - url: URL of an image or message link
+        
+        Example:
+        If you reply with `!sparxie -0.2 0.1 true 0.5` to an image, will position sparkle 20% to the left, 10% up, flip her horizontally, and scale the background to 50% of its original size.
+        """
         await ctx.typing()
+        
+        # Handle differently for slash vs prefix commands
+        if ctx.interaction:
+            # Slash command - use explicit parameters directly
+            size = max(0.1, min(3.0, size)) if size is not None else 1.0
+            mirror = mirror if mirror is not None else False
+            h_shift = max(-1.0, min(1.0, h_shift)) if h_shift is not None else 0.0
+            v_shift = max(-1.0, min(1.0, v_shift)) if v_shift is not None else 0.0
+        else:
+            # Prefix command - the 'url' parameter contains all args as a single string
+            # because of how discord.py handles this
+            args_str = url if url else ""
+            parsed = self._parse_sparxie_args(tuple(args_str.split()) if args_str else ())
+            size = parsed['size']
+            mirror = parsed['mirror']
+            h_shift = parsed['h_shift']
+            v_shift = parsed['v_shift']
+            url = parsed['url']
         
         # Track if this was a reply (for response behavior)
         replied_message = None
@@ -11107,6 +11303,14 @@ class Fun(commands.Cog):
                 replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
             except Exception:
                 pass
+        
+        # Check if URL is a message link and extract image
+        if url and ('discord.com/channels' in url or 'discordapp.com/channels' in url):
+            extracted = await self._extract_image_from_message_link(url)
+            if extracted:
+                url = extracted
+            else:
+                return await ctx.reply("Could not find an image in that message.")
         
         # Get image URL
         image_url = await self._get_image_url(ctx, url)
@@ -11130,7 +11334,10 @@ class Fun(commands.Cog):
             return await ctx.reply("Sparxie react image not found. Please contact the bot developer.")
         
         # Process image in thread pool to avoid blocking the event loop
-        result = await asyncio.to_thread(self._overlay_image, image_bytes, overlay_path)
+        result = await asyncio.to_thread(
+            self._overlay_image, image_bytes, overlay_path,
+            size, mirror, h_shift, v_shift
+        )
         if not result:
             return await ctx.reply("Failed to process the image. The image format may not be supported.")
         
