@@ -11274,7 +11274,7 @@ class Fun(commands.Cog):
         - url: URL of an image or message link
         
         Example:
-        If you reply with `!sparxie -0.2 0.1 true 0.5` to an image, will position sparkle 20% to the left, 10% up, flip her horizontally, and scale the background to 50% of its original size.
+        If you reply with `!sparxie -0.2 0.1 true 0.5` to an image, will position the background 20% to the left, 10% up, flip sparkle horizontally, and scale the background to 50% of its original size.
         """
         await ctx.typing()
         
@@ -11314,24 +11314,30 @@ class Fun(commands.Cog):
         
         # Get image URL
         image_url = await self._get_image_url(ctx, url)
-        if not image_url:
-            # No image provided - just send the sparxie overlay by itself
-            overlay_path = self.assets_path / self.REACTIONS['sparxie']
-            if overlay_path.exists():
-                if replied_message:
-                    return await replied_message.reply(file=discord.File(overlay_path))
-                return await ctx.send(file=discord.File(overlay_path))
-            return await ctx.reply("Sparxie image not found.")
         
-        # Fetch the image
-        image_bytes = await self._fetch_image(image_url)
-        if not image_bytes:
-            return await ctx.reply("Failed to fetch the image. Make sure the URL is valid and the image isn't too large (max 8MB).")
-        
-        # Get overlay path
+        # Get overlay path (needed for both cases)
         overlay_path = self.assets_path / self.REACTIONS['sparxie']
         if not overlay_path.exists():
             return await ctx.reply("Sparxie react image not found. Please contact the bot developer.")
+        
+        if not image_url:
+            # No image provided - create a transparent image matching overlay dimensions
+            # This allows shift, size, and mirror parameters to still work
+            def create_blank_image():
+                overlay = Image.open(overlay_path)
+                # Create a transparent image the same size as the overlay
+                blank = Image.new('RGBA', overlay.size, (0, 0, 0, 0))
+                output = io.BytesIO()
+                blank.save(output, format='PNG')
+                output.seek(0)
+                return output.read()
+            
+            image_bytes = await asyncio.to_thread(create_blank_image)
+        else:
+            # Fetch the image
+            image_bytes = await self._fetch_image(image_url)
+            if not image_bytes:
+                return await ctx.reply("Failed to fetch the image. Make sure the URL is valid and the image isn't too large (max 8MB).")
         
         # Process image in thread pool to avoid blocking the event loop
         result = await asyncio.to_thread(
@@ -11344,7 +11350,7 @@ class Fun(commands.Cog):
         # Send result - reply to original message if it was a reply, otherwise just send
         file = discord.File(result, filename='sparxie_react.png')
         if replied_message:
-            await replied_message.reply(file=file)
+            await replied_message.reply(file=file, mention_author=False)
         else:
             await ctx.send(file=file)
 
