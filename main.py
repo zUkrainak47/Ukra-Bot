@@ -177,7 +177,7 @@ titles = [
     'Gave away 25M', 'Gave away 50M', 'Gave away 100M',
     'Gave away 250M', 'Gave away 500M', 'Gave away 1B',
 
-    'Lottery Winner', 'Bug Hunter', 'Reached #1', 'Donator',  'Top Contributor',
+    'Lottery Winner', 'Bug Hunter', 'Reached #1', 'Donator', 'Top Contributor',
     'lea :3',
     'Married',
     f'{bot_name} Dev',
@@ -188,7 +188,26 @@ num_to_title = {25000: 'Gave away 25k', 50000: 'Gave away 50k', 100000: 'Gave aw
                 2500000: 'Gave away 2.5M', 5000000: 'Gave away 5M', 10000000: 'Gave away 10M',
                 25000000: 'Gave away 25M', 50000000: 'Gave away 50M', 100000000: 'Gave away 100M',
                 250000000: 'Gave away 250M', 500000000: 'Gave away 500M', 1000000000: 'Gave away 1B',}
+titles_mul = {
+    'Gave away 500k': 0.5, 'Gave away 1M': 0.5,
+    'Gave away 2.5M': 0.5, 'Gave away 5M': 0.5, 'Gave away 10M': 0.5,
+    'Gave away 25M': 0.5, 'Gave away 50M': 0.5, 'Gave away 100M': 0.5,
+    'Gave away 250M': 0.5, 'Gave away 500M': 0.5, 'Gave away 1B': 0.5
+}
 
+def get_title_mul(user_titles: list) -> float:
+    mul = 1
+    for title in user_titles:
+        mul += titles_mul.get(title, 0)
+    return mul
+
+def format_multiplier_suffix(mul: float) -> str:
+    """Returns a formatted multiplier suffix like '(x1.5)' or '(x2)' for display, or empty string if mul <= 1."""
+    if mul <= 1:
+        return ''
+    if mul == int(mul):
+        return f' (x{int(mul)})'
+    return f' (x{mul})'
 
 def should_have_titles(num: int) -> list:
     ts = []
@@ -8514,12 +8533,16 @@ class Currency(commands.Cog):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)
-            dig_coins = int(random.randint(1, 400)**0.5)
+            make_sure_user_profile_exists(guild_id, author_id)
+            user_titles = global_profiles[author_id]['items'].get('titles', [])
+            farm_mul = get_title_mul(user_titles)
+            mul_suffix = format_multiplier_suffix(farm_mul)
+            
+            dig_coins = int(random.randint(1, 400)**0.5 * farm_mul)
             if not standalone:
                 farm_msg += f'Dig  {shovel}'
-            if dig_coins == 20:
-                dig_coins = 2500
+            if dig_coins == int(20 * farm_mul):
+                dig_coins = int(2500 * farm_mul)
                 dig_message = f'# You found Gold! {gold_emoji}'
                 if not standalone:
                     rare_msg.append(('Gold', f'{gold_emoji}'))
@@ -8531,11 +8554,11 @@ class Currency(commands.Cog):
                         link = '(in DMs)'
                     await rare_channel.send(f"**{ctx.author.mention}** found Gold {gold_emoji} {link}")
             else:
-                dig_message = f'## Digging successful! {shovel}'
-            if dig_coins != 2500 or (dig_coins == 2500 and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
+                dig_message = f'## Digging successful!{mul_suffix} {shovel}'
+            if dig_coins != int(2500 * farm_mul) or (dig_coins == int(2500 * farm_mul) and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
                 num = add_coins_to_user(guild_id, author_id, dig_coins)  # save file
                 total_gained += dig_coins
-                highest_net_check(guild_id, author_id, save=False, make_sure=dig_coins != 2500)  # make sure profile exists only if gold wasn't found
+                highest_net_check(guild_id, author_id, save=False, make_sure=False)  # make sure profile exists only if gold wasn't found
                 command_count_increment(guild_id, author_id, 'dig', True, False)
                 if standalone:
                     await ctx.reply(f"{dig_message}\n**{ctx.author.display_name}:** +{dig_coins:,} {coin}\nBalance: {num:,} {coin}\n\nYou can dig again {get_timestamp(20)}")
@@ -8607,13 +8630,17 @@ class Currency(commands.Cog):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)
+            make_sure_user_profile_exists(guild_id, author_id)
+            user_titles = global_profiles[author_id]['items'].get('titles', [])
+            farm_mul = get_title_mul(user_titles)
+            mul_suffix = format_multiplier_suffix(farm_mul)
+            
             t = random.randint(1, 625)
-            mine_coins = int(t**0.5 * 2)
+            mine_coins = int(t**0.5 * 2 * farm_mul)
             if not standalone:
                 farm_msg += 'Mine ⛏️'
             if t == 625:
-                mine_coins = 7500
+                mine_coins = int(7500 * farm_mul)
                 mine_message = f'# You found Diamonds! 💎'
                 if not standalone:
                     rare_msg.append(("Diamonds", "💎"))
@@ -8625,7 +8652,7 @@ class Currency(commands.Cog):
                         link = '(in DMs)'
                     await rare_channel.send(f"**{ctx.author.mention}** found Diamonds 💎 {link}")
             elif t == 1:
-                mine_coins = 1
+                mine_coins = 1  # Fool's Gold stays at 1 coin, not multiplied
                 item_msg += add_item_to_user(guild_id, author_id, 'evil_potion', standalone)
                 mine_message = f"# You struck Fool's Gold! ✨"
                 if not standalone:
@@ -8638,11 +8665,11 @@ class Currency(commands.Cog):
                         link = '(in DMs)'
                     await rare_channel.send(f"**{ctx.author.mention}** struck Fool's Gold ✨ {link}")
             else:
-                mine_message = f"## Mining successful! ⛏️"
+                mine_message = f"## Mining successful!{mul_suffix} ⛏️"
             if t not in (1, 625) or (t in (1, 625) and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
                 num = add_coins_to_user(guild_id, author_id, mine_coins)  # save file
                 total_gained += mine_coins
-                highest_net_check(guild_id, author_id, save=False, make_sure=t not in (1, 625))
+                highest_net_check(guild_id, author_id, save=False, make_sure=False)
                 command_count_increment(guild_id, author_id, 'mine', True, False)
                 if standalone:
                     await ctx.reply(f"{mine_message}\n**{ctx.author.display_name}:** +{mine_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can mine again {get_timestamp(120)}")
@@ -8717,14 +8744,18 @@ class Currency(commands.Cog):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)
-            work_coins = random.randint(45, 55)
+            make_sure_user_profile_exists(guild_id, author_id)
+            user_titles = global_profiles[author_id]['items'].get('titles', [])
+            farm_mul = get_title_mul(user_titles)
+            mul_suffix = format_multiplier_suffix(farm_mul)
+            
+            work_coins = int(random.randint(45, 55) * farm_mul)
             num = add_coins_to_user(guild_id, author_id, work_coins)  # save file
             total_gained += work_coins
-            highest_net_check(guild_id, author_id, save=False, make_sure=True)
+            highest_net_check(guild_id, author_id, save=False, make_sure=False)
             command_count_increment(guild_id, author_id, 'work', save=True, make_sure=False)
             if standalone:
-                await ctx.reply(f"## Work successful! {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {num:,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
+                await ctx.reply(f"## Work successful!{mul_suffix} {okaygebusiness}\n**{ctx.author.display_name}:** +{work_coins} {coin}\nBalance: {num:,} {coin}\n\nYou can work again {get_timestamp(5, 'minutes')}")
             else:
                 farm_msg += f'Work 💼 +{work_coins} {coin} - {get_timestamp(300)}\n'
                 if ctx.author.id in dev_mode_users:
@@ -8766,20 +8797,25 @@ class Currency(commands.Cog):
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
             author_id = str(ctx.author.id)
-            make_sure_user_has_currency(guild_id, author_id)
-            fish_coins = random.randint(1, 167)
+            make_sure_user_profile_exists(guild_id, author_id)
+            user_titles = global_profiles[author_id]['items'].get('titles', [])
+            farm_mul = get_title_mul(user_titles)
+            mul_suffix = format_multiplier_suffix(farm_mul)
+            
+            fish_coins_roll = random.randint(1, 167)  # Keep roll separate for rare find detection
             if not standalone:
                 farm_msg += 'Fish 🎣'
-            if fish_coins == 167:
+            if fish_coins_roll == 167:
                 fish_coins = random.randint(7500, 12500)
                 if fish_coins == 12500:
+                    fish_coins = int(12500 * farm_mul)  # Multiply The Catch earnings
                     item_msg += add_item_to_user(guild_id, author_id, 'the_catch', standalone)
                     fish_message = f"# You found *The Catch*{The_Catch}\n"
                     if not standalone:
                         rare_msg.append(('*The Catch*', f'{The_Catch}'))
                     if ctx.author.id not in dev_mode_users:
                         rare_finds_increment(guild_id, author_id, 'the_catch', False)
-                        ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag to your friends'
+                        ps_message = '\nPS: this has a 0.0001197% chance of happening, go brag about it'
                         if ctx.guild:
                             link = f'- https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id} ({ctx.guild.name})'
                         else:
@@ -8787,6 +8823,7 @@ class Currency(commands.Cog):
 
                         await rare_channel.send(f"<@&1326967584821612614> **{ctx.author.mention}** JUST FOUND *THE CATCH* {The_Catch} {link}")
                 else:
+                    fish_coins = int(fish_coins * farm_mul)  # Multiply Treasure Chest earnings
                     fish_message = f'# You found a huge Treasure Chest!!! {treasure_chest}'
                     if not standalone:
                         rare_msg.append(('a huge Treasure Chest', f'{treasure_chest}'))
@@ -8807,20 +8844,21 @@ class Currency(commands.Cog):
 
                         await rare_channel.send(f"**{ctx.author.mention}** just found a Treasure Chest {treasure_chest}{rig} {link}")
             else:
-                if fish_coins == 69:
+                if fish_coins_roll == 69:
                     item_msg += add_item_to_user(guild_id, author_id, 'funny_item', standalone)
+                fish_coins = int(fish_coins_roll * farm_mul)  # Multiply regular fish earnings
                 if ctx.message.content:
                     cast_command = ctx.message.content.split()[0].lower().lstrip('!')
                 else:
                     cast_command = 'f'
                 if cast_command in ('fish', 'f', 'а', 'e'):
                     cast_command = 'fishing'
-                fish_message = f"## {cast_command.capitalize()} successful! {'🎣' * (cast_command == 'fishing') + fishinge * (cast_command == 'fishinge')}\n"
+                fish_message = f"## {cast_command.capitalize()} successful!{mul_suffix} {'🎣' * (cast_command == 'fishing') + fishinge * (cast_command == 'fishinge')}\n"
                 ps_message = ''
-            if fish_coins < 200 or (fish_coins > 200 and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
+            if fish_coins < int(200 * farm_mul) or (fish_coins > int(200 * farm_mul) and not global_profiles[author_id]['dict_1'].setdefault('in', [])):
                 num = add_coins_to_user(guild_id, author_id, fish_coins)  # save file
                 total_gained += fish_coins
-                highest_net_check(guild_id, author_id, save=False, make_sure=fish_coins < 200)
+                highest_net_check(guild_id, author_id, save=False, make_sure=False)
                 command_count_increment(guild_id, author_id, 'fishinge', True, False)
                 if standalone:
                     await ctx.reply(f"{fish_message}\n**{ctx.author.display_name}:** +{fish_coins:,} {coin}\nBalance: {num:,} {coin}{item_msg}\n\nYou can fish again {get_timestamp(10, 'minutes')}{ps_message}")
@@ -8904,10 +8942,14 @@ class Currency(commands.Cog):
         if currency_allowed(ctx) and bot_down_check(guild_id):
             make_sure_user_profile_exists('', str(ctx.author.id))
             if global_profiles[str(ctx.author.id)]['num_1'] >= 250000 or ctx.author.id == 694664131000795307:
+                user_titles = global_profiles[str(ctx.author.id)]['items'].get('titles', [])
+                farm_mul = get_title_mul(user_titles)
+                mul_suffix = format_multiplier_suffix(farm_mul)
+                
                 tracked_commands = ['dig', 'mine', 'work', 'fish']  # List of command names
                 tracked_commands_emojis = {'dig': shovel, 'mine': '⛏️', 'work': '💼', 'fish': '🎣'}
                 tracked_func = {'dig': self.d, 'mine': self.m, 'work': self.w, 'fish': self.f}
-                reply_msg = f'## Farming successful {wicked}\n'
+                reply_msg = f'## Farming successful!{mul_suffix} {wicked}\n'
                 cd_msg = ''
                 rare_message = []
                 item_message = ''
