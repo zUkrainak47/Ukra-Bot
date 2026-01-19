@@ -11117,29 +11117,23 @@ class Fun(commands.Cog):
             if mirror:
                 overlay = overlay.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
             
-            # Apply size to background image
-            scaled_base_width = int(base_img.width * size)
-            scaled_base_height = int(base_img.height * size)
-            if scaled_base_width > 0 and scaled_base_height > 0:
-                base_img = base_img.resize((scaled_base_width, scaled_base_height), Image.Resampling.LANCZOS)
-            
-            # Scale overlay to match the ORIGINAL base dimensions (before size scaling)
-            # This keeps the overlay at a consistent size relative to what would be "normal"
-            original_base_width = int(scaled_base_width / size) if size != 0 else scaled_base_width
-            original_base_height = int(scaled_base_height / size) if size != 0 else scaled_base_height
-            
-            # Calculate overlay dimensions based on original base aspect ratio
-            base_aspect = original_base_width / original_base_height if original_base_height > 0 else 1
+            # Calculate overlay dimensions based on base aspect ratio
+            base_aspect = base_img.width / base_img.height if base_img.height > 0 else 1
             overlay_aspect = overlay.width / overlay.height if overlay.height > 0 else 1
             
             if base_aspect >= overlay_aspect:
-                # Original base was wider - squish overlay to match original base dimensions
-                new_overlay_width = original_base_width
-                new_overlay_height = original_base_height
+                # Base is wider - squish overlay to match base dimensions
+                new_overlay_width = base_img.width
+                new_overlay_height = base_img.height
             else:
-                # Original base was taller - scale overlay to match width, maintain aspect
-                new_overlay_width = original_base_width
-                new_overlay_height = int(overlay.height * (original_base_width / overlay.width))
+                # Base is taller - scale overlay to match width, maintain aspect
+                new_overlay_width = base_img.width
+                new_overlay_height = int(overlay.height * (base_img.width / overlay.width))
+            
+            # Apply size to overlay (size > 1 shrinks overlay, size < 1 grows overlay)
+            # This keeps the background image at its original size
+            new_overlay_width = int(new_overlay_width / size) if size != 0 else new_overlay_width
+            new_overlay_height = int(new_overlay_height / size) if size != 0 else new_overlay_height
             
             overlay = overlay.resize((new_overlay_width, new_overlay_height), Image.Resampling.LANCZOS)
             
