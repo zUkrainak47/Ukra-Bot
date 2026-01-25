@@ -6482,8 +6482,11 @@ async def user_fund(ctx: commands.Context, author: discord.User, amount):
                 additional_msg += title_announcement
 
                 if 'Gave away 250k' in new_titles:  # Check specifically if the 250k title was *just* awarded
-                    additional_msg += f'\n\nYou have also unlocked the `!e` command! Thank you for funding so many giveaways {gladge}'
+                    additional_msg += f'\n\nYou have also unlocked the `!e` command! Thank you for funding so many giveaways {gladge}\nWith every next milestone your **farm multiplier** will increase by **0.5**'
 
+                if any((i in titles_mul) for i in new_titles):
+                    additional_msg += f'\n\n**Your new farm multiplier is {format_multiplier_suffix(get_title_mul(global_profiles[author_id]['items']['titles']))[2:-1]}**'
+                
             # Modify the final reply to include the additional message
             await msg.reply(f"## Funding successful\n"
                             f"**{author.display_name}: -{amount:,} {coin}**\n"
@@ -7937,8 +7940,11 @@ class Currency(commands.Cog):
     @app_commands.describe(amount="How many coins you're adding to the pool")
     async def fund(self, ctx, *, amount: str):
         """
-        Contribute coins to the global giveaway pool.
-        Funding milestones unlock titles and commands. Minimum 5,000 coins.
+        Contribute <:fishingecoin:1324905329657643179> to the global giveaway pool!
+
+        Fund perks:
+        - `!e` unlocks at **250k <:fishingecoin:1324905329657643179>** funded
+        - Farm multiplier increases by 0.5 at every milestone starting with **500k <:fishingecoin:1324905329657643179>** funded
         """
         try:
             guild_id = '' if not ctx.guild else str(ctx.guild.id)
@@ -7965,9 +7971,9 @@ class Currency(commands.Cog):
         example = 'Example: `!fund 5k`'
         if currency_allowed(ctx) and bot_down_check(str(ctx.guild.id)):
             if isinstance(error, commands.MissingRequiredArgument):
-                await ctx.reply(f"You need to pass a number!\n{example}")
+                await ctx.reply(f"This command is used to add {coin} to the giveaway pool!\nThere are perks you can unlock by funding, run `!help fund` to find out more\n\nYou need to pass a number of {coin} to add to the pool. {example}")
             elif isinstance(error, commands.BadArgument):
-                await ctx.reply(f"Invalid input!\n{example}")
+                await ctx.reply(f"This command is used to add {coin} to the giveaway pool!\nThere are perks you can unlock by funding, run `!help fund` to find out more\n\nYour input was invalid! {example}")
             else:
                 print(f"Unexpected error: {error}")  # Log other errors for debugging
         elif currency_allowed(ctx):
@@ -8993,9 +8999,10 @@ class Currency(commands.Cog):
     @app_commands.allowed_installs(guilds=True, users=False)
     async def daily(self, ctx):
         """
-        Claim 1 Daily Item and a random number of daily coins from 140 to 260
+        Claim a random number of daily coins from 140 to 260
         Multiply daily coins by sqrt of daily streak
-        Grants a Daily Item
+
+        Grants a <:daily_item:1336399274476306646> Daily Item
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
@@ -9060,7 +9067,8 @@ class Currency(commands.Cog):
     async def weekly(self, ctx):
         """
         Claim a random number of weekly coins from 1500 to 2500
-        Grants a Weekly Item
+        
+        Grants a <:weekly_item:1336631591543373854> Weekly Item
         """
         guild_id = '' if not ctx.guild else str(ctx.guild.id)
         if currency_allowed(ctx) and bot_down_check(guild_id):
@@ -10917,18 +10925,17 @@ class AREDL(commands.Cog):
         - `/aredl list` - View the Demonlist
         - `/aredl level` - View a specific Extreme Demon
         - `/aredl random` - View a random Extreme Demon
-        - `/aredl size` - See how many Extreme Demons there are
         """
         if level_name:
             await ctx.invoke(self.level, level_name=level_name)
         elif ctx.invoked_subcommand is None:
             await ctx.invoke(self.top)
 
-    @aredl.command(name="size", aliases=['count'])
-    @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
-    async def size(self, ctx):
-        """See how many Extreme Demons there are"""
-        await ctx.reply(f'There are currently *{len(self.aredl_data)} Extreme Demons*')
+    # @aredl.command(name="size", aliases=['count'])
+    # @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
+    # async def size(self, ctx):
+    #     """See how many Extreme Demons there are"""
+    #     await ctx.reply(f'There are currently *{len(self.aredl_data)} Extreme Demons*')
 
     @aredl.command(name="list", aliases=['top'])
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
