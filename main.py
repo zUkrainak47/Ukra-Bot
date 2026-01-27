@@ -3282,9 +3282,9 @@ class CustomCommands(commands.Cog):
 
     @commands.hybrid_command(name='custom_alias', description='Create or update an alias for a command', aliases=['alias', 'alias_add', 'add_alias'])
     @app_commands.allowed_installs(guilds=True, users=False)
-    @app_commands.describe(command='The command to create an alias for', alias='The alias (shortcut) to use')
+    @app_commands.describe(command='The command (with optional arguments) to create an alias for', alias='The alias (shortcut) to use')
     @commands.check(custom_perms)
-    async def custom_alias(self, ctx, command: str, alias: str):
+    async def custom_alias(self, ctx, alias: str, *, command: str):
         """
         Creates or updates an alias for a command in this server
         Aliases work with:
@@ -3292,12 +3292,13 @@ class CustomCommands(commands.Cog):
         - Custom commands (created with `!custom`)
         - Custom role commands (created with `/custom_role`)
 
-        Usage: `!alias <command_name> <alias>`
+        Usage: `!alias <alias> <command_name> [arguments]`
 
         Use `!cai <command/alias>` to inspect one or `!cal` to view all
 
-        Example:
-        - `/custom_alias command:landmine_clear alias:lc` - now `!lc` runs `!landmine_clear`
+        Examples:
+        - `!alias lc landmine_clear` - now `!lc` runs `!landmine_clear`
+        - `!alias sq sparxie 0.2 0.25 f 0.1` - now `!sq` runs `!sparxie 0.2 0.25 f 0.1`
 
         You can add up to 100 aliases per server
 
@@ -3308,7 +3309,16 @@ class CustomCommands(commands.Cog):
 
         guild_id = str(ctx.guild.id)
         alias_name = alias.lower().lstrip('!')
-        command_name = command.lower().lstrip('!')
+        
+        # Parse command and arguments
+        command_input = command.lower()
+        if command_input.startswith('!') and len(command_input) > 1:
+            command_input = command_input[1:]
+        
+        # Split into command name and preset arguments
+        parts = command_input.split(None, 1)  # Split on first whitespace
+        command_name = parts[0]
+        preset_args = parts[1] if len(parts) > 1 else ''
 
         if ' ' in alias_name:
             return await ctx.reply('Alias names can only contain one word')
@@ -3338,17 +3348,18 @@ class CustomCommands(commands.Cog):
         if len(command_aliases) >= 100 and alias_name not in command_aliases:
             return await ctx.reply("You've reached the limit of 100 command aliases per server.\nRemove some with `/custom_alias_remove` and try again.")
 
-        # Check if alias already points to this command
+        # Store the full command string (command name + preset args)
+        full_command = f"{command_name} {preset_args}".strip()
         action = "Updated" if alias_name in command_aliases else "Added"
-        command_aliases[alias_name] = command_name
+        command_aliases[alias_name] = full_command
         save_settings()
 
-        await ctx.reply(f"{action} alias `!{alias_name}` → `!{command_name}` successfully.")
+        await ctx.reply(f"{action} alias `!{alias_name}` → `!{full_command}` successfully.")
 
     @custom_alias.error
     async def custom_alias_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.reply(f"Usage: `/custom_alias command:<command_name> alias:<alias_name>`\nExample: `/custom_alias command:landmine_clear alias:lc`")
+            await ctx.reply(f"Usage: `!alias <alias> <command> [arguments]`\nExamples:\n- `!alias lc landmine_clear`\n- `!alias sq sparxie 0.2 0.25 f 0.1`")
         elif isinstance(error, discord.ext.commands.errors.CheckFailure):
             pass
         else:
@@ -3484,7 +3495,7 @@ class CustomCommands(commands.Cog):
             return await ctx.reply(f"`!{alias_name}` → `!{target}`")
 
         # Check if input is a command name and find all aliases pointing to it
-        aliases_for_command = [a for a, t in command_aliases.items() if t == alias_name]
+        aliases_for_command = [a for a, t in command_aliases.items() if t.split()[0] == alias_name]
         if aliases_for_command:
             alias_list = ', '.join(f"`!{a}`" for a in sorted(aliases_for_command))
             return await ctx.reply(f"Aliases for `!{alias_name}`: {alias_list}")
@@ -3505,10 +3516,10 @@ class CustomCommands(commands.Cog):
                 choices.append(app_commands.Choice(name=f"{alias} → {target}", value=alias))
         
         # Add command names that have aliases (command ← aliases)
-        commands_with_aliases = set(command_aliases.values())
+        commands_with_aliases = set(t.split()[0] for t in command_aliases.values())
         for cmd in sorted(commands_with_aliases):
             if current.lower() in cmd.lower():
-                alias_count = sum(1 for t in command_aliases.values() if t == cmd)
+                alias_count = sum(1 for t in command_aliases.values() if t.split()[0] == cmd)
                 choices.append(app_commands.Choice(name=f"{cmd} ({alias_count} alias{'es' if alias_count != 1 else ''})", value=cmd))
         
         return choices[:25]
@@ -4445,16 +4456,29 @@ async def send_custom_command(ctx, error, mode='normal'):
         # Resolve alias if exists
         command_aliases = server_settings.get(guild_id, {}).get('command_aliases', {})
         if potential_command_name in command_aliases:
-            potential_command_name = command_aliases[potential_command_name]
+            alias_target = command_aliases[potential_command_name]
+            # Split alias target into command name and preset arguments
+            alias_parts = alias_target.split(None, 1)
+            resolved_command_name = alias_parts[0]
+            preset_args = alias_parts[1] if len(alias_parts) > 1 else ''
 
             # Check if it's a built-in command (after alias resolution)
-            builtin_cmd = client.get_command(potential_command_name)
+            builtin_cmd = client.get_command(resolved_command_name)
             if builtin_cmd:
                 # Reparse the message with the aliased command
-                new_content = ctx.prefix + potential_command_name + ctx.message.content[len(ctx.prefix) + len(ctx.invoked_with):]
+                # If preset args exist, use only those; otherwise pass through user's args
+                if preset_args:
+                    new_content = ctx.prefix + resolved_command_name + ' ' + preset_args
+                else:
+                    user_args = ctx.message.content[len(ctx.prefix) + len(ctx.invoked_with):]
+                    new_content = ctx.prefix + resolved_command_name + user_args
                 ctx.message.content = new_content
                 await client.process_commands(ctx.message)
                 return
+            
+            # Update potential_command_name for custom command/role lookup
+            potential_command_name = resolved_command_name
+
 
         guild_settings = server_settings.setdefault(guild_id, {})
         custom_role_commands = guild_settings.setdefault('custom_role_commands', {})
@@ -4473,16 +4497,29 @@ async def send_custom_command(ctx, error, mode='normal'):
         # Resolve alias if exists
         command_aliases = server_settings.get(guild_id, {}).get('command_aliases', {})
         if potential_command_name in command_aliases:
-            potential_command_name = command_aliases[potential_command_name]
+            alias_target = command_aliases[potential_command_name]
+            # Split alias target into command name and preset arguments
+            alias_parts = alias_target.split(None, 1)
+            resolved_command_name = alias_parts[0]
+            preset_args = alias_parts[1] if len(alias_parts) > 1 else ''
 
             # Check if it's a built-in command (after alias resolution)
-            builtin_cmd = client.get_command(potential_command_name)
+            builtin_cmd = client.get_command(resolved_command_name)
             if builtin_cmd:
                 # Reparse the message with the aliased command
-                new_content = ctx.prefix + potential_command_name + ctx.message.content[len(ctx.prefix) + len(ctx.invoked_with):]
+                # If preset args exist, use only those; otherwise pass through user's args
+                if preset_args:
+                    new_content = ctx.prefix + resolved_command_name + ' ' + preset_args
+                else:
+                    user_args = ctx.message.content[len(ctx.prefix) + len(ctx.invoked_with):]
+                    new_content = ctx.prefix + resolved_command_name + user_args
                 ctx.message.content = new_content
                 await client.process_commands(ctx.message)
                 return
+            
+            # Update potential_command_name for custom command lookup
+            potential_command_name = resolved_command_name
+
 
         guild_settings = server_settings.setdefault(guild_id, {})
         custom_commands = guild_settings.setdefault('custom_commands', {})
@@ -5769,7 +5806,7 @@ only_prefix = {'getlegacy',
                'addlore', '!'}
 
 cmd_aliases = {'dig': 'd', 'mine': 'm', 'work': 'w', 'fish': 'f', 'gamble': 'g',
-               'balance': 'bal', 'coinflip': 'c', 'dice': '1d', 'twodice': '2d', 'giveaway_pool': 'pool',
+               'balance': 'bal', 'coinflip': 'coin', 'dice': '1d', 'twodice': '2d', 'giveaway_pool': 'pool',
                'info': 'i', 'profile': 'p', 'inventory': 'inv', 'stock_prices': 'sp',
                'lore_compact': 'lore2', 'lore_remove': 'rmlore', 'lore_random': 'rl', 'server_lore': 'sl',
                'custom_inspect': 'ci', 'custom_list': 'cl', 'custom_list_dm': 'cldm', 'custom_remove': 'crm',
@@ -9309,7 +9346,7 @@ class Currency(commands.Cog):
         print(error)
         await ctx.reply("Please don't spam this command. It has already been used within the last 3 seconds")
 
-    @commands.command(aliases=['coin', 'c'])
+    @commands.command(aliases=['coin'])
     async def coinflip(self, ctx):
         """
         Flips a coin, takes an optional bet
@@ -11062,7 +11099,7 @@ class Fun(commands.Cog):
             return None
     
     async def _get_image_url(self, ctx: commands.Context, url: str = None) -> str | None:
-        """Get image URL from: 1) attachment, 2) provided URL, 3) replied message"""
+        """Get image URL from: 1) attachment, 2) provided URL, 3) replied message (attachments, embeds, stickers, emojis)"""
         # Check for attachment first
         if ctx.message.attachments:
             attachment = ctx.message.attachments[0]
@@ -11077,10 +11114,25 @@ class Fun(commands.Cog):
         if ctx.message.reference:
             try:
                 replied_msg = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+                
+                # Check for attachments
                 if replied_msg.attachments:
                     attachment = replied_msg.attachments[0]
                     if attachment.content_type and attachment.content_type.startswith('image/'):
                         return attachment.url
+                
+                # Check for stickers
+                if replied_msg.stickers:
+                    sticker = replied_msg.stickers[0]
+                    # Skip APNG format as it's not well supported
+                    if sticker.format != discord.StickerFormatType.apng:
+                        link = sticker.url
+                        if link.endswith('.gif'):
+                            link += "?size=4096"
+                        elif '?size=' in link:
+                            link = f"{link.split('?size=')[0]}?size=4096"
+                        return link
+                
                 # Check for embeds with images
                 if replied_msg.embeds:
                     for embed in replied_msg.embeds:
@@ -11088,6 +11140,24 @@ class Fun(commands.Cog):
                             return embed.image.url
                         if embed.thumbnail:
                             return embed.thumbnail.url
+
+                # Check for custom emojis in message content
+                custom_emoji_data = re.search(EMOJI_REGEX, replied_msg.content) or re.search(EMOJI_REGEX_VENCORD, replied_msg.content)
+                if custom_emoji_data:
+                    emoji = discord.PartialEmoji(
+                        name=custom_emoji_data.group('name'),
+                        id=int(custom_emoji_data.group('id')),
+                        animated=bool(custom_emoji_data.group('animated'))
+                    )
+                    link = emoji.url
+                    # Verify the URL works, fallback to webp if gif fails
+                    if link.endswith('.gif'):
+                        async with aiohttp.ClientSession() as session:
+                            async with session.head(link) as resp:
+                                if resp.status != 200:
+                                    link = link.split('.gif')[0] + '.webp?size=4096&animated=true'
+                    return link
+                
             except Exception:
                 pass
         
@@ -11289,7 +11359,7 @@ class Fun(commands.Cog):
         
         return result
     
-    @commands.hybrid_command(name='sparklereact', aliases=['sparxie'])
+    @commands.hybrid_command(name='sparxie', aliases=['sparklereact'])
     @app_commands.describe(
         url="URL of an image or message link",
         h_shift="Horizontal shift (-1 to 1, positive = right)",
