@@ -11165,7 +11165,8 @@ class Fun(commands.Cog):
     
     def _overlay_image(self, base_bytes: bytes, overlay_path: Path, 
                        size: float = 1.0, mirror: bool = False, 
-                       h_shift: float = 0.0, v_shift: float = 0.0) -> io.BytesIO | None:
+                       h_shift: float = 0.0, v_shift: float = 0.0,
+                       adjust: bool = None) -> io.BytesIO | None:
         """
         Overlay an image on top of the base image (runs synchronously, call via asyncio.to_thread)
         
@@ -11174,6 +11175,7 @@ class Fun(commands.Cog):
             mirror: If True, flip OVERLAY horizontally
             h_shift: Horizontal shift of BACKGROUND (-1 to 1, positive = right)
             v_shift: Vertical shift of BACKGROUND (-1 to 1, positive = up)
+            adjust: Override aspect ratio adjustment (None = auto, True = squish/stretch, False = don't squish/stretch)
         
         The canvas expands to fit both images without cutoff.
         """
@@ -11198,12 +11200,21 @@ class Fun(commands.Cog):
             base_aspect = base_img.width / base_img.height if base_img.height > 0 else 1
             overlay_aspect = overlay.width / overlay.height if overlay.height > 0 else 1
             
-            if base_aspect >= overlay_aspect:
-                # Base is wider - squish overlay to match base dimensions
+            # Determine whether to adjust overlay to match base aspect ratio
+            # adjust=None (default): auto-detect based on aspect ratio comparison
+            # adjust=True: always squish overlay to match base dimensions
+            # adjust=False: always maintain overlay aspect ratio
+            if adjust is None:
+                should_adjust = base_aspect >= overlay_aspect
+            else:
+                should_adjust = adjust
+            
+            if should_adjust:
+                # Squish overlay to match base dimensions
                 new_overlay_width = base_img.width
                 new_overlay_height = base_img.height
             else:
-                # Base is taller - scale overlay to match width, maintain aspect
+                # Scale overlay to match width, maintain aspect
                 new_overlay_width = base_img.width
                 new_overlay_height = int(overlay.height * (base_img.width / overlay.width))
             
@@ -11321,10 +11332,10 @@ class Fun(commands.Cog):
     def _parse_sparxie_args(self, args: tuple) -> dict:
         """
         Parse flexible arguments for sparxie command.
-        Expected order: size, mirror, h_shift, v_shift, url
+        Expected order: h_shift, v_shift, mirror, size, adjust, url
         But URL can appear anywhere or be detected by format.
         """
-        result = {'size': 1.0, 'mirror': False, 'h_shift': 0.0, 'v_shift': 0.0, 'url': None}
+        result = {'size': 1.0, 'mirror': False, 'h_shift': 0.0, 'v_shift': 0.0, 'adjust': None, 'url': None}
         remaining_args = list(args)
         
         # First, extract any URL-like argument
@@ -11334,8 +11345,8 @@ class Fun(commands.Cog):
                 remaining_args.pop(i)
                 break
         
-        # Now parse remaining args in order: h_shift, v_shift, mirror, size
-        arg_order = ['h_shift', 'v_shift', 'mirror', 'size']
+        # Now parse remaining args in order: h_shift, v_shift, mirror, size, adjust
+        arg_order = ['h_shift', 'v_shift', 'mirror', 'size', 'adjust']
         
         for i, arg in enumerate(remaining_args):
             if i >= len(arg_order):
@@ -11346,6 +11357,14 @@ class Fun(commands.Cog):
             if arg_name == 'mirror':
                 # Parse boolean
                 result['mirror'] = arg.lower() in ('true', '1', 'yes', 'y', 't')
+            elif arg_name == 'adjust':
+                # Parse boolean or None
+                arg_lower = arg.lower()
+                if arg_lower in ('true', '1', 'yes', 'y', 't'):
+                    result['adjust'] = True
+                elif arg_lower in ('false', '0', 'no', 'n', 'f'):
+                    result['adjust'] = False
+                # Otherwise keep as None (default/auto)
             else:
                 # Parse float
                 try:
@@ -11365,7 +11384,8 @@ class Fun(commands.Cog):
         h_shift="Horizontal shift (-1 to 1, positive = right)",
         v_shift="Vertical shift (-1 to 1, positive = up)",
         mirror="Flip the overlay horizontally",
-        size="Size multiplier (0.1 to 3.0)"
+        size="Size multiplier (0.1 to 3.0)",
+        adjust="Override aspect ratio adjustment (None = auto, True = squish/stretch, False = don't squish/stretch)"
     )
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     async def sparklereact(self, ctx: commands.Context, *,
@@ -11374,20 +11394,23 @@ class Fun(commands.Cog):
                            v_shift: float = None,
                            mirror: bool = None,
                            size: float = None,
+                           adjust: bool = None,
                            ):
         """
         Sparxie react an image!
-        You can attach an image, provide a URL, or reply to a message with an image
+        You can attach an image, provide a URL, or reply to a message with an image, sticker or emoji
         
         Parameters:
         - h_shift: Horizontal shift (-1 to 1, positive = right)
         - v_shift: Vertical shift (-1 to 1, positive = up)
         - mirror: Flip the overlay horizontally
         - size: Size multiplier (0.1 to 3.0)
+        - adjust: Override aspect ratio adjustment (None = auto, True = squish/stretch, False = don't squish/stretch)
         - url: URL of an image or message link
         
-        Example:
-        If you reply with `!sparxie -0.2 0.1 true 0.5` to an image, will position the background 20% to the left, 10% up, flip sparkle horizontally, and scale the background to 50% of its original size.
+        Examples:
+        - If you reply with `!sparxie -0.2 0.1 true 0.5` to an image, will position the background 20% to the left, 10% up, flip sparkle horizontally, and scale the background to 50% of its original size.
+        - To force sparxie to not squish when given a wide image pass "false" as the 5th parameter: `!sparxie 0 0 false 1 false`
         """
         await ctx.typing()
         
@@ -11398,6 +11421,7 @@ class Fun(commands.Cog):
             mirror = mirror if mirror is not None else False
             h_shift = max(-1.0, min(1.0, h_shift)) if h_shift is not None else 0.0
             v_shift = max(-1.0, min(1.0, v_shift)) if v_shift is not None else 0.0
+            # adjust is already a bool or None, no processing needed
         else:
             # Prefix command - the 'url' parameter contains all args as a single string
             # because of how discord.py handles this
@@ -11407,6 +11431,7 @@ class Fun(commands.Cog):
             mirror = parsed['mirror']
             h_shift = parsed['h_shift']
             v_shift = parsed['v_shift']
+            adjust = parsed['adjust']
             url = parsed['url']
         
         # Track if this was a reply (for response behavior)
@@ -11455,7 +11480,7 @@ class Fun(commands.Cog):
         # Process image in thread pool to avoid blocking the event loop
         result = await asyncio.to_thread(
             self._overlay_image, image_bytes, overlay_path,
-            size, mirror, h_shift, v_shift
+            size, mirror, h_shift, v_shift, adjust
         )
         if not result:
             return await ctx.reply("Failed to process the image. The image format may not be supported.")
