@@ -11171,7 +11171,7 @@ class Fun(commands.Cog):
         Overlay an image on top of the base image (runs synchronously, call via asyncio.to_thread)
         
         Args:
-            size: Scale multiplier for BACKGROUND image (0.1 to 3.0)
+            size: Scale multiplier for OVERLAY image (0.1 to 3.0). Values > 1 shrink the overlay, < 1 grow it.
             mirror: If True, flip OVERLAY horizontally
             h_shift: Horizontal shift of BACKGROUND (-1 to 1, positive = right)
             v_shift: Vertical shift of BACKGROUND (-1 to 1, positive = up)
@@ -11222,6 +11222,20 @@ class Fun(commands.Cog):
             # This keeps the background image at its original size
             new_overlay_width = int(new_overlay_width / size) if size != 0 else new_overlay_width
             new_overlay_height = int(new_overlay_height / size) if size != 0 else new_overlay_height
+            
+            # Cap overlay dimensions to prevent massive intermediate images
+            # Without this, size=0.1 could create a 40,000x40,000 pixel overlay
+            max_overlay_dim = self.max_dimension * 2  # Allow some headroom for compositing
+            if new_overlay_width > max_overlay_dim or new_overlay_height > max_overlay_dim:
+                scale_down = min(max_overlay_dim / new_overlay_width, max_overlay_dim / new_overlay_height)
+                new_overlay_width = int(new_overlay_width * scale_down)
+                new_overlay_height = int(new_overlay_height * scale_down)
+                # Also scale down base image proportionally to maintain relative sizing
+                base_scale = scale_down
+                base_img = base_img.resize(
+                    (int(base_img.width * base_scale), int(base_img.height * base_scale)),
+                    Image.Resampling.LANCZOS
+                )
             
             overlay = overlay.resize((new_overlay_width, new_overlay_height), Image.Resampling.LANCZOS)
             
