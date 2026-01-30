@@ -11199,8 +11199,25 @@ class Fun(commands.Cog):
             if attachment.content_type and attachment.content_type.startswith('image/'):
                 return attachment.url
         
-        # Check for provided URL
+        # Check for provided URL (could also be an emoji)
         if url:
+            # Check if 'url' is actually an emoji
+            custom_emoji_data = re.search(EMOJI_REGEX, url) or re.search(EMOJI_REGEX_VENCORD, url)
+            if custom_emoji_data:
+                emoji = discord.PartialEmoji(
+                    name=custom_emoji_data.group('name'),
+                    id=int(custom_emoji_data.group('id')),
+                    animated=bool(custom_emoji_data.group('animated'))
+                )
+                link = emoji.url
+                # Verify the URL works, fallback to webp if gif fails
+                if link.endswith('.gif'):
+                    async with aiohttp.ClientSession() as session:
+                        async with session.head(link) as resp:
+                            if resp.status != 200:
+                                link = link.split('.gif')[0] + '.webp?size=4096&animated=true'
+                return link
+            # Not an emoji, treat as regular URL
             return url
         
         # Check for reply
@@ -11445,9 +11462,14 @@ class Fun(commands.Cog):
         result = {'size': 1.0, 'mirror': False, 'h_shift': 0.0, 'v_shift': 0.0, 'adjust': None, 'url': None}
         remaining_args = list(args)
         
-        # First, extract any URL-like argument
+        # First, extract any URL-like or emoji-like argument
         for i, arg in enumerate(remaining_args):
             if arg and (arg.startswith('http://') or arg.startswith('https://')):
+                result['url'] = arg
+                remaining_args.pop(i)
+                break
+            # Check if this arg contains an emoji pattern
+            if arg and (re.search(EMOJI_REGEX, arg) or re.search(EMOJI_REGEX_VENCORD, arg)):
                 result['url'] = arg
                 remaining_args.pop(i)
                 break
@@ -11487,7 +11509,7 @@ class Fun(commands.Cog):
     
     @commands.hybrid_command(name='sparxie', aliases=['sparklereact'])
     @app_commands.describe(
-        url="URL of an image or message link",
+        url="URL of an image, an emoji, or a message link",
         h_shift="Horizontal shift (-1 to 1, positive = right)",
         v_shift="Vertical shift (-1 to 1, positive = up)",
         mirror="Flip the overlay horizontally",
@@ -11513,7 +11535,7 @@ class Fun(commands.Cog):
         - mirror: Flip the overlay horizontally
         - size: Size multiplier (0.1 to 3.0)
         - adjust: Override aspect ratio adjustment (None = auto, True = squish/stretch, False = don't squish/stretch)
-        - url: URL of an image or message link
+        - url: URL of an image, an emoji, or a message link
         
         Examples:
         - If you reply with `!sparxie -0.2 0.1 true 0.5` to an image, will position the background 20% to the left, 10% up, flip sparkle horizontally, and scale the background to 50% of its original size.
