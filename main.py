@@ -3323,24 +3323,18 @@ class CustomCommands(commands.Cog):
         if command_input.startswith('!') and len(command_input) > 1:
             command_input = command_input[1:]
         
-        # Try to find the longest matching command (for subcommands like "aredl level")
-        # Start with the full input and progressively shorten
-        parts = command_input.split()
-        builtin_cmd = None
-        command_name = None
-        preset_args = ''
         
-        # Try full string first, then progressively remove words from the end
-        for i in range(len(parts), 0, -1):
-            potential_cmd = ' '.join(parts[:i])
-            builtin_cmd = client.get_command(potential_cmd)
-            if builtin_cmd:
-                command_name = builtin_cmd.qualified_name  # Use canonical name
-                preset_args = ' '.join(parts[i:])  # Remaining words are preset args
-                break
-        
-        # If no built-in command found, use first word as command name
-        if not command_name:
+        # Try to find the command (get_command handles subcommands like "aredl level")
+        builtin_cmd = client.get_command(command_input)
+        if builtin_cmd:
+            command_name = builtin_cmd.qualified_name  # Use canonical name
+            # Strip command name from the front to get preset args
+            # Handle case-insensitive matching
+            remaining = command_input[len(command_name):].strip()
+            preset_args = remaining
+        else:
+            # No built-in command found, use first word as command name
+            parts = command_input.split()
             command_name = parts[0]
             preset_args = ' '.join(parts[1:]) if len(parts) > 1 else ''
 
@@ -4477,21 +4471,14 @@ async def send_custom_command(ctx, error, mode='normal'):
         if potential_command_name in command_aliases:
             alias_target = command_aliases[potential_command_name]
             
-            # Try to find the longest matching command (for subcommands like "aredl level")
-            alias_parts = alias_target.split()
-            builtin_cmd = None
-            resolved_command_name = None
-            preset_args = ''
-            
-            for i in range(len(alias_parts), 0, -1):
-                potential_cmd = ' '.join(alias_parts[:i])
-                builtin_cmd = client.get_command(potential_cmd)
-                if builtin_cmd:
-                    resolved_command_name = builtin_cmd.qualified_name
-                    preset_args = ' '.join(alias_parts[i:])  # Remaining words are preset args
-                    break
-            
-            if not resolved_command_name:
+            # Try to find the command (get_command handles subcommands like "aredl level")
+            builtin_cmd = client.get_command(alias_target)
+            if builtin_cmd:
+                resolved_command_name = builtin_cmd.qualified_name
+                # Strip command name from the front to get preset args
+                preset_args = alias_target[len(resolved_command_name):].strip()
+            else:
+                alias_parts = alias_target.split()
                 resolved_command_name = alias_parts[0]
                 preset_args = ' '.join(alias_parts[1:]) if len(alias_parts) > 1 else ''
 
@@ -4530,21 +4517,14 @@ async def send_custom_command(ctx, error, mode='normal'):
         if potential_command_name in command_aliases:
             alias_target = command_aliases[potential_command_name]
             
-            # Try to find the longest matching command (for subcommands like "aredl level")
-            alias_parts = alias_target.split()
-            builtin_cmd = None
-            resolved_command_name = None
-            preset_args = ''
-            
-            for i in range(len(alias_parts), 0, -1):
-                potential_cmd = ' '.join(alias_parts[:i])
-                builtin_cmd = client.get_command(potential_cmd)
-                if builtin_cmd:
-                    resolved_command_name = builtin_cmd.qualified_name
-                    preset_args = ' '.join(alias_parts[i:])  # Remaining words are preset args
-                    break
-            
-            if not resolved_command_name:
+            # Try to find the command (get_command handles subcommands like "aredl level")
+            builtin_cmd = client.get_command(alias_target)
+            if builtin_cmd:
+                resolved_command_name = builtin_cmd.qualified_name
+                # Strip command name from the front to get preset args
+                preset_args = alias_target[len(resolved_command_name):].strip()
+            else:
+                alias_parts = alias_target.split()
                 resolved_command_name = alias_parts[0]
                 preset_args = ' '.join(alias_parts[1:]) if len(alias_parts) > 1 else ''
 
@@ -6112,21 +6092,14 @@ class MyHelpCommand(commands.HelpCommand):
             if lookup in custom_aliases:
                 alias_value = custom_aliases[lookup]
                 
-                # Try to find the longest matching command (for subcommands like "aredl level")
-                alias_parts = alias_value.split()
-                builtin_cmd = None
-                target = None
-                has_preset_args = False
-                
-                for i in range(len(alias_parts), 0, -1):
-                    potential_cmd = ' '.join(alias_parts[:i])
-                    builtin_cmd = ctx.bot.get_command(potential_cmd)
-                    if builtin_cmd:
-                        target = builtin_cmd.qualified_name
-                        has_preset_args = i < len(alias_parts)  # Has args after the command
-                        break
-                
-                if not target:
+                # Try to find the command (get_command handles subcommands like "aredl level")
+                builtin_cmd = ctx.bot.get_command(alias_value)
+                if builtin_cmd:
+                    target = builtin_cmd.qualified_name
+                    # Strip command name from the front to check for preset args
+                    has_preset_args = len(alias_value) > len(target) and alias_value[len(target):].strip()
+                else:
+                    alias_parts = alias_value.split()
                     target = alias_parts[0].lower().lstrip('!')
                     has_preset_args = len(alias_parts) > 1
                 
@@ -11161,6 +11134,11 @@ class AREDL(commands.Cog):
     async def level_autocomplete(self, interaction: discord.Interaction, current: str):
         suggestions = [(f"#{entry['position']} - {entry['name']}", entry['name']) for entry in self.aredl_data if current.lower() in entry['name'].lower() or current in f"#{entry['position']}"][:25]
         return [app_commands.Choice(name=suggestion[0], value=suggestion[1]) for suggestion in suggestions]
+
+    @level.error
+    async def level_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send('You need to pass a level name!')
 
     @aredl.command(name='random')
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
