@@ -99,7 +99,7 @@ global_command_cooldowns = {  # command: (number_of_uses, seconds)
 }
 bot_id = 1322197604297085020
 official_server_id = 696311992973131796
-MAX_INITIAL_RESPONSE_LENGTH = 1950
+MAX_INITIAL_RESPONSE_LENGTH = 1900
 MAX_TOTAL_RESPONSE_LENGTH = 10000
 # fetched_users = {}
 stock_cache = {}
@@ -2905,11 +2905,13 @@ async def add_custom_command(ctx, name: str, response: str, mode):
     command_name = name.lower().lstrip('!')  # Store names in lowercase for case-insensitivity
     if ' ' in command_name:
         return await ctx.reply('Custom command names can only contain one word, silly')
+    if len(command_name) > 30:
+        return await ctx.reply('Custom command names can only be up to 30 characters long')
     if response[0] == response[-1] == '"':
         response = response[1:-1]
 
     if len(response) > MAX_INITIAL_RESPONSE_LENGTH:
-        await ctx.reply("No more than 1950 symbols at a time")
+        await ctx.reply("No more than 1900 symbols at a time.\nUse `!custom_append` to create a longer response")
         return
 
     # Ensure the structure exists
@@ -3242,10 +3244,12 @@ class CustomCommands(commands.Cog):
 
         if command_name in custom_commands:
             response = custom_commands[command_name]
-            responses = [response[i:i+1950] for i in range(0, len(response), 1950)]
-            # await ctx.reply(f"## !{command_name}")
-            for r in responses:
-                await ctx.send(f"```{r}```")
+            responses = [response[i:i+1900] for i in range(0, len(response), 1900)]
+            for i, r in enumerate(responses):
+                if i == 0:
+                    await ctx.send(f"## Custom command `!{command_name}`\n```{r}```")
+                else:
+                    await ctx.send(f"```{r}```")
             return
 
         await ctx.reply(f"Custom command `!{command_name}` doesn't exist.\nIf you're looking for a custom role command, use `!cri`")
@@ -3319,10 +3323,26 @@ class CustomCommands(commands.Cog):
         if command_input.startswith('!') and len(command_input) > 1:
             command_input = command_input[1:]
         
-        # Split into command name and preset arguments
-        parts = command_input.split(None, 1)  # Split on first whitespace
-        command_name = parts[0]
-        preset_args = parts[1] if len(parts) > 1 else ''
+        # Try to find the longest matching command (for subcommands like "aredl level")
+        # Start with the full input and progressively shorten
+        parts = command_input.split()
+        builtin_cmd = None
+        command_name = None
+        preset_args = ''
+        
+        # Try full string first, then progressively remove words from the end
+        for i in range(len(parts), 0, -1):
+            potential_cmd = ' '.join(parts[:i])
+            builtin_cmd = client.get_command(potential_cmd)
+            if builtin_cmd:
+                command_name = builtin_cmd.qualified_name  # Use canonical name
+                preset_args = ' '.join(parts[i:])  # Remaining words are preset args
+                break
+        
+        # If no built-in command found, use first word as command name
+        if not command_name:
+            command_name = parts[0]
+            preset_args = ' '.join(parts[1:]) if len(parts) > 1 else ''
 
         if ' ' in alias_name:
             return await ctx.reply('Alias names can only contain one word')
@@ -3334,11 +3354,6 @@ class CustomCommands(commands.Cog):
             return await ctx.reply(f"`{alias_name}` conflicts with a built-in bot command!")
 
         # Check if command exists (built-in, custom, or custom role)
-        # For built-in commands, resolve to canonical name (not alias)
-        builtin_cmd = client.get_command(command_name)
-        if builtin_cmd:
-            command_name = builtin_cmd.qualified_name  # Use canonical name, not alias
-        
         command_exists = (
             builtin_cmd or
             command_name in server_settings[guild_id].get('custom_commands', {}) or
@@ -3419,9 +3434,9 @@ class CustomCommands(commands.Cog):
             target = command_aliases[alias_name]
             del command_aliases[alias_name]
             save_settings()
-            return await ctx.reply(f"Removed alias `!{alias_name}` (was pointing to `!{target}`).")
+            return await ctx.reply(f"Removed alias `!{alias_name}` (was pointing to `!{target}`)")
 
-        await ctx.reply(f"Alias `!{alias_name}` doesn't exist.\nUse `!cal` to view all aliases.")
+        await ctx.reply(f"Alias `!{alias_name}` doesn't exist\nUse `!cal` to view all aliases")
 
     @custom_alias_remove.error
     async def custom_alias_remove_error(self, ctx, error):
@@ -4461,20 +4476,32 @@ async def send_custom_command(ctx, error, mode='normal'):
         command_aliases = server_settings.get(guild_id, {}).get('command_aliases', {})
         if potential_command_name in command_aliases:
             alias_target = command_aliases[potential_command_name]
-            # Split alias target into command name and preset arguments
-            alias_parts = alias_target.split(None, 1)
-            resolved_command_name = alias_parts[0]
-            preset_args = alias_parts[1] if len(alias_parts) > 1 else ''
+            
+            # Try to find the longest matching command (for subcommands like "aredl level")
+            alias_parts = alias_target.split()
+            builtin_cmd = None
+            resolved_command_name = None
+            preset_args = ''
+            
+            for i in range(len(alias_parts), 0, -1):
+                potential_cmd = ' '.join(alias_parts[:i])
+                builtin_cmd = client.get_command(potential_cmd)
+                if builtin_cmd:
+                    resolved_command_name = builtin_cmd.qualified_name
+                    preset_args = ' '.join(alias_parts[i:])  # Remaining words are preset args
+                    break
+            
+            if not resolved_command_name:
+                resolved_command_name = alias_parts[0]
+                preset_args = ' '.join(alias_parts[1:]) if len(alias_parts) > 1 else ''
 
-            # Check if it's a built-in command (after alias resolution)
-            builtin_cmd = client.get_command(resolved_command_name)
             if builtin_cmd:
                 # Reparse the message with the aliased command
-                # If preset args exist, use only those; otherwise pass through user's args
+                # Always append user's args after preset args
+                user_args = ctx.message.content[len(ctx.prefix) + len(ctx.invoked_with):]
                 if preset_args:
-                    new_content = ctx.prefix + resolved_command_name + ' ' + preset_args
+                    new_content = ctx.prefix + resolved_command_name + ' ' + preset_args + user_args
                 else:
-                    user_args = ctx.message.content[len(ctx.prefix) + len(ctx.invoked_with):]
                     new_content = ctx.prefix + resolved_command_name + user_args
                 ctx.message.content = new_content
                 await client.process_commands(ctx.message)
@@ -4502,20 +4529,32 @@ async def send_custom_command(ctx, error, mode='normal'):
         command_aliases = server_settings.get(guild_id, {}).get('command_aliases', {})
         if potential_command_name in command_aliases:
             alias_target = command_aliases[potential_command_name]
-            # Split alias target into command name and preset arguments
-            alias_parts = alias_target.split(None, 1)
-            resolved_command_name = alias_parts[0]
-            preset_args = alias_parts[1] if len(alias_parts) > 1 else ''
+            
+            # Try to find the longest matching command (for subcommands like "aredl level")
+            alias_parts = alias_target.split()
+            builtin_cmd = None
+            resolved_command_name = None
+            preset_args = ''
+            
+            for i in range(len(alias_parts), 0, -1):
+                potential_cmd = ' '.join(alias_parts[:i])
+                builtin_cmd = client.get_command(potential_cmd)
+                if builtin_cmd:
+                    resolved_command_name = builtin_cmd.qualified_name
+                    preset_args = ' '.join(alias_parts[i:])  # Remaining words are preset args
+                    break
+            
+            if not resolved_command_name:
+                resolved_command_name = alias_parts[0]
+                preset_args = ' '.join(alias_parts[1:]) if len(alias_parts) > 1 else ''
 
-            # Check if it's a built-in command (after alias resolution)
-            builtin_cmd = client.get_command(resolved_command_name)
             if builtin_cmd:
                 # Reparse the message with the aliased command
-                # If preset args exist, use only those; otherwise pass through user's args
+                # Always append user's args after preset args
+                user_args = ctx.message.content[len(ctx.prefix) + len(ctx.invoked_with):]
                 if preset_args:
-                    new_content = ctx.prefix + resolved_command_name + ' ' + preset_args
+                    new_content = ctx.prefix + resolved_command_name + ' ' + preset_args + user_args
                 else:
-                    user_args = ctx.message.content[len(ctx.prefix) + len(ctx.invoked_with):]
                     new_content = ctx.prefix + resolved_command_name + user_args
                 ctx.message.content = new_content
                 await client.process_commands(ctx.message)
@@ -6055,6 +6094,78 @@ class MyHelpCommand(commands.HelpCommand):
         await self._send(embed=embed)
 
     async def command_not_found(self, string):
+        # Check if we're in a guild context for custom aliases/commands
+        ctx = self.context
+        if ctx.guild:
+            guild_id = str(ctx.guild.id)
+            make_sure_server_settings_exist(guild_id)
+            
+            custom_aliases = server_settings[guild_id].get('command_aliases', {})
+            custom_commands = server_settings[guild_id].get('custom_commands', {})
+            custom_role_commands = server_settings[guild_id].get('custom_role_commands', {})
+            
+            # Resolve the input through custom aliases
+            lookup = string.lower().lstrip('!')
+            resolved = lookup
+            
+            # Follow alias chain (in case alias points to another alias via custom command)
+            if lookup in custom_aliases:
+                alias_value = custom_aliases[lookup]
+                
+                # Try to find the longest matching command (for subcommands like "aredl level")
+                alias_parts = alias_value.split()
+                builtin_cmd = None
+                target = None
+                has_preset_args = False
+                
+                for i in range(len(alias_parts), 0, -1):
+                    potential_cmd = ' '.join(alias_parts[:i])
+                    builtin_cmd = ctx.bot.get_command(potential_cmd)
+                    if builtin_cmd:
+                        target = builtin_cmd.qualified_name
+                        has_preset_args = i < len(alias_parts)  # Has args after the command
+                        break
+                
+                if not target:
+                    target = alias_parts[0].lower().lstrip('!')
+                    has_preset_args = len(alias_parts) > 1
+                
+                if builtin_cmd:
+                    if has_preset_args:
+                        # Alias has preset arguments, invoke custom_alias_inspect
+                        custom_alias_inspect_cmd = ctx.bot.get_command('custom_alias_inspect')
+                        if custom_alias_inspect_cmd:
+                            await ctx.invoke(custom_alias_inspect_cmd, alias=lookup)
+                            return
+                    else:
+                        # Simple alias, redirect to the built-in command's help
+                        return await self.send_command_help(builtin_cmd)
+                
+                # Check if target is a custom role command
+                if target in custom_role_commands:
+                    custom_role_inspect_cmd = ctx.bot.get_command('custom_role_inspect')
+                    if custom_role_inspect_cmd:
+                        await ctx.invoke(custom_role_inspect_cmd, name=target)
+                        return
+                
+                # Otherwise, the target might be a custom command
+                resolved = target
+            
+            # Check if resolved name is a custom role command
+            if resolved in custom_role_commands:
+                custom_role_inspect_cmd = ctx.bot.get_command('custom_role_inspect')
+                if custom_role_inspect_cmd:
+                    await ctx.invoke(custom_role_inspect_cmd, name=resolved)
+                    return
+            
+            # Check if resolved name is a custom command
+            if resolved in custom_commands:
+                # Invoke custom_inspect for this custom command
+                custom_inspect_cmd = ctx.bot.get_command('custom_inspect')
+                if custom_inspect_cmd:
+                    await ctx.invoke(custom_inspect_cmd, name=resolved)
+                    return
+        
         await self._send(content=f"Command `{string}` not found.")
 
     async def subcommand_not_found(self, command, string):
