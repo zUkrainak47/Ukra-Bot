@@ -302,6 +302,8 @@ if os.path.exists(ACTIVE_GIVEAWAYS):
 else:
     active_giveaways = {}
 
+_giveaways_resumed = False  # Guard to prevent duplicate giveaway resumptions on reconnect
+
 _reminder_tasks: dict[str, asyncio.Task] = {}  # Track tasks for cancellation
 ACTIVE_REMINDERS = Path(dev_folder, "active_reminders.json")
 if os.path.exists(ACTIVE_REMINDERS):
@@ -1125,12 +1127,14 @@ async def on_ready():
         elapsed = time.time() - start_time
         print(f"✅ Fully ready in {elapsed:.2f}s")
 
-        if active_giveaways:
+        global _giveaways_resumed
+        if active_giveaways and not _giveaways_resumed:
             try:
                 print("✅ Resuming giveaways")
                 await resume_giveaways()
             except Exception as e:
                 traceback.print_exc()
+        _giveaways_resumed = True  # Always set after first on_ready to prevent duplicate resumes on reconnect
 
     except Exception as e:
         await client.change_presence(
