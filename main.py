@@ -302,7 +302,7 @@ if os.path.exists(ACTIVE_GIVEAWAYS):
 else:
     active_giveaways = {}
 
-_giveaways_resumed = False  # Guard to prevent duplicate giveaway resumptions on reconnect
+_giveaway_tasks: dict[str, asyncio.Task] = {}  # Track running giveaway tasks for cancellation on reconnect
 
 _reminder_tasks: dict[str, asyncio.Task] = {}  # Track tasks for cancellation
 ACTIVE_REMINDERS = Path(dev_folder, "active_reminders.json")
@@ -1067,11 +1067,21 @@ async def on_ready():
                 print(f"Error resuming giveaway {message_id}: {e}")
 
         async def resume_giveaways():
-            # print('resuming giveaways')
-            tasks = []
+            global _giveaway_tasks
+            # Cancel any existing giveaway tasks from previous on_ready (reconnect case)
+            for task_id, task in list(_giveaway_tasks.items()):
+                if not task.done():
+                    task.cancel()
+            _giveaway_tasks.clear()
+            
+            # Create new tasks for all active giveaways
             for message_id in active_giveaways:
-                tasks.append(asyncio.create_task(resume_giveaway(message_id)))
-            await asyncio.gather(*tasks)
+                task = asyncio.create_task(resume_giveaway(message_id))
+                _giveaway_tasks[message_id] = task
+            
+            # Wait for all to complete (or be cancelled on next reconnect)
+            if _giveaway_tasks:
+                await asyncio.gather(*_giveaway_tasks.values(), return_exceptions=True)
         
         await client.change_presence(
             activity=discord.Activity(
@@ -1127,14 +1137,13 @@ async def on_ready():
         elapsed = time.time() - start_time
         print(f"✅ Fully ready in {elapsed:.2f}s")
 
-        global _giveaways_resumed
-        if active_giveaways and not _giveaways_resumed:
+        if active_giveaways:
             try:
                 print("✅ Resuming giveaways")
-                await resume_giveaways()
+                # This will cancel any existing tasks from previous on_ready and restart them
+                asyncio.create_task(resume_giveaways())
             except Exception as e:
                 traceback.print_exc()
-        _giveaways_resumed = True  # Always set after first on_ready to prevent duplicate resumes on reconnect
 
     except Exception as e:
         await client.change_presence(
@@ -5066,6 +5075,10 @@ async def schedule_reminders(message, amount, duration, remind_intervals):
 
 
 async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, author_id: str, amount: int, admin: bool, t: str = 'regular', too_late=False):
+    # Early guard: if this giveaway is no longer active, another task already handled it
+    if message_id not in active_giveaways:
+        return
+    
     # Collect reactions
     try:
         guild = await client.fetch_guild(int(guild_id))
@@ -5123,6 +5136,7 @@ async def finalize_giveaway(message_id: str, channel_id: int, guild_id: str, aut
 
         if message_id in active_giveaways:
             active_giveaways.pop(message_id)
+            _giveaway_tasks.pop(message_id, None)  # Clean up task tracking
             # print('removing giveaway', message_id)
             save_active_giveaways()
         else:
@@ -10346,17 +10360,30 @@ class Currency(commands.Cog):
 
                 if not remind:
                     await ctx.author.send(f'No reminders will be sent for [this giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id})')
-                    await asyncio.sleep(duration)
-
                 else:
                     await ctx.author.send(f'Thanks for hosting a [giveaway](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}) {yay}')
-                    # Calculate reminder intervals
-                    reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
-                    reminder_interval = duration // reminders_to_send - min(5, duration // 10)
-                    remind_intervals = [reminder_interval for _ in range(1, reminders_to_send+1)]
-                    await asyncio.create_task(schedule_reminders(message, amount, duration, remind_intervals))
 
-            await finalize_giveaway(str(message.id), ctx.channel.id, guild_id, author_id, amount, admin, t)
+            # Create a tracked giveaway task instead of executing inline
+            # This allows on_ready's resume_giveaways to cancel it on reconnect
+            message_id_str = str(message.id)
+            
+            async def giveaway_task():
+                try:
+                    if remind:
+                        # Calculate reminder intervals
+                        reminders_to_send = 2 + (duration >= 120) + (duration >= 600) + (duration >= 3000) + (duration >= 85000)
+                        reminder_interval = duration // reminders_to_send - min(5, duration // 10)
+                        remind_intervals = [reminder_interval for _ in range(1, reminders_to_send+1)]
+                        await schedule_reminders(message, amount, duration, remind_intervals)
+                    else:
+                        await asyncio.sleep(duration)
+                    await finalize_giveaway(message_id_str, ctx.channel.id, guild_id, author_id, amount, admin, t)
+                except asyncio.CancelledError:
+                    # Task was cancelled due to bot reconnection - resume_giveaways will handle it
+                    pass
+            
+            task = asyncio.create_task(giveaway_task())
+            _giveaway_tasks[message_id_str] = task
 
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
