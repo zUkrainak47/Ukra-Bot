@@ -5265,9 +5265,9 @@ class PaginationView(discord.ui.View):
         # AREDL list view
         if self.author == "AREDL":
             embed = discord.Embed(
-                title=f"AREDL - Page {self.current_page} / {self.total_pages()}",
+                title=f"{self.title} - Page {self.current_page} / {self.total_pages()}",
                 color=self.color,
-                description='\n'.join([f"{entry['position']}. **{entry['name']}**" for entry in data])
+                description='\n'.join([f"`{f"{entry['position']}.":<{max([len(str(i['position'])) for i in data])+1}}`  **{entry['name']}**" for entry in data]) if 'Newest First' in self.title else '\n'.join([f"{entry['position']}. **{entry['name']}**" for entry in data])
             )
             embed.set_footer(text=f"{len(self.data)} Extreme Demons")
             return embed
@@ -7621,7 +7621,12 @@ class Currency(commands.Cog):
                     target_profile = get_profile(target_id_)
 
                     if target_id not in ignored_users + dev_mode_users:
-                        global_rank = get_net_leaderboard().index((target_id_, num)) + 1
+                        lb = get_net_leaderboard()
+                        if (target_id_, num) not in lb:
+                            profile_embed = discord.Embed(title=f"{target.display_name} hasn't run a single farm or gamble command yet!", description=f"Try using `!d` or `!g` for example!", color=embed_color)
+                            return profile_embed
+                        
+                        global_rank = lb.index((target_id_, num)) + 1
                         if target_profile['highest_global_rank'] > global_rank or target_profile['highest_global_rank'] < 0:
                             target_profile['highest_global_rank'] = global_rank
                             if global_rank == 1:
@@ -10989,6 +10994,7 @@ class AREDL(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.aredl_data = {}
+        self.sorted_data = {}
         self.cached_levels = {}
         self.load_aredl_data.start()
         self.level_aliases = {
@@ -11027,6 +11033,14 @@ class AREDL(commands.Cog):
                 if resp.status == 200:
                     return [level for level in await resp.json() if not level['legacy']]
 
+    async def fetch_sorted_data_dict(self):
+        """Fetch the latest AREDL data sorted by time added"""
+        async with aiohttp.ClientSession() as session:
+            async with session.get('https://api.aredl.net/v2/api/aredl/changelog?per_page=1000000') as resp:
+                if resp.status == 200:
+                    sorted_levels = await resp.json()
+                    return {k: v for v, k in enumerate([i['affected_level']['id'] for i in sorted_levels['data'] if "Placed" in i['action']])}
+
     async def fetch_level_data(self, level_id):
         """Fetch the latest AREDL data from the API"""
         async with aiohttp.ClientSession() as session:
@@ -11037,6 +11051,8 @@ class AREDL(commands.Cog):
     @tasks.loop(minutes=5)
     async def load_aredl_data(self):
         self.aredl_data = await self.fetch_aredl_data()
+        sorted_dict = await self.fetch_sorted_data_dict()
+        self.sorted_data = sorted(self.aredl_data, key=lambda i: sorted_dict[i['id']])
         
     @load_aredl_data.before_loop
     async def before_load_aredl_data(self):
@@ -11064,8 +11080,8 @@ class AREDL(commands.Cog):
 
     @aredl.command(name="list", aliases=['top'])
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
-    @app_commands.describe(page="The page number to view")
-    async def top(self, ctx, page: int = 1):
+    @app_commands.describe(page="The page number to view", most_recent_first="Whether to show the newest Extreme Demons first")
+    async def top(self, ctx, page: int = 1, most_recent_first=False):
         """(!aredl) View the Demonlist"""
         if not self.aredl_data:
             return await ctx.reply("AREDL data is not loaded yet, please try again in a moment.")
@@ -11075,8 +11091,8 @@ class AREDL(commands.Cog):
         page = min(max(page, 1), max_page)
         
         pagination_view = PaginationView(
-            data_=self.aredl_data,
-            title_="AREDL",
+            data_=self.aredl_data if not most_recent_first else self.sorted_data,
+            title_="AREDL" if not most_recent_first else 'AREDL - Newest First',
             color_=0x00ff00,  # Green color
             author_="AREDL",
             ctx_=ctx,
