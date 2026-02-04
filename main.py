@@ -11207,7 +11207,7 @@ class Fun(commands.Cog):
         except Exception:
             return None
     
-    async def _get_image_url(self, ctx: commands.Context, url: str = None) -> str | None:
+    async def _get_image_url(self, ctx: commands.Context, background: str = None) -> str | None:
         """Get image URL from: 1) attachment, 2) provided URL, 3) replied message (attachments, embeds, stickers, emojis)"""
         # Check for attachment first
         if ctx.message.attachments:
@@ -11216,9 +11216,9 @@ class Fun(commands.Cog):
                 return attachment.url
         
         # Check for provided URL (could also be an emoji)
-        if url:
-            # Check if 'url' is actually an emoji
-            custom_emoji_data = re.search(EMOJI_REGEX, url) or re.search(EMOJI_REGEX_VENCORD, url)
+        if background:
+            # Check if 'background' is actually an emoji
+            custom_emoji_data = re.search(EMOJI_REGEX, background) or re.search(EMOJI_REGEX_VENCORD, background)
             if custom_emoji_data:
                 emoji = discord.PartialEmoji(
                     name=custom_emoji_data.group('name'),
@@ -11234,7 +11234,7 @@ class Fun(commands.Cog):
                                 link = link.split('.gif')[0] + '.webp?size=4096&animated=true'
                 return link
             # Not an emoji, treat as regular URL
-            return url
+            return background
         
         # Check for reply
         if ctx.message.reference:
@@ -11472,8 +11472,8 @@ class Fun(commands.Cog):
     def _parse_sparxie_args(self, args: tuple) -> dict:
         """
         Parse flexible arguments for sparxie command.
-        Expected order: h_shift, v_shift, mirror, size, adjust, url
-        But URL can appear anywhere or be detected by format.
+        Expected order: h_shift, v_shift, mirror, size, adjust, background
+        But background can appear anywhere or be detected by format.
         """
         result = {'size': 1.0, 'mirror': False, 'h_shift': 0.0, 'v_shift': 0.0, 'adjust': None, 'url': None}
         remaining_args = list(args)
@@ -11525,7 +11525,7 @@ class Fun(commands.Cog):
     
     @commands.hybrid_command(name='sparxie', aliases=['sparklereact'])
     @app_commands.describe(
-        url="URL of an image, an emoji, or a message link",
+        background="URL of an image, a message link, or an emoji",
         h_shift="Horizontal shift (-1 to 1, positive = right)",
         v_shift="Vertical shift (-1 to 1, positive = up)",
         mirror="Flip the overlay horizontally",
@@ -11534,7 +11534,7 @@ class Fun(commands.Cog):
     )
     @app_commands.allowed_contexts(dms=True, guilds=True, private_channels=True)
     async def sparklereact(self, ctx: commands.Context, *,
-                           url: str = None,
+                           background: str = None,
                            h_shift: float = None,
                            v_shift: float = None,
                            mirror: bool = None,
@@ -11543,7 +11543,7 @@ class Fun(commands.Cog):
                            ):
         """
         Sparxie react an image!
-        You can attach an image, provide a URL, or reply to a message with an image, sticker or emoji
+        You can attach an image, provide a URL or an emoji, or reply to a message with an image, sticker or emoji
         
         Parameters:
         - h_shift: Horizontal shift (-1 to 1, positive = right)
@@ -11551,7 +11551,7 @@ class Fun(commands.Cog):
         - mirror: Flip the overlay horizontally
         - size: Size multiplier (0.1 to 3.0)
         - adjust: Override aspect ratio adjustment (None = auto, True = squish/stretch, False = don't squish/stretch)
-        - url: URL of an image, an emoji, or a message link
+        - background: URL of an image, a message link, or an emoji
         
         Examples:
         - If you reply with `!sparxie -0.2 0.1 true 0.5` to an image, will position the background 20% to the left, 10% up, flip sparkle horizontally, and scale the background to 50% of its original size.
@@ -11568,16 +11568,16 @@ class Fun(commands.Cog):
             v_shift = max(-1.0, min(1.0, v_shift)) if v_shift is not None else 0.0
             # adjust is already a bool or None, no processing needed
         else:
-            # Prefix command - the 'url' parameter contains all args as a single string
+            # Prefix command - the 'background' parameter contains all args as a single string
             # because of how discord.py handles this
-            args_str = url if url else ""
+            args_str = background if background else ""
             parsed = self._parse_sparxie_args(tuple(args_str.split()) if args_str else ())
             size = parsed['size']
             mirror = parsed['mirror']
             h_shift = parsed['h_shift']
             v_shift = parsed['v_shift']
             adjust = parsed['adjust']
-            url = parsed['url']
+            background = parsed['url']
         
         # Track if this was a reply (for response behavior)
         replied_message = None
@@ -11588,15 +11588,15 @@ class Fun(commands.Cog):
                 pass
         
         # Check if URL is a message link and extract image
-        if url and ('discord.com/channels' in url or 'discordapp.com/channels' in url):
-            extracted = await self._extract_image_from_message_link(url)
+        if background and ('discord.com/channels' in background or 'discordapp.com/channels' in background):
+            extracted = await self._extract_image_from_message_link(background)
             if extracted:
-                url = extracted
+                background = extracted
             else:
                 return await ctx.reply("Could not find an image in that message.")
         
         # Get image URL
-        image_url = await self._get_image_url(ctx, url)
+        image_url = await self._get_image_url(ctx, background)
         
         # Get overlay path (needed for both cases)
         overlay_path = self.assets_path / self.REACTIONS['sparxie']
