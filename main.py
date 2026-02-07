@@ -3286,13 +3286,36 @@ class CustomCommands(commands.Cog):
 
     @custom_cooldown_check(default_seconds=0)
     @commands.command(name='!')
-    async def random_custom(self, ctx):
+    async def random_custom(self, ctx, *, args: str = None):
         """
         Sends a random custom command from the server!
 
+        - `!! <search>` to filter commands matching the search term
+        - `!! <search> <mode>` where mode is:
+          - `1` = search command names only
+          - `2` = search responses only
+          - `3` = search both (default)
+
+        Examples:
+        - `!!` - random command from all
+        - `!! hello` - random command matching "hello" in name or response
+        - `!! hello world 1` - random command with "hello world" in name only
+
         You can change this command's cooldown using `!setcd`
         """
-        await send_custom_command(ctx, None, 'random')
+        search = None
+        search_mode = 3  # Default: search both
+
+        if args:
+            parts = args.rsplit(None, 1)  # Split from the right to get the last word
+            if len(parts) == 2 and parts[1] in ('1', '2', '3'):
+                search = parts[0].lower()
+                search_mode = int(parts[1])
+            else:
+                # No mode specified, entire args is the search string
+                search = args.lower()
+
+        await send_custom_command(ctx, None, 'random', search=search, search_mode=search_mode)
         apply_custom_cooldown(ctx, default_seconds=0)
 
     # ==================== COMMAND ALIASES ====================
@@ -4462,7 +4485,7 @@ async def execute_custom_role_command(ctx, command_name, command_config):
         traceback.print_exc()
 
 
-async def send_custom_command(ctx, error, mode='normal'):
+async def send_custom_command(ctx, error, mode='normal', search=None, search_mode=3):
     if not bot_ready.is_set():
         await ctx.send(f"⏳ {bot_name} is starting up, please wait a moment {murmheart} (how ?)")
         return
@@ -4557,8 +4580,30 @@ async def send_custom_command(ctx, error, mode='normal'):
         custom_commands = guild_settings.setdefault('custom_commands', {})
 
         if potential_command_name in custom_commands or mode == 'random':
-            response_template = custom_commands[potential_command_name] if mode == 'normal' \
-                         else random.choice([t for t in custom_commands.values() if not any(x in t for x in templates)])
+            if mode == 'normal':
+                response_template = custom_commands[potential_command_name]
+            else:
+                # Random mode: filter commands based on search and search_mode
+                def matches_search(name, response):
+                    if search is None:
+                        return True
+                    if search_mode == 1:  # Name only
+                        return search in name.lower()
+                    elif search_mode == 2:  # Response only
+                        return search in response.lower()
+                    else:  # Mode 3: Both
+                        return search in name.lower() or search in response.lower()
+
+                eligible_commands = [
+                    (name, resp) for name, resp in custom_commands.items()
+                    if not any(x in resp for x in templates) and matches_search(name, resp)
+                ]
+                if not eligible_commands:
+                    search_desc = f' matching "{search}"' if search else ''
+                    mode_desc = {1: ' (names only)', 2: ' (responses only)', 3: ''}.get(search_mode, '')
+                    return await ctx.reply(f"No custom commands found{search_desc}{mode_desc}")
+                
+                _, response_template = random.choice(eligible_commands)
             command_part = f"{ctx.prefix}{ctx.invoked_with}"
             full_argument_string = ctx.message.content[len(command_part):].strip()
 
