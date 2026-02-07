@@ -7670,12 +7670,12 @@ class Currency(commands.Cog):
                     if full_info:
                         profile_embed.add_field(name="Highest Net Worth", value=f"{target_profile['highest_balance']:,} {coin}", inline=True)
                         profile_embed.add_field(name="Highest Recorded Rank", value=f"#{target_profile['highest_global_rank']:,}", inline=True)
-                        profile_embed.add_field(name="Total Given Away", value=f"{target_profile['num_1']:,} {coin}", inline=True)
+                        profile_embed.add_field(name="Total Giveaways Funded", value=f"{target_profile['num_1']:,} {coin}", inline=True)
 
                     profile_embed.add_field(name="Highest Single Win", value=f"{target_profile['highest_single_win']:,} {coin}", inline=True)
                     profile_embed.add_field(name="Highest Single Loss", value=f"{target_profile['highest_single_loss']:,} {coin}", inline=True)
                     if not full_info:
-                        profile_embed.add_field(name="Total Given Away", value=f"{target_profile['num_1']:,} {coin}", inline=True)
+                        profile_embed.add_field(name="Total Giveaways Funded", value=f"{target_profile['num_1']:,} {coin}", inline=True)
                     else:
                         profile_embed.add_field(name="", value='', inline=True)
 
@@ -7735,7 +7735,7 @@ class Currency(commands.Cog):
         else:
             print(f"Unexpected error: {error}")  # Log other errors for debugging
 
-    @commands.hybrid_command(name="info", description="!i - Check your or someone else's info", aliases=['i'])
+    @commands.hybrid_command(name="info", description="!i - Check your or someone else's info", aliases=['i', 'me', 'stats'])
     @app_commands.allowed_installs(guilds=True, users=False)
     @app_commands.describe(user="Whose info you want to view")
     async def info(self, ctx, *, user: discord.User = None):
@@ -9355,7 +9355,7 @@ class Currency(commands.Cog):
 
                 sorted_members = get_net_leaderboard() if t == 'global' else \
                                  get_net_leaderboard([], True) if t == 'real' else \
-                                 get_net_leaderboard(server_settings.get(guild_id).get('members')) if t == 'local' else \
+                                 get_net_leaderboard([str(member.id) for member in client.get_guild(int(guild_id)).members]) if t == 'local' else \
                                  sorted({funder_id: global_profiles[funder_id]['num_1'] for funder_id in global_profiles if global_profiles[funder_id]['num_1']}.items(), key=lambda x: x[1], reverse=True)
                 #  FIXME probably not the best approach
                 footer = [f"Go !fund, at 250k you unlock !e", get_pfp(ctx.author)] if t == 'funders' else ['', '']
