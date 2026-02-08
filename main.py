@@ -9180,7 +9180,9 @@ class Currency(commands.Cog):
                                 )
             else:
                 await ctx.reply("This command becomes available once you fund 250k worth of official giveaways!\n"
-                                "Use `!fund` to add coins to the giveaway pool", ephemeral=True)
+                                "Use `!fund` to add coins to the giveaway pool\n"
+                                "\n"
+                                f"Fund progress: **{global_profiles[str(ctx.author.id)]['num_1']:,} / 250,000 {coin}**", ephemeral=True)
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
 
