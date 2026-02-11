@@ -620,7 +620,7 @@ class UseItemView(discord.ui.View):
 
 
 items = {
-    'the_catch': Item('the_catch', "The Catch", f"Rarest item in the bot\nUsing it grants you 25,000,000 {coin}\n\nObtainable in 1 of 5000 Treasure Chests {treasure_chest}", The_Catch, "https://cdn.discordapp.com/attachments/696842659989291130/1337170886373146634/The_Catch.png?ex=67a678ee&is=67a5276e&hm=3ae6739e718213ac63952faeefdcc64cc878d953da52ccb318628fb11371db2d&"),
+    'the_catch': Item('the_catch', "The Catch", f"Rarest item in the bot\nUsing it grants you 25,000,000 {coin} and a {rigged_potion} Rigged Potion\n\nObtainable in 1 of 5000 Treasure Chests {treasure_chest}", The_Catch, "https://cdn.discordapp.com/attachments/696842659989291130/1337170886373146634/The_Catch.png?ex=67a678ee&is=67a5276e&hm=3ae6739e718213ac63952faeefdcc64cc878d953da52ccb318628fb11371db2d&"),
     'rigged_potion': Item('rigged_potion', "Rigged Potion", f"Upon use, this potion doubles your balance.\nBe cautious when you use it!\n\nHas a 5% chance to drop from a Treasure Chest {treasure_chest}\nAlso distributed by the bot developer as an exclusive reward", rigged_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336436819193237594/rigged_potion.png?ex=67a3cd47&is=67a27bc7&hm=a66335a489d56af5676b78e737dc602df55ec23240de7f3efe6eff2ed1699e13&"),
     'evil_potion': Item('evil_potion', "Evil Potion", f"Using this potion requires you to pick another user and choose a number of coins. (Put coins in the 'parameter' field)\nBoth you and the chosen user will lose this number of coins\n\nDrops alongside Fool's Gold ✨", evil_potion, "https://cdn.discordapp.com/attachments/696842659989291130/1336641413181476894/evil_potion.png?ex=67a48bd2&is=67a33a52&hm=ce1542ce82b01e0f743fbaf7aecafd433ac2b85b7df111e4ce66df70c9c8af20&"),
     'math_potion': Item('math_potion', 'Math Potion', f"Using this potion requires you to choose a number between 1 and 99. This number is the success rate of this potion!\n(Put this number in the 'parameter' field)\n\nLet's call this number 'X' for simplicity\nIf the potion usage succeeds, you get 100-X percent of your balance. If the potion fails, you lose X percent of your balance!\n\nFor example, if you set X = 80% and you have 10,000 {coin} in your balance, there's an 80% chance to get +2,000 {coin} and a 20% chance to get -8,000 {coin}\n\nPurchasable for 4 {daily_item}", math_potion, 'https://cdn.discordapp.com/attachments/696842659989291130/1362905341829845042/math_potion.png?ex=68041803&is=6802c683&hm=0680d259dc5daea58985a779d0fa6172079208a301b0e825be18934a1be2f23d&', [4, 'daily_item']),
@@ -6488,10 +6488,12 @@ async def the_catch_func(message, castor, amount, additional_context=[]):
         guild_id = '' if not message.guild else str(message.guild.id)
         castor_id = str(castor.id)
         bal = add_coins_to_user(guild_id, castor_id, 25000000)
+        rigged_msg = add_item_to_user(guild_id, castor_id, 'rigged_potion', make_sure=False)
         await message.reply(
             f"# {items['the_catch']} used successfully\n"
             f"**{castor.display_name}**: +{25000000:,} {coin}\n"
             f"Balance: {bal:,} {coin}"
+            f"{rigged_msg}"
         )
         global_profiles[castor_id]['items']['the_catch'] -= 1
         highest_net_check(guild_id, castor_id, save=False, make_sure=False)
@@ -6651,13 +6653,17 @@ async def user_fund(ctx: commands.Context, author: discord.User, amount):
             given_away = global_profiles[author_id]['num_1']
             user_titles = global_profiles[author_id]['items'].setdefault('titles', [])
             new_titles = []
-            additional_msg = f'\n\nTotal Funded: {given_away:,} {coin}'  # Start building the additional message
+            next_milestone = 'INFINITY'
+            for i in num_to_title:
+                if i > given_away:
+                    next_milestone = i
+                    break
 
             for ti in should_have_titles(given_away):
                 if ti not in user_titles:
                     global_profiles[author_id]['items']['titles'].append(ti)
                     new_titles.append(ti)
-
+            additional_msg = ''
             if new_titles:
                 save_profiles()
                 title_announcement = f"\n\n{author.mention}, you've unlocked new Titles: *{', '.join(new_titles)}*.\nRun `!title` to change your Titles!" \
@@ -6668,14 +6674,16 @@ async def user_fund(ctx: commands.Context, author: discord.User, amount):
                 if 'Gave away 250k' in new_titles:  # Check specifically if the 250k title was *just* awarded
                     additional_msg += f'\n\nYou have also unlocked the `!e` command! Thank you for funding so many giveaways {gladge}\nWith every next milestone your **farm multiplier** will increase by **0.5**'
 
-                if any((i in titles_mul) for i in new_titles):
-                    additional_msg += f'\n\n**Your new farm multiplier is {format_multiplier_suffix(get_title_mul(global_profiles[author_id]['items']['titles']))[2:-1]}**'
+            additional_msg = f'\n\nTotal Funded: **{given_away:,} {coin}**\nNext Milestone: **{next_milestone:,} {coin}**'  # Start building the additional message
+
+            if any((i in titles_mul) for i in new_titles):
+                additional_msg += f'\n## Your new farm multiplier is {format_multiplier_suffix(get_title_mul(global_profiles[author_id]['items']['titles']))[2:-1]}'
                 
             # Modify the final reply to include the additional message
-            await msg.reply(f"## Funding successful\n"
-                            f"**{author.display_name}: -{amount:,} {coin}**\n"
-                            f"Balance: {bal:,} {coin}\n"
-                            f"\n"
+            await msg.reply(f"# Funding successful!\n"
+                            # f"**{author.display_name}: -{amount:,} {coin}**\n"
+                            # f"Balance: {bal:,} {coin}\n"
+                            # f"\n"
                             f"**{amount:,} {coin}** added to the pool\n"
                             f"Pool: {global_profiles[str(bot_id)]['num_2']:,} {coin}"
                             f"{additional_msg}")  # Append the unlock messages here
