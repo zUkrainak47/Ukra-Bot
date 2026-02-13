@@ -3537,7 +3537,7 @@ class CustomCommands(commands.Cog):
 
         if alias_name in command_aliases:
             target = command_aliases[alias_name]
-            return await ctx.reply(f"`!{alias_name}` → `!{target}`")
+            return await ctx.reply(f"Alias `!{alias_name}` → `!{target}`")
 
         # Check if input is a command name and find all aliases pointing to it
         aliases_for_command = [a for a, t in command_aliases.items() if t.split()[0] == alias_name]
@@ -6064,7 +6064,7 @@ class MyHelpCommand(commands.HelpCommand):
             return f"/{cmd.qualified_name}"
         
         # Prefix command: use full signature with aliases
-        sig = self.get_command_signature(cmd)
+        sig = self.get_command_signature(cmd).strip()
         if cmd.name not in only_prefix:
             return sig.replace('*', r'\*')
         return '!' + sig.split(" ", 1)[-1] if " " in sig else '!' + cmd.name
@@ -6163,15 +6163,10 @@ class MyHelpCommand(commands.HelpCommand):
                     has_preset_args = len(alias_parts) > 1
                 
                 if builtin_cmd:
-                    if has_preset_args:
-                        # Alias has preset arguments, invoke custom_alias_inspect
-                        custom_alias_inspect_cmd = ctx.bot.get_command('custom_alias_inspect')
-                        if custom_alias_inspect_cmd:
-                            await ctx.invoke(custom_alias_inspect_cmd, alias=lookup)
-                            return
-                    else:
-                        # Simple alias, redirect to the built-in command's help
-                        return await self.send_command_help(builtin_cmd)
+                    custom_alias_inspect_cmd = ctx.bot.get_command('custom_alias_inspect')
+                    if custom_alias_inspect_cmd:
+                        await ctx.invoke(custom_alias_inspect_cmd, alias=lookup)
+                        return
                 
                 # Check if target is a custom role command
                 if target in custom_role_commands:
@@ -6674,7 +6669,7 @@ async def user_fund(ctx: commands.Context, author: discord.User, amount):
                 if 'Gave away 250k' in new_titles:  # Check specifically if the 250k title was *just* awarded
                     additional_msg += f'\n\nYou have also unlocked the `!e` command! Thank you for funding so many giveaways {gladge}\nWith every next milestone your **farm multiplier** will increase by **0.5**'
 
-            additional_msg = f'\n\nTotal Funded: **{given_away:,} {coin}**\nNext Milestone: **{next_milestone:,} {coin}**'  # Start building the additional message
+            additional_msg += f'\n\nTotal Funded: **{given_away:,} {coin}**\nNext Milestone: **{next_milestone:,} {coin}**'  # Start building the additional message
 
             if any((i in titles_mul) for i in new_titles):
                 additional_msg += f'\n## Your new farm multiplier is {format_multiplier_suffix(get_title_mul(global_profiles[author_id]['items']['titles']))[2:-1]}'
