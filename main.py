@@ -5797,7 +5797,11 @@ class ConfirmView(discord.ui.View):
             # await interaction.response.edit_message(content=f"{self.author.display_name} canceled the use of {self.amount} {self.item}{'s' if self.amount != 1 else ''}", view=None)
             await interaction.response.edit_message(content=f"{self.type_} canceled", view=None)
         elif self.type_ and isinstance(self.type_, tuple):
-            await interaction.response.edit_message(content=self.type_[1], view=None)
+            if self.type_[1] is False:
+                await interaction.response.defer()
+                await interaction.message.delete()
+            else:
+                await interaction.response.edit_message(content=self.type_[1], view=None)
         else:
             await interaction.response.edit_message(view=None)
         self.stop()
@@ -6254,7 +6258,7 @@ async def confirm_stock(message1, author: discord.User, stock: str, amount: int,
 
 async def confirm_fund(reply_message, author: discord.User, number: int):
     """Sends a confirmation message with buttons and waits for the user's response"""
-    view = ConfirmView(author, amount=number, type_=f"Funding - {number:,} {coin}")
+    view = ConfirmView(author, amount=number, type_=(f"✅ Funding confirmed", False))
     message = await reply_message.reply(
         f"## {author.display_name}, do you want to add **{number:,}** {coin} to the giveaway pool?\n\n**Balance:** {get_user_balance('', str(author.id)):,} {coin}",
         view=view
