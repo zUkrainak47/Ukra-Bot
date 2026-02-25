@@ -1610,11 +1610,14 @@ class Reminders(commands.Cog):
         if not reminder_text and time.lower().startswith('me '):
             time = time[3:]
 
-        processed_time = preprocess_time(time)
-        dates = search_dates(processed_time, languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
+        # Strip Discord mentions for dateparser (their numeric IDs get absorbed into time matches)
+        stripped_time = re.sub(r'<[@#][!&]?\d+>', '', time)
+
+        processed_stripped = preprocess_time(stripped_time)
+        dates = search_dates(processed_stripped, languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
         added = dates is None
         if added:
-            dates = search_dates(f"at {processed_time}", languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
+            dates = search_dates(f"at {processed_stripped}", languages=['en'], settings={'PREFER_DATES_FROM': 'future'})
             if not dates:
                 return await ctx.reply("I couldn't parse that time. Please try again with a different format", ephemeral=True)
         
@@ -1627,14 +1630,16 @@ class Reminders(commands.Cog):
         if delta > 160704000:
             return await ctx.reply("Let's keep reminders under 5 years please", ephemeral=True)
         if not reminder_text:
+            # Use the full input (with mentions) for text extraction
+            processed_time = preprocess_time(time)
             if not added:
                 if f" {st} " in processed_time:
                     temp = processed_time.replace(f" {st} ", ' ') 
                 else:
                     temp = processed_time.replace(st, '') 
             else:
-                processed_time.replace(st[3:], '')
-            
+                temp = processed_time.replace(st[3:], '')
+
             # If replying to a message and no text provided, use the message link
             if ctx.message.reference and not temp:
                 ref = ctx.message.reference
@@ -1680,7 +1685,7 @@ class Reminders(commands.Cog):
     @remind.error
     async def remind_error(self, interaction: discord.Interaction, error):
         if isinstance(error, commands.MissingRequiredArgument):
-            return await interaction.reply("You didn't tell me when to remind you!\n Try \"!remind me to do xyz at 5pm gmt+1\"")
+            return await interaction.reply("You didn't tell me when to remind you!\nTry \"!remind me to do xyz at 5pm gmt+1\"")
 
     @remind.autocomplete('where')
     async def format_autocomplete(self, interaction: discord.Interaction, current: str):
@@ -9571,6 +9576,7 @@ class Currency(commands.Cog):
                 else:
                     await ctx.reply(f"Gambling failed! You don't own {number:,} {coin} {sadgebusiness}")
             except:
+                traceback.print_exc()
                 await ctx.reply("Gambling failed!")
         elif currency_allowed(ctx):
             await ctx.reply(f'{reason}, currency commands are disabled')
