@@ -4163,6 +4163,9 @@ async def avatar(ctx: commands.Context, user: typing.Optional[discord.User] = No
     await ctx.reply(embed=embed)
 
 
+# Shared cache for API-fetched users so they persist across command calls
+_user_cache = {}  # {user_id: discord.User}
+
 async def get_user(id_: int, ctx=None, force_fetch=False) -> discord.User | discord.Member | None:
     if not force_fetch:
         # 1. Try guild member cache (has roles, nick, etc.)
@@ -4181,10 +4184,16 @@ async def get_user(id_: int, ctx=None, force_fetch=False) -> discord.User | disc
             member = guild.get_member(id_)
             if member:
                 return member
+        
+        # 4. Check our own fetch cache
+        if id_ in _user_cache:
+            return _user_cache[id_]
     
-    # 4. Fetch as last resort (API call)
+    # 5. Fetch as last resort (API call) and cache the result
     try:
-        return await client.fetch_user(id_)
+        user = await client.fetch_user(id_)
+        _user_cache[id_] = user
+        return user
     except discord.NotFound:
         return None
 
@@ -7526,14 +7535,23 @@ class Lore(commands.Cog):
         your_rank = None
         rank = 1
         footer = ['', '']
+        uncached_indices = {}  # {index_in_embed_data: user_id_str}
         for user_id, message_count in sorted_entries:
-            user = await self.get_user(int(user_id), ctx)
-            if int(user_id) == ctx.author.id:
+            uid = int(user_id)
+            # Resolve from cache only — no API calls to keep the command instant
+            user = ctx.guild.get_member(uid) or self.bot.get_user(uid) or _user_cache.get(uid)
+            if uid == ctx.author.id:
                 footer = [f"You're at #{rank} with {message_count} entr{'ies' if message_count != 1 else 'y'}", get_pfp(ctx.author)]
                 your_rank = rank
+            if user is not None:
+                display = user.mention if user == ctx.author else user.display_name
+            else:
+                display = f"User {user_id}"
+                uncached_indices[len(embed_data)] = user_id
             embed_data.append({
-                'label': f"**#{rank}** - {user.display_name if user != ctx.author else user.mention}",
-                'item': f"**{message_count}** entr{'ies' if message_count != 1 else 'y'}"
+                'label': f"**#{rank}** - {display}",
+                'item': f"**{message_count}** entr{'ies' if message_count != 1 else 'y'}",
+                '_rank': rank
             })
             rank += 1
 
@@ -7547,6 +7565,28 @@ class Lore(commands.Cog):
             total_number_=total_entries
         )
         await pagination_view.send_embed()
+
+        # Background-fetch uncached users and update the embed with real display names
+        if uncached_indices:
+            async def _update_uncached_names():
+                try:
+                    for idx, uid_str in uncached_indices.items():
+                        try:
+                            uid_int = int(uid_str)
+                            fetched = await self.bot.fetch_user(uid_int)
+                            _user_cache[uid_int] = fetched  # Cache for future commands
+                            entry = embed_data[idx]
+                            is_author = uid_int == ctx.author.id
+                            display = fetched.mention if is_author else fetched.display_name
+                            entry['label'] = f"**#{entry['_rank']}** - {display}"
+                        except discord.NotFound:
+                            pass  # Keep the "User <id>" fallback
+                    # Re-render the current page with updated names
+                    await pagination_view.update_message(pagination_view.get_current_page_data())
+                except Exception:
+                    pass  # Silently fail — the leaderboard is already visible with fallback names
+
+            asyncio.create_task(_update_uncached_names())
 
 
 async def get_direct_tenor_url(tenor_url: str):
@@ -7646,10 +7686,16 @@ class Currency(commands.Cog):
             member = guild.get_member(id_)
             if member:
                 return member
+        
+        # 4. Check our own fetch cache
+        if id_ in _user_cache:
+            return _user_cache[id_]
     
-        # 4. Fetch as last resort (API call)
+        # 5. Fetch as last resort (API call) and cache the result
         try:
-            return await self.bot.fetch_user(id_)
+            user = await self.bot.fetch_user(id_)
+            _user_cache[id_] = user
+            return user
         except discord.NotFound:
             return None
 
