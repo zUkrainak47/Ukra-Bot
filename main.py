@@ -4382,11 +4382,22 @@ async def execute_custom_role_command(ctx, command_name, command_config):
             return await ctx.send(f"⚠️ {i.replace('_', ' ').title()} for `{command_name}` no longer exists! Contact an admin.")
         extra_roles[i] = r
 
-    mentions = ctx.message.mentions
-    if not mentions:
-        return await ctx.send(f'Please mention a user: `!{command_name} @user`')
-
-    target = mentions[0]
+    # Parse the target from command arguments directly, not from message.mentions,
+    # since Discord auto-adds the replied-to author to message.mentions.
+    # Fallback: if no explicit mention, use the replied-to message's author.
+    args_text = ctx.message.content[len(ctx.prefix) + len(ctx.invoked_with):].strip()
+    mention_match = re.match(r'<@!?(\d{17,20})>', args_text)
+    if mention_match:
+        target = ctx.guild.get_member(int(mention_match.group(1)))
+        if not target:
+            return await ctx.send(f"Couldn't find that user in this server!")
+    elif ctx.message.reference:
+        replied_msg = ctx.message.reference.resolved or await ctx.channel.fetch_message(ctx.message.reference.message_id)
+        target = ctx.guild.get_member(replied_msg.author.id)
+        if not target:
+            return await ctx.send(f"Couldn't find that user in this server!")
+    else:
+        return await ctx.send(f'Please mention a user or reply to their message: `!{command_name} @user`')
 
     if target.bot:
         return await ctx.send(f"Can't use this command on bots!")
@@ -4971,7 +4982,7 @@ def get_net_leaderboard(members=[], real=False):
             continue
         if int(user_id) in non_lb_users:
             continue
-        if not global_profiles[user_id]['commands'] and int(user_id) != bot_id:  # only count those who ran at least one command
+        if not global_profiles.get(user_id, {}).get('commands') and int(user_id) != bot_id:  # only count those who ran at least one command
             continue
         # Start with the user's balance
         total_worth = balance
@@ -11119,6 +11130,8 @@ class AREDL(commands.Cog):
             async with session.get('https://api.aredl.net/v2/api/aredl/levels') as resp:
                 if resp.status == 200:
                     return [level for level in await resp.json() if not level['legacy']]
+                else:
+                    print(f"Error fetching AREDL data: {resp.status}")
 
     async def fetch_sorted_data_dict(self):
         """Fetch the latest AREDL data sorted by time added"""
@@ -11127,6 +11140,8 @@ class AREDL(commands.Cog):
                 if resp.status == 200:
                     sorted_levels = await resp.json()
                     return {k: v for v, k in enumerate([i['affected_level']['id'] for i in sorted_levels['data'] if "Placed" in i['action']])}
+                else:
+                    print(f"Error fetching sorted data: {resp.status}")
 
     async def fetch_level_data(self, level_id):
         """Fetch the latest AREDL data from the API"""
@@ -11134,6 +11149,8 @@ class AREDL(commands.Cog):
             async with session.get(f'https://api.aredl.net/v2/api/aredl/levels/{level_id}') as resp:
                 if resp.status == 200:
                     return await resp.json()    
+                else:
+                    print(f"Error fetching level data: {resp.status}")
 
     @tasks.loop(minutes=5)
     async def load_aredl_data(self):
