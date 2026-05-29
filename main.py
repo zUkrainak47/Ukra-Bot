@@ -11178,6 +11178,7 @@ class AREDL(commands.Cog):
                     return [level for level in await resp.json() if not level['legacy']]
                 else:
                     print(f"Error fetching AREDL data: {resp.status}")
+                    return []
 
     async def fetch_sorted_data_dict(self):
         """Fetch the latest AREDL data sorted by time added"""
@@ -11188,6 +11189,7 @@ class AREDL(commands.Cog):
                     return {k: v for v, k in enumerate([i['affected_level']['id'] for i in sorted_levels['data'] if "Placed" in i['action']])}
                 else:
                     print(f"Error fetching sorted data: {resp.status}")
+                    return {}
 
     async def fetch_level_data(self, level_id):
         """Fetch the latest AREDL data from the API"""
@@ -11202,7 +11204,7 @@ class AREDL(commands.Cog):
     async def load_aredl_data(self):
         self.aredl_data = await self.fetch_aredl_data()
         sorted_dict = await self.fetch_sorted_data_dict()
-        self.sorted_data = sorted(self.aredl_data, key=lambda i: sorted_dict[i['id']])
+        self.sorted_data = sorted(self.aredl_data, key=lambda i: sorted_dict.get(i['id']))
         
     @load_aredl_data.before_loop
     async def before_load_aredl_data(self):
@@ -11311,6 +11313,8 @@ class AREDL(commands.Cog):
     @app_commands.describe(highest_rank="The highest rank to include", lowest_rank="The lowest rank to include")
     async def random(self, ctx, highest_rank: int|None = None, lowest_rank: int|None = None):
         """View a random Extreme Demon"""
+        if not self.aredl_data:
+            return await ctx.reply("AREDL data is not loaded yet, please try again in a moment.")
         if lowest_rank is None or lowest_rank > len(self.aredl_data) or lowest_rank < 1:
             lowest_rank = len(self.aredl_data)
         if highest_rank is None or highest_rank < 1 or highest_rank > len(self.aredl_data):
